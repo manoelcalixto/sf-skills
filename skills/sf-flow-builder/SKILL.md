@@ -241,12 +241,22 @@ sf org login user --username standard.user@company.com --target-org [org]
 3. **Documentation:** Review auto-generated `docs/flows/[FlowName]_documentation.md`, fill business context, test results, troubleshooting notes.
 
 4. **Completion Summary:**
+
+**Query Flow ID** (required for direct link):
+```bash
+sf data query --query "SELECT Id, DeveloperName, VersionNumber, ActiveVersionId FROM FlowDefinition WHERE DeveloperName='[FlowName]' LIMIT 1" --target-org [org] --json
+```
+
+**Generate Summary:**
 ```
 ✓ Flow Creation Complete: [FlowName]
   Type: [type] | API: 62.0 | Status: [Draft/Active]
   Location: force-app/main/default/flows/[FlowName].flow-meta.xml
   Validation: PASSED (Score: XX/110)
   Deployment: Org=[target-org], Job=[job-id]
+
+  🔗 Direct Flow Link: https://[instance-url]/lightning/setup/Flows/page?address=%2F[flow-id]
+     (Open in Salesforce to view/edit)
 
 Next Steps:
 1. Complete testing (unit, bulk, security, integration)
@@ -262,11 +272,12 @@ docs/governance-checklist.md, https://help.salesforce.com/s/articleView?id=sf.fl
 ## Salesforce Flow Best Practices (Built-In Enforcement)
 
 ### Critical Requirements
-- **API 62.0:** Latest features (Transform, enhanced error connectors)
+- **API 62.0:** Latest features (enhanced error connectors, better bulkification)
 - **No DML in Loops:** CRITICAL ERROR - causes bulk failures. Pattern: Collect in loop → DML after loop
 - **Bulkify Record-Triggered:** MUST handle collections
 - **Fault Paths:** All DML must have fault connectors
 - **Auto-Layout:** All locationX/Y = 0 (cleaner git, easier reviews, standard in API 64.0+)
+  - **IMPORTANT**: Salesforce UI may show "Free-Form" dropdown, but if all locationX/Y = 0, it IS Auto-Layout in the XML
 
 ### XML Element Ordering (CRITICAL)
 Salesforce Metadata API requires strict alphabetical ordering. Required order:
@@ -274,9 +285,10 @@ Salesforce Metadata API requires strict alphabetical ordering. Required order:
 **Note:** API 60.0+ does NOT use `<bulkSupport>` - bulk processing is automatic.
 
 ### Performance
-- **Transform Element:** 30-50% faster than loops for field mapping
-- **Minimize DML:** Batch operations
+- **Minimize DML:** Batch operations, use Get Records → Assignment → Update Records pattern
 - **Get Records with Filters:** Instead of loops + decisions
+- **Collection Processing:** Process records in bulk, not individually
+- **NOTE:** Transform element is powerful but has complex XML structure - NOT recommended for hand-written flows
 
 ### Design
 - **Meaningful Names:** Variables (camelCase), Elements (PascalCase_With_Underscores)
@@ -307,9 +319,27 @@ Salesforce Metadata API requires strict alphabetical ordering. Required order:
 **Field Not Found:** Verify field exists in target org, deploy field first if missing
 **Insufficient Permissions:** Check profile permissions, consider System mode, verify FLS
 
+### XML Metadata Gotchas (CRITICAL)
+
+**recordLookups Conflicts:**
+- ❌ **NEVER use both** `<storeOutputAutomatically>true</storeOutputAutomatically>` AND `<outputReference>varName</outputReference>` together
+- ✅ **Use ONLY ONE:**
+  - Option 1: `<storeOutputAutomatically>true</storeOutputAutomatically>` (auto-creates variable)
+  - Option 2: `<outputReference>varName</outputReference>` with explicit variable declaration
+
+**Element Ordering in recordLookups:**
+Correct order within `<recordLookups>`:
+1. `<name>` 2. `<label>` 3. `<locationX>` 4. `<locationY>` 5. `<assignNullValuesIfNoRecordsFound>` 6. `<connector>` 7. `<filterLogic>` 8. `<filters>` 9. `<getFirstRecordOnly>` 10. `<object>` 11. `<outputReference>` OR `<storeOutputAutomatically>` 12. `<queriedFields>`
+
+**Transform Element (AVOID for hand-written flows):**
+- Complex nested XML structure with strict ordering requirements
+- `inputReference` placement varies by context
+- Multiple conflicting rules in Metadata API
+- **Recommendation**: Create Transform elements in Flow Builder UI, then deploy - do NOT hand-write
+
 ## Edge Cases & Troubleshooting
 
-**Large Data (>200 records):** Warn about governor limits, suggest scheduled flow for batching, recommend Transform over loops
+**Large Data (>200 records):** Warn about governor limits, suggest scheduled flow for batching, use Get Records with filters
 **Complex Branching (>5 paths):** Suggest subflows for modularity, document criteria, consider formula fields
 **Cross-Object Updates:** Check for circular dependencies, existing flows on related objects, test for recursion
 **Production Deployments:** Keep Draft initially, require explicit activation, provide rollback instructions
@@ -317,7 +347,7 @@ Salesforce Metadata API requires strict alphabetical ordering. Required order:
 **Common Issues:**
 - Flow not visible after deployment → Check `sf project deploy report`, verify permissions, refresh Setup → Flows
 - Validation passes but testing fails → Check Debug Logs, verify test data, test bulk (200+ records)
-- Performance issues → Check for DML in loops, use Transform, use Get Records with filters
+- Performance issues → Check for DML in loops, use Get Records with filters, minimize SOQL queries
 - Sandbox works, production fails → Check FLS differences, verify dependent metadata deployed, review validation rules, test with production data volumes
 
 ## Notes

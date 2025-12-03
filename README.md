@@ -15,6 +15,30 @@ A collection of Claude Code skills for Salesforce development, specializing in A
 | **[sf-deployment](skills/sf-deployment/)** | Salesforce DevOps automation for deployments and CI/CD |
 | **[skill-builder](skills/skill-builder/)** | Wizard for creating Claude Code skills |
 
+## Roadmap
+
+This project follows a structured naming convention for Salesforce skills:
+
+```
+sf-{capability}           # Cross-cutting (apex, flow, admin, security)
+sf-cloud-{name}           # Cloud-specific (sales, service, marketing)
+sf-product-{name}         # Product-specific (datacloud, cpq, omnistudio)
+sf-industry-{name}        # Industry-specific (healthcare, finserv)
+sf-ai-{name}              # AI features (agentforce, einstein, copilot)
+```
+
+### Planned Skills
+
+| Phase | Category | Skills |
+|-------|----------|--------|
+| **Phase 1** | Cross-Cutting | `sf-admin`, `sf-security`, `sf-integration`, `sf-testing`, `sf-debugging`, `sf-migration`, `sf-data` |
+| **Phase 2** | AI/Automation | `sf-ai-agentforce`, `sf-ai-copilot`, `sf-ai-einstein` |
+| **Phase 3** | Products | `sf-product-datacloud`, `sf-product-omnistudio`, `sf-product-cpq` |
+| **Phase 4** | Clouds | `sf-cloud-sales`, `sf-cloud-service`, `sf-cloud-experience` |
+| **Phase 5** | Industries | `sf-industry-healthcare`, `sf-industry-finserv` |
+
+**Total: 23 skills** (4 built, 19 planned)
+
 ## Quick Install
 
 ```bash

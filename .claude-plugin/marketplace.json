@@ -1,23 +1,24 @@
 {
   "name": "sf-skills",
-  "description": "Salesforce development skills for Claude Code",
   "owner": {
     "name": "Jag Valaiyapathy",
     "url": "https://github.com/Jaganpro"
   },
   "metadata": {
+    "description": "Salesforce development skills for Claude Code",
     "version": "2.0.0"
   },
   "plugins": [
     {
       "name": "sf-skills",
       "description": "Complete Salesforce development suite - Apex, Flow, Deployment, and Skill Builder",
-      "version": "2.0.0",
+      "source": "./",
+      "strict": false,
       "skills": [
-        { "source": "./sf-apex" },
-        { "source": "./sf-flow-builder" },
-        { "source": "./sf-deployment" },
-        { "source": "./skill-builder" }
+        "./sf-apex/skills/sf-apex",
+        "./sf-flow-builder/skills/sf-flow-builder",
+        "./sf-deployment/skills/sf-deployment",
+        "./skill-builder/skills/skill-builder"
       ]
     }
   ]

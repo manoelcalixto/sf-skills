@@ -1,0 +1,12 @@
+{
+  "name": "sf-metadata",
+  "version": "1.0.0",
+  "description": "Salesforce metadata generation and org querying with 120-point scoring. Creates Custom Objects, Fields, Profiles, Permission Sets, Validation Rules, Record Types, and Layouts.",
+  "author": {
+    "name": "Jag Valaiyapathy",
+    "url": "https://github.com/Jaganpro"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/Jaganpro/sf-skills",
+  "keywords": ["salesforce", "metadata", "objects", "fields", "profiles", "permission-sets", "security"]
+}

@@ -6,17 +6,18 @@
   },
   "metadata": {
     "description": "Salesforce development skills for Claude Code",
-    "version": "2.0.0"
+    "version": "2.1.0"
   },
   "plugins": [
     {
       "name": "sf-skills",
-      "description": "Complete Salesforce development suite - Apex, Flow, Deployment, and Skill Builder (install all at once)",
+      "description": "Complete Salesforce development suite - Apex, Flow, Metadata, Deployment, and Skill Builder (install all at once)",
       "source": "./",
       "strict": false,
       "skills": [
         "./sf-apex/skills/sf-apex",
         "./sf-flow-builder/skills/sf-flow-builder",
+        "./sf-metadata/skills/sf-metadata",
         "./sf-deployment/skills/sf-deployment",
         "./skill-builder/skills/skill-builder"
       ]
@@ -30,6 +31,11 @@
       "name": "sf-flow-builder",
       "description": "Salesforce Flow creation and validation with 110-point scoring",
       "source": "./sf-flow-builder"
+    },
+    {
+      "name": "sf-metadata",
+      "description": "Salesforce metadata generation and org querying with 120-point scoring",
+      "source": "./sf-metadata"
     },
     {
       "name": "sf-deployment",

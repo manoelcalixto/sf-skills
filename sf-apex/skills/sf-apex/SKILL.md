@@ -251,11 +251,45 @@ See [../../docs/trigger-actions-framework.md](../../docs/trigger-actions-framewo
 
 ---
 
+## Cross-Skill Integration: sf-metadata
+
+### Pre-Generation Object Discovery (Optional)
+
+Before generating triggers or service classes, you can query the org to discover object/field information:
+
+```
+Skill(skill="sf-metadata")
+Request: "Query org [alias] to describe object [ObjectName] and list all fields"
+```
+
+**Use this when:**
+- Creating a trigger for an unfamiliar object
+- Need to verify field API names before writing SOQL
+- Want to check relationship fields and their names
+- Need to understand existing validation rules or record types
+
+### Example Workflow
+
+1. User requests: "Create a trigger for the Invoice__c object"
+2. Before generating code, query the object structure:
+   ```
+   Skill(skill="sf-metadata")
+   Request: "Describe Invoice__c object in org myorg - show all custom fields and relationships"
+   ```
+3. Use the returned field information to write accurate SOQL and field references
+4. Generate trigger with correct field API names
+
+---
+
 ## Dependencies
 
 - **sf-deployment** (optional): Required for deploying Apex code to Salesforce orgs
   - If not installed, code will be created locally but cannot be deployed via `Skill(skill="sf-deployment")`
   - Install: `/plugin install github:Jaganpro/sf-skills/sf-deployment`
+
+- **sf-metadata** (optional): Query org metadata before code generation
+  - Helps discover object fields and relationships
+  - Install: `/plugin install github:Jaganpro/sf-skills/sf-metadata`
 
 ## Notes
 

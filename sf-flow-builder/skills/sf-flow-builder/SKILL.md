@@ -349,11 +349,50 @@ screens → start → status → subflows → textTemplates → variables → wa
 - Validation passes but testing fails → Check Debug Logs, test bulk (200+ records)
 - Sandbox works, production fails → Check FLS differences, verify dependencies
 
+---
+
+## Cross-Skill Integration: sf-metadata
+
+### Pre-Flow Object Verification (Optional)
+
+Before creating record-triggered flows, you can verify object configuration:
+
+```
+Skill(skill="sf-metadata")
+Request: "Describe object [ObjectName] in org [alias] - show fields, record types, and validation rules"
+```
+
+**Use this when:**
+- Building flows for unfamiliar custom objects
+- Need to verify field types for flow assignments
+- Want to understand existing validation rules that might conflict
+- Need to check record type availability
+
+### Example Workflow
+
+1. User requests: "Create a record-triggered flow for Invoice__c"
+2. Before generating flow, verify object structure:
+   ```
+   Skill(skill="sf-metadata")
+   Request: "Describe Invoice__c in org myorg - show all fields and their types"
+   ```
+3. Use the returned field information to:
+   - Set correct field types in Get/Update elements
+   - Understand picklist values for decision criteria
+   - Identify relationship fields for cross-object updates
+4. Generate flow with accurate field references
+
+---
+
 ## Dependencies
 
 - **sf-deployment** (optional): Required for deploying flows to Salesforce orgs
   - If not installed, flows will be created locally but cannot be deployed via `Skill(skill="sf-deployment")`
   - Install: `/plugin install github:Jaganpro/sf-skills/sf-deployment`
+
+- **sf-metadata** (optional): Query org metadata before flow creation
+  - Verifies objects and fields exist before building flows
+  - Install: `/plugin install github:Jaganpro/sf-skills/sf-metadata`
 
 ## Notes
 

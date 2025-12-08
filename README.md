@@ -310,8 +310,6 @@ sf-industry-{name}        # Industries (healthcare, finserv)
 ### 🔧 Cross-Cutting Skills
 | Skill | Description | Status |
 |-------|-------------|--------|
-| `sf-metadata` | Objects, fields, profiles, permission sets | ✅ Live |
-| `sf-data` | SOQL, CRUD, test data factories, bulk operations | ✅ Live |
 | `sf-security` | Sharing rules, org-wide defaults, encryption | 📋 Planned |
 | `sf-integration` | REST, SOAP, Platform Events | 📋 Planned |
 | `sf-testing` | Test strategy, mocking, coverage | 📋 Planned |

@@ -84,16 +84,8 @@ Next Steps:
 Resources: ../../docs/skill-structure.md, ../../docs/frontmatter-reference.md, ../../docs/best-practices.md
 ```
 
-## Validation Error Handling
+## Validation Errors
 
-When validation fails, provide actionable guidance. See [../../docs/validation-errors.md](../../docs/validation-errors.md) for:
-- YAML syntax errors (unquoted special chars, indentation)
-- Missing required fields
-- Invalid tool names (case-sensitive)
-- Version format errors
-- Name format errors
-
-**Quick reference**:
 | Error | Fix |
 |-------|-----|
 | YAML syntax | Quote strings with `:` or `#` |
@@ -101,6 +93,8 @@ When validation fails, provide actionable guidance. See [../../docs/validation-e
 | Invalid tool | Use exact case: `Bash` not `bash` |
 | Bad version | Use X.Y.Z format |
 | Bad name | Use kebab-case |
+
+See [../../docs/validation-errors.md](../../docs/validation-errors.md) for details.
 
 ## Bulk Validation (v2.0)
 
@@ -151,62 +145,25 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/dependency_manager.py validate --all      
 
 See [../../docs/workflow-examples.md](../../docs/workflow-examples.md) for output examples.
 
-## Helper Functions
+## Patterns & Best Practices
 
-**Show example skill**: `Glob: skills/*/SKILL.md` → Read simple examples → Explain patterns
+**Skill types**: Code analysis (Glob→Read→Grep→Report) | Documentation (Read→Write) | Interactive (AskUserQuestion→Validate→Execute) | Testing (Bash→Analyze→Report)
 
-**Template customization by purpose**:
-| Skill Type | Tools | Pattern |
-|------------|-------|---------|
-| Code analysis | Glob, Read, Grep | Find → Read → Search → Report |
-| Documentation | Read, Write | Read code → Generate → Write |
-| Interactive | AskUserQuestion, Read, Write | Gather → Validate → Process → Execute |
-| Testing | Bash, Read, Write | Run tests → Analyze → Report |
-
-## Best Practices
-
-1. **Single Responsibility**: One main capability per skill
-2. **Clear Names**: Descriptive kebab-case: `api-doc-generator` not `helper`
-3. **Minimal Tools**: Only request tools you'll use
-4. **Examples Matter**: Include concrete examples in skill content
-5. **Version Properly**: Semver - major (breaking), minor (features), patch (fixes)
-
-## Edge Cases
-
-| Scenario | Handling |
-|----------|----------|
-| Name conflict | Check first, offer overwrite or new name |
-| Invalid name chars | Validate kebab-case (lowercase, numbers, hyphens) |
-| No tools selected | Warn skill may not be functional |
-| Project-specific outside git | Warn, suggest global instead |
+**Best practices**: Single responsibility | Clear kebab-case names | Minimal tools | Include examples | Proper semver
 
 ## Troubleshooting
 
-**Skill creation fails**:
-1. Check permissions on ~/.claude/skills/
-2. Verify Python 3 available
-3. Check disk space
-4. Review error messages
-
-**Validation fails repeatedly**:
-1. Run `scripts/list-available-tools.sh`
-2. Validate YAML syntax online
-3. Review docs/frontmatter-reference.md
-4. Check examples/simple-skill/
-
-**Skill doesn't load**:
-1. Restart Claude Code
-2. Verify SKILL.md path
-3. Check YAML frontmatter
-4. Look for typos in name
+| Issue | Check |
+|-------|-------|
+| Creation fails | Permissions on ~/.claude/skills/, Python 3, disk space |
+| Validation fails | YAML syntax, tool case-sensitivity (`Bash` not `bash`) |
+| Skill doesn't load | Restart Claude Code, verify path, check frontmatter |
 
 ## Notes
 
-- Skills load on Claude Code start - restart required for new skills
-- Minimal-starter template needs customization
-- Validation catches errors but can't verify logic
-- Test with real scenarios after creation
-- This meta-skill can create other meta-skills (recursive bootstrapping!)
+- Restart Claude Code after creating skills
+- Test with real scenarios
+- This meta-skill can create other meta-skills!
 
 ---
 

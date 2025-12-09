@@ -32,46 +32,23 @@ python3 ~/.claude/plugins/marketplaces/sf-skills/sf-flow-builder/hooks/scripts/v
 
 ---
 
-## ⚠️ CRITICAL: Orchestration Workflow Order
+## ⚠️ CRITICAL: Orchestration Order
 
-When using sf-flow-builder with other skills, **follow this execution order**:
+**sf-metadata → sf-flow → sf-deploy → sf-data** (you are here: sf-flow)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  CORRECT MULTI-SKILL ORCHESTRATION ORDER                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  1. sf-metadata    → Create object/field definitions (LOCAL files)          │
-│  2. sf-flow-builder → Create flow definitions (LOCAL files) ← YOU ARE HERE │
-│  3. sf-deployment  → Deploy all metadata to org (REMOTE)                   │
-│  4. sf-data        → Create test data (REMOTE - objects must exist!)        │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+⚠️ Flow references custom object/fields? Create with sf-metadata FIRST. Deploy objects BEFORE flows.
 
-**⚠️ PREREQUISITE**: If your flow references custom objects/fields, ensure they were created with sf-metadata first!
-
-**⚠️ COMMON MISTAKE**: Deploying flow before deploying the custom object it references.
-Always deploy objects/fields BEFORE flows that reference them.
+See [../../shared/docs/orchestration.md](../../shared/docs/orchestration.md) for details.
 
 ---
 
-## 🔑 Key Insights for Flow Development
+## 🔑 Key Insights
 
-### Before-Save vs After-Save Selection
-
-| Scenario | Use | Why |
-|----------|-----|-----|
-| Update fields on triggering record | **Before-Save** | No DML needed, auto-saved |
-| Create/update related records | After-Save | Needs explicit DML |
-| Send emails, callouts | After-Save | Before-Save doesn't support |
-| Complex validation | Before-Save | Can add errors to record |
-
-### Test with 251 Records
-
-**Why 251?**: Salesforce batch boundaries are at 200 records
-**Always test record-triggered flows with 251+ records** to verify:
-- No governor limit violations
-- No N+1 query patterns
-- Bulk processing works correctly
+| Insight | Details |
+|---------|---------|
+| **Before vs After Save** | Before-Save: same-record updates (no DML), validation. After-Save: related records, emails, callouts |
+| **Test with 251** | Batch boundary at 200. Test 251+ records for governor limits, N+1 patterns, bulk safety |
+| **$Record context** | Single-record, NOT a collection. Platform handles batching. Never loop over $Record |
 
 ---
 
@@ -184,57 +161,15 @@ Score: 92/110 ⭐⭐⭐⭐ Very Good
 
 ### Phase 4: Deployment & Integration
 
-⚠️ **MANDATORY: Use sf-deploy Skill** ⚠️
+⚠️ **MANDATORY: Use sf-deploy Skill** - NEVER use direct CLI commands.
 
-**NEVER use `sf project deploy` or any direct CLI commands via Bash for flow deployment.**
-**ALWAYS invoke the sf-deploy skill.**
+**Pattern**:
+1. `Skill(skill="sf-deploy")` → "Deploy flow [path] to [org] with --dry-run"
+2. Review validation results
+3. `Skill(skill="sf-deploy")` → "Proceed with actual deployment"
+4. Edit `<status>Draft</status>` → `Active`, redeploy
 
-This ensures:
-- Two-step validation (dry-run → actual deploy)
-- Proper error handling and reporting
-- Consistent deployment patterns
-- Correct CLI flag usage (--dry-run not --checkonly)
-
-❌ **WRONG** (will be rejected):
-```bash
-sf project deploy start --source-dir force-app/main/default/flows --target-org myOrg
-```
-
-✅ **CORRECT** (required approach):
-```
-Skill(skill="sf-deploy")
-Request: "Deploy flow at force-app/main/default/flows/[FlowName].flow-meta.xml to [target-org] with --dry-run first"
-```
-
-**Step 1: Validation (Check-Only)**
-```
-Skill(skill="sf-deploy")
-Request: "Deploy flow at force-app/main/default/flows/[FlowName].flow-meta.xml to [target-org] with --dry-run. Do NOT deploy yet."
-```
-
-Review: Check for field access, permissions, conflicts.
-
-**Step 2: Actual Deployment** (only if validation succeeds)
-```
-Skill(skill="sf-deploy")
-Request: "Proceed with actual deployment of flow to [target-org]."
-```
-
-**Step 3: Activation**
-```
-Edit: <status>Draft</status> → <status>Active</status>
-Skill(skill="sf-deploy")
-Request: "Deploy activated flow to [target-org]"
-```
-
-**Generate Documentation**:
-```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/generators/doc_generator.py \
-  force-app/main/default/flows/[FlowName].flow-meta.xml \
-  docs/flows/[FlowName]_documentation.md
-```
-
-For complex flows: [../../docs/governance-checklist.md](../../docs/governance-checklist.md) (min score: 140/200 for production)
+For complex flows: [../../docs/governance-checklist.md](../../docs/governance-checklist.md)
 
 ### Phase 5: Testing & Documentation
 
@@ -272,104 +207,19 @@ Resources: ../../examples/, ../../docs/subflow-library.md, ../../docs/orchestrat
 
 ### ⛔ CRITICAL: Record-Triggered Flow Architecture
 
-**NEVER create manual loops over triggered records in Record-Triggered Flows.**
+**NEVER loop over triggered records.** `$Record` = single record; platform handles batching.
 
-Record-Triggered Flows use **single-record context** with `$Record`. The platform batches records automatically.
+| Pattern | OK? | Notes |
+|---------|-----|-------|
+| `$Record.FieldName` | ✅ | Direct access |
+| Loop over `$Record__c` | ❌ | Process Builder pattern, not Flow |
+| Loop over `$Record` | ❌ | $Record is single, not collection |
 
-| Pattern | Correct? | Explanation |
-|---------|----------|-------------|
-| `$Record.FieldName` | ✅ YES | Direct access to triggering record |
-| Loop over `$Record__c` | ❌ NO | Process Builder pattern, NOT for Flows |
-| Loop over `$Record` collection | ❌ NO | $Record is single record, not collection |
+**Loops for RELATED records only**: Get Records → Loop collection → Assignment → DML after loop
 
-**Correct Pattern for Record-Triggered Flow:**
-```
-Start (Opportunity, After Save)
-  → Decision: Check $Record.StageName
-  → Assignment: Build rec_Task using $Record fields
-  → Create Records: rec_Task
-  → Update Records: rec_AccountUpdate
-```
+### ⛔ CRITICAL: No Parent Traversal in Get Records
 
-**When You NEED Loops:** Only for processing RELATED records (not the triggered record):
-```
-Get Records: Query Contacts where AccountId = $Record.Id
-  → Loop: col_RelatedContacts
-  → Assignment: Add to col_ContactsToUpdate
-  → (After loop) Update Records: col_ContactsToUpdate
-```
-
-**Common Mistake**: Trying to loop over triggered records like Process Builder did with `$Record__c`. In Flows, `$Record` is always the single triggering record, and the platform handles bulk processing automatically.
-
-### ⛔ CRITICAL: Relationship Fields in Get Records
-
-**Flow's Get Records (recordLookups) CANNOT query parent relationship fields.**
-
-| Query | Works? | Error |
-|-------|--------|-------|
-| `User.Name` | ✅ YES | Direct field on queried object |
-| `User.ManagerId` | ✅ YES | Direct field (lookup ID) |
-| `User.Manager.Name` | ❌ NO | "field 'Manager.Name' doesn't exist" |
-| `Account.Owner.Email` | ❌ NO | Parent traversal not supported |
-
-**Solution**: Use separate Get Records for parent object:
-```xml
-<!-- Step 1: Get the Case Owner -->
-<recordLookups>
-    <name>Get_Case_Owner</name>
-    <label>Get Case Owner</label>
-    <locationX>0</locationX>
-    <locationY>0</locationY>
-    <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
-    <connector>
-        <targetReference>Get_Manager</targetReference>
-    </connector>
-    <faultConnector>
-        <targetReference>Error_Handler</targetReference>
-    </faultConnector>
-    <filterLogic>and</filterLogic>
-    <filters>
-        <field>Id</field>
-        <operator>EqualTo</operator>
-        <value><elementReference>$Record.OwnerId</elementReference></value>
-    </filters>
-    <getFirstRecordOnly>true</getFirstRecordOnly>
-    <object>User</object>
-    <queriedFields>Id</queriedFields>
-    <queriedFields>Name</queriedFields>
-    <queriedFields>ManagerId</queriedFields>
-    <storeOutputAutomatically>false</storeOutputAutomatically>
-    <outputReference>rec_CaseOwner</outputReference>
-</recordLookups>
-
-<!-- Step 2: Get the Manager (separate query) -->
-<recordLookups>
-    <name>Get_Manager</name>
-    <label>Get Manager</label>
-    <locationX>0</locationX>
-    <locationY>0</locationY>
-    <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
-    <connector>
-        <targetReference>Next_Element</targetReference>
-    </connector>
-    <faultConnector>
-        <targetReference>Error_Handler</targetReference>
-    </faultConnector>
-    <filterLogic>and</filterLogic>
-    <filters>
-        <field>Id</field>
-        <operator>EqualTo</operator>
-        <value><elementReference>rec_CaseOwner.ManagerId</elementReference></value>
-    </filters>
-    <getFirstRecordOnly>true</getFirstRecordOnly>
-    <object>User</object>
-    <queriedFields>Id</queriedFields>
-    <queriedFields>Name</queriedFields>
-    <queriedFields>Email</queriedFields>
-    <storeOutputAutomatically>false</storeOutputAutomatically>
-    <outputReference>rec_Manager</outputReference>
-</recordLookups>
-```
+`recordLookups` cannot query `Parent.Field` (e.g., `Manager.Name`). **Solution**: Two Get Records - child first, then parent by Id.
 
 ### recordLookups Best Practices
 
@@ -435,122 +285,41 @@ screens → start → status → subflows → textTemplates → variables → wa
 **Field Not Found**: Verify field exists, deploy field first if missing
 **Insufficient Permissions**: Check profile permissions, consider System mode
 
-**$Record__Prior** (CRITICAL):
-- NEVER use in Create-only triggers (`<recordTriggerType>Create</recordTriggerType>`)
-- Valid only for: `Update` or `CreateAndUpdate` triggers
-- Error: "$Record__Prior can only be used...with recordTriggerType of Update or CreateAndUpdate"
+| Error Pattern | Fix |
+|---------------|-----|
+| `$Record__Prior` in Create-only | Only valid for Update/CreateAndUpdate triggers |
+| "Parent.Field doesn't exist" | Use TWO Get Records (child then parent) |
+| `$Record__c` loop fails | Use `$Record` directly (single context, not collection) |
 
-**Relationship Field in Get Records** (CRITICAL):
-- Error: "The field 'Parent.FieldName' for the object 'X' doesn't exist"
-- Cause: Trying to query parent relationship field (e.g., `Manager.Name`, `Account.Owner.Email`)
-- Fix: Use TWO separate Get Records - first for child, then for parent using the lookup ID
-
-**$Record vs $Record__c Confusion** (CRITICAL):
-- `$Record` = Flow's single-record context (correct for Record-Triggered Flows)
-- `$Record__c` = Process Builder collection pattern (DOES NOT EXIST in Flows)
-- If you try to loop over `$Record__c`, it will fail - use `$Record` directly without loops
-
-**XML Gotchas**: See [../../docs/xml-gotchas.md](../../docs/xml-gotchas.md) for recordLookups conflicts, element ordering, Transform issues, relationship fields, and subflow limitations.
+**XML Gotchas**: See [../../docs/xml-gotchas.md](../../docs/xml-gotchas.md)
 
 ## Edge Cases
 
-- **Large Data (>200 records)**: Warn governor limits, suggest scheduled flow
-- **Complex Branching (>5 paths)**: Suggest subflows, document criteria
-- **Cross-Object Updates**: Check circular dependencies, test for recursion
-- **Production**: Keep Draft initially, require explicit activation, provide rollback
-- **Testing/Unknown Org**: Prefer **standard objects** (Account, Contact, Opportunity, Task) for guaranteed deployability. Custom objects may not exist in target org.
+| Scenario | Solution |
+|----------|----------|
+| >200 records | Warn limits, suggest scheduled flow |
+| >5 branches | Use subflows |
+| Cross-object | Check circular deps, test recursion |
+| Production | Deploy Draft, activate explicitly |
+| Unknown org | Use standard objects (Account, Contact, etc.) |
 
-**Common Issues**:
-- Flow not visible → Check `sf project deploy report`, verify permissions, refresh Setup
-- Validation passes but testing fails → Check Debug Logs, test bulk (200+ records)
-- Sandbox works, production fails → Check FLS differences, verify dependencies
-
----
-
-## Cross-Skill Integration: sf-metadata
-
-### Pre-Flow Object Verification (Optional)
-
-Before creating record-triggered flows, you can verify object configuration:
-
-```
-Skill(skill="sf-metadata")
-Request: "Describe object [ObjectName] in org [alias] - show fields, record types, and validation rules"
-```
-
-**Use this when:**
-- Building flows for unfamiliar custom objects
-- Need to verify field types for flow assignments
-- Want to understand existing validation rules that might conflict
-- Need to check record type availability
-
-### Example Workflow
-
-1. User requests: "Create a record-triggered flow for Invoice__c"
-2. Before generating flow, verify object structure:
-   ```
-   Skill(skill="sf-metadata")
-   Request: "Describe Invoice__c in org myorg - show all fields and their types"
-   ```
-3. Use the returned field information to:
-   - Set correct field types in Get/Update elements
-   - Understand picklist values for decision criteria
-   - Identify relationship fields for cross-object updates
-4. Generate flow with accurate field references
+**Debug**: Flow not visible → deploy report + permissions | Tests fail → Debug Logs + bulk test | Sandbox→Prod fails → FLS + dependencies
 
 ---
 
-## Cross-Skill Integration: sf-data
+## Cross-Skill Integration
 
-### Generate Test Data for Flow Testing
+See [../../shared/docs/cross-skill-integration.md](../../shared/docs/cross-skill-integration.md)
 
-After creating and deploying flows, use sf-data to create test records that trigger the flow:
-
-```
-Skill(skill="sf-data")
-Request: "Create test records to trigger Account_After_Save_Flow - include edge cases for all decision branches"
-```
-
-**Use this when:**
-- Testing record-triggered flows with specific entry criteria
-- Verifying flow handles bulk data correctly (200+ records)
-- Creating test data for screen flow demonstrations
-- Testing scheduled flow scenarios
-
-### Example Workflow
-
-1. Create record-triggered flow for Account
-2. Deploy to sandbox via sf-deploy
-3. Generate test data:
-   ```
-   Skill(skill="sf-data")
-   Request: "Create 200 test Accounts with Industry='Technology' and AnnualRevenue > 1000000 to trigger the flow in org dev"
-   ```
-4. Check Debug Logs for flow execution
-5. Verify expected outcomes
-
----
-
-## Dependencies
-
-- **sf-deploy** (optional): Required for deploying flows to Salesforce orgs
-  - If not installed, flows will be created locally but cannot be deployed via `Skill(skill="sf-deploy")`
-  - Install: `/plugin install github:Jaganpro/sf-skills/sf-deploy`
-
-- **sf-metadata** (optional): Query org metadata before flow creation
-  - Verifies objects and fields exist before building flows
-  - Install: `/plugin install github:Jaganpro/sf-skills/sf-metadata`
-
-- **sf-data** (optional): Generate test data for flow testing
-  - Creates records that trigger record-triggered flows
-  - Install: `/plugin install github:Jaganpro/sf-skills/sf-data`
+| Direction | Pattern |
+|-----------|---------|
+| sf-flow → sf-metadata | "Describe Invoice__c" (verify fields before flow) |
+| sf-flow → sf-deploy | "Deploy with --dry-run" (validate & deploy) |
+| sf-flow → sf-data | "Create 200 test Accounts" (test data after deploy) |
 
 ## Notes
 
-- **Strict Mode**: All warnings block deployment
-- **API 62.0 Required**
-- **Two-Step Deployment**: Validate before deploying
-- **Python Validators**: Optional but recommended
+**Dependencies** (optional): sf-deploy, sf-metadata, sf-data | **API**: 62.0 | **Mode**: Strict (warnings block) | Python validators recommended
 
 ---
 

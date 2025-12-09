@@ -362,92 +362,23 @@ See [../../docs/trigger-actions-framework.md](../../docs/trigger-actions-framewo
 
 ---
 
-## Reference Documentation
+## Reference
 
-- [../../docs/best-practices.md](../../docs/best-practices.md) - Comprehensive best practices
-- [../../docs/trigger-actions-framework.md](../../docs/trigger-actions-framework.md) - TAF patterns
-- [../../docs/security-guide.md](../../docs/security-guide.md) - Security patterns
-- [../../docs/testing-guide.md](../../docs/testing-guide.md) - Testing patterns
-- [../../docs/naming-conventions.md](../../docs/naming-conventions.md) - Naming standards
-- [../../docs/solid-principles.md](../../docs/solid-principles.md) - SOLID in Apex
-- [../../docs/design-patterns.md](../../docs/design-patterns.md) - Factory, Repository, Builder
-- [../../docs/code-review-checklist.md](../../docs/code-review-checklist.md) - Review checklist
+**Docs**: `../../docs/` - best-practices, trigger-actions-framework, security-guide, testing-guide, naming-conventions, solid-principles, design-patterns, code-review-checklist
 
 ---
 
-## Cross-Skill Integration: sf-metadata
+## Cross-Skill Integration
 
-### Pre-Generation Object Discovery (Optional)
-
-Before generating triggers or service classes, you can query the org to discover object/field information:
-
-```
-Skill(skill="sf-metadata")
-Request: "Query org [alias] to describe object [ObjectName] and list all fields"
-```
-
-**Use this when:**
-- Creating a trigger for an unfamiliar object
-- Need to verify field API names before writing SOQL
-- Want to check relationship fields and their names
-- Need to understand existing validation rules or record types
-
-### Example Workflow
-
-1. User requests: "Create a trigger for the Invoice__c object"
-2. Before generating code, query the object structure:
-   ```
-   Skill(skill="sf-metadata")
-   Request: "Describe Invoice__c object in org myorg - show all custom fields and relationships"
-   ```
-3. Use the returned field information to write accurate SOQL and field references
-4. Generate trigger with correct field API names
-
----
-
-## Cross-Skill Integration: sf-data
-
-### Generate Test Data for Trigger Testing
-
-After creating triggers or service classes, use sf-data to generate test records:
-
-```
-Skill(skill="sf-data")
-Request: "Create 251 test Account records with varying Industries for trigger bulk testing in org [alias]"
-```
-
-**Use this when:**
-- Testing triggers with bulk data (201+ records for batch boundaries)
-- Need to verify flow triggers with specific data patterns
-- Want to test edge cases with boundary values
-- Setting up integration test data
-
-### Example Workflow
-
-1. Create trigger using sf-apex
-2. Deploy via sf-deploy
-3. Generate test data:
-   ```
-   Skill(skill="sf-data")
-   Request: "Create test hierarchy: 10 Accounts with 3 Contacts and 2 Opportunities each for testing AccountTrigger"
-   ```
-4. Verify trigger behavior in org
-
----
+| Skill | When to Use | Example |
+|-------|-------------|---------|
+| sf-metadata | Discover object/fields before coding | `Skill(skill="sf-metadata")` → "Describe Invoice__c" |
+| sf-data | Generate 251+ test records after deploy | `Skill(skill="sf-data")` → "Create 251 Accounts for bulk testing" |
+| sf-deploy | Deploy and run tests | `Skill(skill="sf-deploy")` → "Deploy with RunLocalTests" |
 
 ## Dependencies
 
-- **sf-deploy** (optional): Required for deploying Apex code to Salesforce orgs
-  - If not installed, code will be created locally but cannot be deployed via `Skill(skill="sf-deploy")`
-  - Install: `/plugin install github:Jaganpro/sf-skills/sf-deploy`
-
-- **sf-metadata** (optional): Query org metadata before code generation
-  - Helps discover object fields and relationships
-  - Install: `/plugin install github:Jaganpro/sf-skills/sf-metadata`
-
-- **sf-data** (optional): Generate test data for trigger/flow testing
-  - Creates bulk test records for trigger boundary testing
-  - Install: `/plugin install github:Jaganpro/sf-skills/sf-data`
+**All optional**: sf-deploy, sf-metadata, sf-data. Install: `/plugin install github:Jaganpro/sf-skills/[skill-name]`
 
 ## Common Exception Types Reference
 

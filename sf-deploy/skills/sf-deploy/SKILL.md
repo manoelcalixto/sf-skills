@@ -17,35 +17,15 @@ Expert Salesforce DevOps engineer specializing in deployment automation, CI/CD p
 
 ---
 
-## ⚠️ CRITICAL: Orchestration Workflow Order
+## ⚠️ CRITICAL: Orchestration Order
 
-When using sf-deployment with other skills, **follow this execution order**:
+**sf-metadata → sf-flow → sf-deploy → sf-data** (you are here: sf-deploy)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  CORRECT MULTI-SKILL ORCHESTRATION ORDER                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  1. sf-metadata    → Create object/field definitions (LOCAL files)          │
-│  2. sf-flow-builder → Create flow definitions (LOCAL files)                 │
-│  3. sf-deployment  → Deploy all metadata to org (REMOTE) ← YOU ARE HERE    │
-│  4. sf-data        → Create test data (REMOTE - objects must exist!)        │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+See [../../shared/docs/orchestration.md](../../shared/docs/orchestration.md) for details.
 
-**⚠️ DEPLOYMENT ORDER WITHIN sf-deployment:**
+**Deploy order WITHIN sf-deploy**: Objects/Fields → Permission Sets → Flows → Apex → Activate Flows
 
-```
-1. Custom Objects & Fields FIRST
-2. Permission Sets (for FLS access)
-3. Flows (may reference custom fields)
-4. Apex Classes/Triggers
-5. Activate Flows (change status to Active)
-```
-
-**Why order matters:**
-- Flows referencing non-existent fields will fail
-- Users can't see fields without Permission Sets
-- Triggers may depend on flows being active
+*Why*: Flows need fields, users need FLS, triggers may need active flows.
 
 ---
 
@@ -71,41 +51,17 @@ Error: In field: field - no CustomObject named ObjectName__c found
 
 **Solution:** Deploy objects first, THEN permission sets referencing them.
 
-### Flow Activation Workflow (CRITICAL)
+### Flow Activation (4-Step Process)
 
-**Flows deploy as Draft by default for safety. Follow this 4-step activation process:**
+**Flows deploy as Draft by default.** Activation steps:
+1. Deploy with `<status>Draft</status>`
+2. Verify: `sf project deploy report --job-id [id]`
+3. Edit XML: `Draft` → `Active`
+4. Redeploy
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  FLOW ACTIVATION WORKFLOW                                           │
-├─────────────────────────────────────────────────────────────────────┤
-│  Step 1: Deploy with <status>Draft</status>                         │
-│          sf project deploy start --source-dir flows --target-org X  │
-│                                                                      │
-│  Step 2: Verify deployment succeeded                                 │
-│          sf project deploy report --job-id [id]                      │
-│                                                                      │
-│  Step 3: Edit XML: Change <status>Draft</status>                    │
-│                    to      <status>Active</status>                   │
-│                                                                      │
-│  Step 4: Redeploy the flow                                          │
-│          sf project deploy start --source-dir flows --target-org X  │
-└─────────────────────────────────────────────────────────────────────┘
-```
+**Why?** Draft lets you verify before activating; if activation fails, flow still exists.
 
-**Why two deployments?**
-- Draft allows you to verify the flow deployed correctly
-- If activation fails (e.g., missing permissions), the flow still exists
-- You can test the flow manually before activating
-- Production best practice: deploy Draft, test, then activate
-
-**Common Activation Errors:**
-
-| Error | Cause | Solution |
-|-------|-------|----------|
-| "Flow is invalid" | Referenced field/object missing | Deploy objects BEFORE flows |
-| "Insufficient permissions" | User can't activate | Check "Manage Flow" permission |
-| "Version conflict" | Active version exists | Deactivate old version first |
+**Common Errors**: "Flow is invalid" (deploy objects first) | "Insufficient permissions" (check Manage Flow) | "Version conflict" (deactivate old version)
 
 ### FLS Warning After Deployment
 
@@ -297,69 +253,9 @@ See [examples/deployment-workflows.md](examples/deployment-workflows.md) for scr
 
 ## Deployment Script Template
 
-**Reusable bash script for multi-step deployments:**
+Reusable multi-step deployment script: **[examples/deploy.sh](examples/deploy.sh)**
 
-```bash
-#!/bin/bash
-#
-# Multi-Step Deployment Script
-# Generated by sf-deployment skill
-#
-# Usage: ./scripts/deploy.sh <target-org-alias>
-
-set -e  # Exit on error
-
-TARGET_ORG=${1:-"myorg"}
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}/..")" && pwd)"
-
-echo "═══════════════════════════════════════════════════════════════════"
-echo "  DEPLOYMENT TO: $TARGET_ORG"
-echo "═══════════════════════════════════════════════════════════════════"
-
-# Step 0: Pre-flight checks
-echo "📋 Pre-flight checks..."
-sf --version || { echo "❌ sf CLI not found"; exit 1; }
-sf org display --target-org "$TARGET_ORG" || { echo "❌ Cannot connect to org"; exit 1; }
-
-# Step 1: Deploy Custom Objects/Fields
-echo "📦 Step 1: Deploying objects and fields..."
-sf project deploy start \
-    --source-dir "$PROJECT_DIR/force-app/main/default/objects" \
-    --target-org "$TARGET_ORG" \
-    --wait 10
-
-# Step 2: Deploy Permission Sets
-echo "📦 Step 2: Deploying permission sets..."
-sf project deploy start \
-    --source-dir "$PROJECT_DIR/force-app/main/default/permissionsets" \
-    --target-org "$TARGET_ORG" \
-    --wait 10
-
-# Step 3: Deploy Apex (with tests)
-echo "📦 Step 3: Deploying Apex..."
-sf project deploy start \
-    --source-dir "$PROJECT_DIR/force-app/main/default/classes" \
-    --source-dir "$PROJECT_DIR/force-app/main/default/triggers" \
-    --target-org "$TARGET_ORG" \
-    --test-level RunLocalTests \
-    --wait 30
-
-# Step 4: Deploy Flows (Draft)
-echo "📦 Step 4: Deploying flows..."
-sf project deploy start \
-    --source-dir "$PROJECT_DIR/force-app/main/default/flows" \
-    --target-org "$TARGET_ORG" \
-    --wait 10
-
-echo "═══════════════════════════════════════════════════════════════════"
-echo "  ✅ DEPLOYMENT COMPLETE"
-echo "═══════════════════════════════════════════════════════════════════"
-echo ""
-echo "Next Steps:"
-echo "  1. Assign permission sets: sf org assign permset --name PermSetName --target-org $TARGET_ORG"
-echo "  2. Activate flows: Edit XML status to Active, redeploy"
-echo "  3. Run test data: sf apex run --file scripts/data/create-test-data.apex --target-org $TARGET_ORG"
-```
+Deploys in order: Objects → Permission Sets → Apex (with tests) → Flows (Draft)
 
 ---
 

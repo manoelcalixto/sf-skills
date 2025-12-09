@@ -15,23 +15,13 @@ Expert Salesforce administrator specializing in metadata architecture, security 
 4. **Cross-Skill Integration**: Provide metadata discovery for sf-apex and sf-flow
 5. **Deployment Integration**: Deploy metadata via sf-deploy skill
 
-## ⚠️ CRITICAL: Orchestration Workflow Order
+## ⚠️ CRITICAL: Orchestration Order
 
-When using sf-metadata with other skills, **follow this execution order**:
+**sf-metadata → sf-flow → sf-deploy → sf-data** (you are here: sf-metadata)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  CORRECT MULTI-SKILL ORCHESTRATION ORDER                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  1. sf-metadata    → Create object/field definitions (LOCAL files)          │
-│  2. sf-flow-builder → Create flow definitions (LOCAL files)                 │
-│  3. sf-deployment  → Deploy all metadata to org (REMOTE)                   │
-│  4. sf-data        → Create test data (REMOTE - objects must exist!)        │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+⚠️ sf-data requires objects deployed to org. Always deploy BEFORE creating test data.
 
-**⚠️ COMMON MISTAKE**: Running sf-data BEFORE sf-deployment for custom objects.
-sf-data requires objects to exist in the org. Always deploy first!
+See [../../shared/docs/orchestration.md](../../shared/docs/orchestration.md) for details.
 
 ---
 
@@ -321,15 +311,9 @@ Next Steps:
 - Master-Detail vs Lookup selection appropriate for use case (-3)
 - Record Types have associated Page Layouts (-3)
 
-### Scoring Thresholds
+### Scoring
 
-| Rating | Score |
-|--------|-------|
-| ⭐⭐⭐⭐⭐ Excellent | 108-120 |
-| ⭐⭐⭐⭐ Very Good | 96-107 |
-| ⭐⭐⭐ Good | 84-95 |
-| ⭐⭐ Needs Work | 72-83 |
-| ⭐ Critical Issues | <72 |
+See [../../shared/docs/scoring-overview.md](../../shared/docs/scoring-overview.md) | **Thresholds**: ⭐⭐⭐⭐⭐ 108+ | ⭐⭐⭐⭐ 96-107 | ⭐⭐⭐ 84-95 | Block: <72
 
 ---
 
@@ -382,26 +366,16 @@ Next Steps:
 
 ## Field Type Selection Guide
 
-| Data Type | Salesforce Field | Use When |
-|-----------|------------------|----------|
-| Short text | Text | ≤255 characters, single line |
-| Long text | Text Area (Long) | >255 characters, multi-line |
-| Rich text | Text Area (Rich) | Formatted text with HTML |
-| Whole numbers | Number (0 decimals) | Counts, quantities |
-| Decimals | Number (with decimals) | Measurements, rates |
-| Money | Currency | Monetary values (respects org currency) |
-| True/False | Checkbox | Binary options |
-| Single choice | Picklist | Predefined options, single select |
-| Multiple choice | Multi-Select Picklist | Predefined options, multi-select |
-| Date only | Date | Calendar dates without time |
-| Date + time | DateTime | Timestamps with timezone |
-| Email | Email | Email addresses (validated format) |
-| Phone | Phone | Phone numbers (click-to-dial) |
-| URL | URL | Web addresses (clickable links) |
-| Related record | Lookup | Optional relationship |
-| Required parent | Master-Detail | Required relationship, cascade delete |
-| Calculated | Formula | Derived from other fields |
-| Aggregated | Roll-Up Summary | SUM, COUNT, MIN, MAX from children |
+| Type | Salesforce | Notes |
+|------|------------|-------|
+| Text | Text / Text Area (Long/Rich) | ≤255 chars / multi-line / HTML |
+| Numbers | Number / Currency | Decimals or money (org currency) |
+| Boolean | Checkbox | True/False |
+| Choice | Picklist / Multi-Select | Single/multiple predefined options |
+| Date | Date / DateTime | With or without time |
+| Contact | Email / Phone / URL | Validated formats |
+| Relationship | Lookup / Master-Detail | Optional / required parent |
+| Calculated | Formula / Roll-Up | Derived from fields / children |
 
 ---
 
@@ -419,67 +393,24 @@ Next Steps:
 
 ## Common Validation Rule Patterns
 
-**Required Field Based on Another**:
-```
-AND(
-    ISPICKVAL(Status__c, 'Closed'),
-    ISBLANK(Close_Date__c)
-)
-// Error: Close Date is required when Status is Closed
-```
-
-**Email Format Validation**:
-```
-NOT(REGEX(Email__c, "^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"))
-// Error: Please enter a valid email address
-```
-
-**Future Date Required**:
-```
-Due_Date__c < TODAY()
-// Error: Due Date must be in the future
-```
-
-**Cross-Object Validation**:
-```
-AND(
-    NOT(ISBLANK(Account.Type)),
-    Account.Type != 'Customer',
-    Amount__c > 100000
-)
-// Error: Opportunities over $100K require Customer account type
-```
+| Pattern | Formula | Use |
+|---------|---------|-----|
+| Conditional Required | `AND(ISPICKVAL(Status,'Closed'), ISBLANK(Close_Date__c))` | Field required when condition met |
+| Email Regex | `NOT(REGEX(Email__c, "^[a-zA-Z0-9._-]+@..."))` | Format validation |
+| Future Date | `Due_Date__c < TODAY()` | Date constraints |
+| Cross-Object | `AND(Account.Type != 'Customer', Amount__c > 100000)` | Related field checks |
 
 ---
 
 ## Cross-Skill Integration
 
-### Invoked BY sf-apex
+See [../../shared/docs/cross-skill-integration.md](../../shared/docs/cross-skill-integration.md)
 
-sf-apex can call sf-metadata to query object/field information before generating triggers:
-
-```
-Skill(skill="sf-metadata")
-Request: "Query org [alias] to describe object [ObjectName] and list all fields"
-```
-
-### Invoked BY sf-flow
-
-sf-flow can call sf-metadata to verify object configuration before creating flows:
-
-```
-Skill(skill="sf-metadata")
-Request: "Describe object [ObjectName] in org [alias] - show fields, record types, and validation rules"
-```
-
-### Invokes sf-deploy
-
-sf-metadata calls sf-deploy for deploying generated metadata:
-
-```
-Skill(skill="sf-deploy")
-Request: "Deploy metadata at [path] to [target-org] with --dry-run"
-```
+| Direction | Pattern |
+|-----------|---------|
+| sf-apex → sf-metadata | "Describe Invoice__c" (discover fields before coding) |
+| sf-flow → sf-metadata | "Describe object fields, record types, validation rules" |
+| sf-metadata → sf-deploy | "Deploy with --dry-run" (validate & deploy metadata) |
 
 ---
 
@@ -538,155 +469,47 @@ sf schema generate field --label "My Field" --object Account
 
 ---
 
-## Reference Documentation
+## Reference & Dependencies
 
-- [../../docs/metadata-types-reference.md](../../docs/metadata-types-reference.md) - Complete metadata types guide
-- [../../docs/field-types-guide.md](../../docs/field-types-guide.md) - Field type selection guide
-- [../../docs/fls-best-practices.md](../../docs/fls-best-practices.md) - Field-Level Security patterns
-- [../../docs/profile-permission-guide.md](../../docs/profile-permission-guide.md) - Profiles vs Permission Sets
-- [../../docs/naming-conventions.md](../../docs/naming-conventions.md) - Naming standards
-- [../../docs/sf-cli-commands.md](../../docs/sf-cli-commands.md) - sf CLI reference
+**Docs**: `../../docs/` - metadata-types-reference, field-types-guide, fls-best-practices, naming-conventions
 
----
+**Dependencies**: sf-deploy (optional) for deployment. Install: `/plugin install github:Jaganpro/sf-skills/sf-deploy`
 
-## Dependencies
-
-- **sf-deploy** (optional): Required for deploying metadata to Salesforce orgs
-  - If not installed, metadata will be created locally but cannot be deployed via `Skill(skill="sf-deploy")`
-  - Install: `/plugin install github:Jaganpro/sf-skills/sf-deploy`
-
-## Notes
-
-- **API Version**: 62.0 required
-- **Permission Sets Preferred**: Always recommend Permission Sets over Profile modifications
-- **Scoring**: Block deployment if score < 72
+**Notes**: API 62.0 required | Permission Sets over Profiles | Block if score < 72
 
 ---
 
-## 📋 Quick Reference: Validation Script
+## Validation
 
-**Validate metadata XML before deployment:**
-
+**Manual validation** (if hooks don't fire):
 ```bash
-# Path to validation script
 python3 ~/.claude/plugins/marketplaces/sf-skills/sf-metadata/hooks/scripts/validate_metadata.py <file_path>
-
-# Example - Custom Object
-python3 ~/.claude/plugins/marketplaces/sf-skills/sf-metadata/hooks/scripts/validate_metadata.py \
-  force-app/main/default/objects/Customer_Feedback__c/Customer_Feedback__c.object-meta.xml
-
-# Example - Custom Field
-python3 ~/.claude/plugins/marketplaces/sf-skills/sf-metadata/hooks/scripts/validate_metadata.py \
-  force-app/main/default/objects/Lead/fields/Lead_Score__c.field-meta.xml
 ```
 
-**Scoring**: 120 points across 6 categories. Minimum 84 (70%) for deployment.
+**Scoring**: 120 points / 6 categories. Minimum 84 (70%) for deployment.
+
+**Hooks not firing?** Check: `CLAUDE_PLUGIN_ROOT` set, hooks.json valid, Python 3 in PATH, file matches pattern.
 
 ---
 
-## Manual Validation When Hooks Don't Fire
+## 🔑 Key Insights
 
-**If the automatic post-write validation hook doesn't trigger:**
+| Insight | Issue | Fix |
+|---------|-------|-----|
+| FLS is the Silent Killer | Deployed fields invisible without FLS | Always prompt for Permission Set generation |
+| Required Fields ≠ Permission Sets | Salesforce rejects required fields in PS | Filter out required fields from fieldPermissions |
+| Orchestration Order | sf-data fails if objects not deployed | sf-metadata → sf-flow → sf-deploy → sf-data |
+| Before-Save Efficiency | Before-Save auto-saves, no DML needed | Use Before-Save for same-record updates |
+| Test with 251 Records | Batch boundary at 200 records | Always bulk test with 251+ records |
 
-1. **Check hook status:**
-   ```bash
-   ls -la ~/.claude/plugins/marketplaces/sf-skills/sf-metadata/hooks/
-   cat ~/.claude/plugins/marketplaces/sf-skills/sf-metadata/hooks/hooks.json
-   ```
+## Common Errors
 
-2. **Run validation manually:**
-   ```bash
-   python3 ~/.claude/plugins/marketplaces/sf-skills/sf-metadata/hooks/scripts/validate_metadata.py <file_path>
-   ```
-
-3. **Troubleshooting Checklist:**
-   - [ ] `CLAUDE_PLUGIN_ROOT` environment variable is set
-   - [ ] hooks.json is properly formatted JSON
-   - [ ] Python 3 is available in PATH
-   - [ ] File path matches hook pattern (`**/*.field-meta.xml`, `**/*.object-meta.xml`)
-   - [ ] Check Claude Code logs for hook errors
-
-**Common Reasons Hooks Don't Fire:**
-- Plugin not properly installed
-- File written outside expected directory
-- Hook pattern doesn't match file path
-- Python not available in system PATH
-
----
-
-## 🔑 Key Insights & Lessons Learned
-
-These are critical lessons learned from real-world usage. **DO NOT repeat these mistakes!**
-
-### 1. FLS is the Silent Killer
-
-```
-⚠️ CRITICAL: Deployed fields can be INVISIBLE to users!
-```
-
-**Mistake**: Assuming deployment success = users can see fields
-**Reality**: FLS must be configured via Permission Set or Profile
-**Fix**: ALWAYS prompt user for Permission Set generation after creating objects/fields
-
-### 2. Required Fields Cannot Be in Permission Sets
-
-```
-Error: You cannot deploy to a required field: ObjectName.RequiredField__c
-```
-
-**Mistake**: Including required fields in Permission Set field permissions
-**Reality**: Required fields are automatically visible - Salesforce rejects them in Permission Sets
-**Fix**: Filter out required fields when generating Permission Sets
-
-### 3. Orchestration Order Matters
-
-```
-Error: SObject type 'Custom_Object__c' is not supported
-```
-
-**Mistake**: Trying to create test data before deploying custom objects
-**Reality**: sf-data operations require objects to exist in the org
-**Fix**: Always follow the order: sf-metadata → sf-flow-builder → sf-deployment → sf-data
-
-### 4. Validation Hooks May Not Fire
-
-**Mistake**: Assuming post-write validation always runs automatically
-**Reality**: Hooks require proper environment setup and may not trigger in all contexts
-**Fix**: Provide manual validation command as fallback, document troubleshooting steps
-
-### 5. Before-Save Flows Don't Need DML
-
-```
-✅ Before-Save: Assign to $Record.Field__c (auto-saved)
-❌ After-Save: Requires explicit recordUpdate DML
-```
-
-**Insight**: For field updates on the triggering record, Before-Save flows are more efficient
-**Benefit**: No extra DML statement, better performance, cleaner code
-
-### 6. Name Field is Always Visible
-
-**Mistake**: Including Name field in Permission Set
-**Reality**: The Name field (standard or auto-number) is always visible
-**Fix**: Never include Name field in fieldPermissions
-
-### 7. Test with 251 Records
-
-**Why 251?**: Salesforce batch boundaries are at 200 records
-**Benefit**: Tests bulk processing, catches N+1 patterns, validates governor limits
-**Standard**: Always test automation with 251+ records before production
-
----
-
-## Common Error Reference
-
-| Error Message | Cause | Solution |
-|---------------|-------|----------|
-| `You cannot deploy to a required field` | Required field in Permission Set | Remove required fields from fieldPermissions |
-| `Field does not exist` | FLS blocking field visibility | Create Permission Set with field access |
-| `SObject type 'X' is not supported` | Object not deployed yet | Deploy metadata before creating data |
-| `Element X is duplicated` | XML elements not alphabetically ordered | Reorder elements in XML |
-| `Invalid field: Parent.Field__c` | Relationship traversal in flow | Use separate Get Records for parent |
+| Error | Fix |
+|-------|-----|
+| `Cannot deploy to required field` | Remove from fieldPermissions (auto-visible) |
+| `Field does not exist` | Create Permission Set with field access |
+| `SObject type 'X' not supported` | Deploy metadata first |
+| `Element X is duplicated` | Reorder XML elements alphabetically |
 
 ---
 

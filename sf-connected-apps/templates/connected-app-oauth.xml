@@ -48,10 +48,15 @@
 
     <oauthPolicy>
         <ipRelaxation>ENFORCE</ipRelaxation>
-        <refreshTokenPolicy>specific_lifetime</refreshTokenPolicy>
-        <refreshTokenValidityPeriod>30</refreshTokenValidityPeriod>
+        <refreshTokenPolicy>infinite</refreshTokenPolicy>
         <singleLogoutUrl>{{LOGOUT_URL}}</singleLogoutUrl>
     </oauthPolicy>
+
+    <!--
+      NOTE: refreshTokenValidityPeriod requires specific element ordering per XSD.
+      For custom token lifetimes, configure via Setup UI after deployment.
+      Using refreshTokenPolicy=infinite is the safest metadata-deployable option.
+    -->
 
     <!-- Session Policy -->
     <sessionPolicy>

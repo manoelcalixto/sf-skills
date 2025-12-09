@@ -243,37 +243,55 @@ Next Steps:
 
 ### ExtlClntAppGlobalOauthSettings (Global OAuth)
 
-**File**: `[AppName].ecaGlobalOauth-meta.xml`
+**File**: `[AppName].ecaGlblOauth-meta.xml`
+
+> ⚠️ **IMPORTANT**: File suffix is `.ecaGlblOauth` (abbreviated), NOT `.ecaGlobalOauth`
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <ExtlClntAppGlobalOauthSettings xmlns="http://soap.sforce.com/2006/04/metadata">
     <callbackUrl>https://app.example.com/oauth/callback</callbackUrl>
-    <consumerKey>AUTO_GENERATED</consumerKey>
+    <externalClientApplication>My_App_Name</externalClientApplication>
     <isConsumerSecretOptional>false</isConsumerSecretOptional>
+    <isIntrospectAllTokens>false</isIntrospectAllTokens>
     <isPkceRequired>true</isPkceRequired>
-    <shouldRotateConsumerKey>true</shouldRotateConsumerKey>
-    <shouldRotateConsumerSecret>true</shouldRotateConsumerSecret>
+    <isSecretRequiredForRefreshToken>true</isSecretRequiredForRefreshToken>
+    <label>My App Global OAuth Settings</label>
+    <shouldRotateConsumerKey>false</shouldRotateConsumerKey>
+    <shouldRotateConsumerSecret>false</shouldRotateConsumerSecret>
 </ExtlClntAppGlobalOauthSettings>
 ```
+
+**Required Fields**:
+| Field | Description |
+|-------|-------------|
+| `callbackUrl` | OAuth callback URL |
+| `externalClientApplication` | Reference to parent ECA (must match .eca file name) |
+| `label` | Display label for this configuration |
 
 ### ExtlClntAppOauthSettings (Instance OAuth)
 
 **File**: `[AppName].ecaOauth-meta.xml`
 
+> ⚠️ **IMPORTANT**: Uses `commaSeparatedOauthScopes` string, NOT individual `<scopes>` tags
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <ExtlClntAppOauthSettings xmlns="http://soap.sforce.com/2006/04/metadata">
-    <isAdminApproved>true</isAdminApproved>
-    <isClientCredentialsEnabled>false</isClientCredentialsEnabled>
-    <isCodeCredentialsEnabled>true</isCodeCredentialsEnabled>
-    <isIntrospectAllTokens>false</isIntrospectAllTokens>
-    <isNamedUserJwtEnabled>false</isNamedUserJwtEnabled>
-    <isRefreshTokenEnabled>true</isRefreshTokenEnabled>
-    <scopes>Api</scopes>
-    <scopes>RefreshToken</scopes>
+    <commaSeparatedOauthScopes>Api, RefreshToken, OpenID</commaSeparatedOauthScopes>
+    <externalClientApplication>My_App_Name</externalClientApplication>
+    <label>My App OAuth Settings</label>
 </ExtlClntAppOauthSettings>
 ```
+
+**Required Fields**:
+| Field | Description |
+|-------|-------------|
+| `commaSeparatedOauthScopes` | Comma-separated list of scopes (e.g., "Api, RefreshToken") |
+| `externalClientApplication` | Reference to parent ECA (must match .eca file name) |
+| `label` | Display label for this configuration |
+
+> **Note**: OAuth flows (Authorization Code, Client Credentials, JWT) are configured via the Admin UI or `ExtlClntAppOauthConfigurablePolicies`, not in this metadata type.
 
 ### ExtlClntAppConfigurablePolicies (Admin Policies)
 

@@ -222,57 +222,6 @@ Hooks provide **advisory feedback** after writes - they inform but don't block.
 "Create a new Claude Code skill for code analysis"
 ```
 
-## What's Included
-
-### sf-flow
-- Flow XML generation with API 62.0 (Winter '26)
-- 7 flow type templates (Screen, Record-Triggered, Scheduled, etc.)
-- 6 reusable subflow patterns
-- Strict validation with 110-point scoring
-- Auto-Layout support (locationX/Y = 0)
-- Integration with sf-deploy and sf-metadata
-
-### sf-apex
-- 150-point scoring across 8 categories
-- Trigger Actions Framework (TAF) enforcement
-- 9 production-ready templates
-- SOLID principles validation
-- Security best practices (WITH USER_MODE, FLS)
-- Modern Apex features (null coalescing, safe navigation)
-- Integration with sf-metadata for object discovery
-
-### sf-metadata
-- 120-point scoring across 6 categories
-- Custom Object and Field generation (15+ field types)
-- Profile and Permission Set templates with FLS
-- Validation Rules with common patterns
-- Record Types and Page Layouts
-- Org metadata querying via sf CLI v2
-- Cross-skill integration (sf-apex and sf-flow can query metadata)
-
-### sf-data
-- 130-point scoring across 7 categories
-- SOQL expertise (relationships, polymorphic, aggregates)
-- Test data factory templates for standard objects
-- Bulk API 2.0 operations (import, export, upsert, delete)
-- Record tracking and cleanup/rollback capabilities
-- Anonymous Apex execution for complex data setup
-- Cross-skill integration (sf-apex and sf-flow use for testing)
-
-### sf-deploy
-- Modern `sf` CLI v2 commands (not legacy sfdx)
-- Dry-run validation (`--dry-run`) before deployment
-- Test execution with coverage reporting
-- Quick deploy for validated changesets
-- CI/CD pipeline support
-
-### skill-builder
-- Interactive wizard for skill creation
-- YAML frontmatter validation
-- Bulk skill validation
-- Dependency management
-- Interactive terminal editor
-
 ## Roadmap
 
 ### Naming Convention

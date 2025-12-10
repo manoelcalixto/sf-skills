@@ -38,79 +38,134 @@ sequenceDiagram
 
     Note over C,OP: User-Agent Flow with Social Sign-On (OIDC)
 
-    %% Phase 1: Initial Access Token Request
-    C->>SF: 1. Access Token Request
-    Note over C,SF: GET /services/oauth2/authorize<br/>client_id, response_type=token<br/>redirect_uri, state, scope
+    %% ═══════════════════════════════════════════════════════════
+    %% PHASE 1: INITIAL REQUEST
+    %% ═══════════════════════════════════════════════════════════
+    rect rgba(165,243,252,0.15)
+        Note over C,SF: ══════ INITIAL REQUEST ══════
 
-    SF->>SF: 2. Check for RP session
+        C->>SF: 📤 Access Token Request
+        Note right of SF: Endpoint: /services/oauth2/authorize
+        Note left of C: response_type=token │ client_id │ redirect_uri │ state │ scope
 
-    %% Phase 2: Redirect to OIDC Provider
-    SF->>C: 3. HTTP Redirect to OP
-    Note over SF,C: Redirect to OIDC authorize endpoint
-
-    C->>OP: 4. Auth Code Request
-    Note over C,OP: GET /authorize<br/>response_type=code<br/>redirect_uri=/services/authglobalcallback<br/>scope, state
-
-    %% Phase 3: Authentication at OP
-    OP->>OP: 5. Check for OP session
-    OP->>C: 6. Display Login Page
-    C->>OP: 7. User authenticates
-
-    OP->>OP: 8. Validate credentials
-    OP->>C: 9. Display Consent Screen (first time only)
-    C->>OP: 10. User grants consent
-
-    OP->>OP: 11. Generate authorization code
-
-    %% Phase 4: Return to Salesforce
-    OP->>C: 12. HTTP Redirect to Salesforce
-    Note over OP,C: Redirect to /services/authglobalcallback<br/>?code=OP_AUTH_CODE&state=...
-
-    C->>SF: 13. Deliver OP Auth Code
-    Note over C,SF: GET /services/authglobalcallback<br/>code=OP_AUTH_CODE, state
-
-    %% Phase 5: Salesforce exchanges code with OP
-    SF->>OP: 14. Access Token Request
-    Note over SF,OP: POST to OP Token Endpoint<br/>client_id, client_secret<br/>code, redirect_uri, state
-
-    OP->>OP: 15. Validate client & code
-
-    OP-->>SF: 16. Access Token Response
-    Note over OP,SF: id_token (JWT)<br/>access_token<br/>refresh_token
-
-    SF->>SF: 17. Verify ID token signature
-
-    %% Phase 6: Optional UserInfo
-    rect rgba(248,250,252,0.5)
-        Note over SF,OP: Optional: UserInfo Endpoint
-        SF->>OP: 18. Request User Information
-        Note over SF,OP: POST /userinfo<br/>Authorization: Bearer ACCESS_TOKEN
-        OP-->>SF: 19. User Info Response
-        Note over OP,SF: User claims (email, name, etc.)
-        SF->>SF: 20. Validate sub matches ID token
+        SF->>SF: ⚙️ Check for RP session
     end
 
-    %% Phase 7: Salesforce User Provisioning
-    SF->>SF: 21. Invoke registration handler<br/>to create/update user
+    %% ═══════════════════════════════════════════════════════════
+    %% PHASE 2: REDIRECT TO OIDC PROVIDER
+    %% ═══════════════════════════════════════════════════════════
+    rect rgba(254,215,170,0.15)
+        Note over C,OP: ══════ REDIRECT TO OIDC PROVIDER ══════
 
-    %% Phase 8: User Authorization for Salesforce
-    SF->>C: 22. Display Salesforce Consent
-    Note over SF,C: "App requests:<br/>• API Access<br/>• Refresh Token"
-    C->>SF: 23. User grants Salesforce consent
+        SF->>C: 📥 HTTP Redirect to OP
+        Note right of C: HTTP 302 → OP authorize endpoint
 
-    %% Phase 9: Return tokens to Client
-    SF->>C: 24. Redirect to Client Callback
-    Note over SF,C: Redirect URI with:<br/>access_token (Salesforce)<br/>refresh_token<br/>instance_url
+        C->>OP: 📤 Auth Code Request
+        Note right of OP: Endpoint: /authorize
+        Note left of C: response_type=code │ redirect_uri=/services/authglobalcallback │ scope │ state
+    end
 
-    C->>C: 25. Store Salesforce tokens
+    %% ═══════════════════════════════════════════════════════════
+    %% PHASE 3: AUTHENTICATION AT OP
+    %% ═══════════════════════════════════════════════════════════
+    rect rgba(254,215,170,0.15)
+        Note over C,OP: ══════ AUTHENTICATION AT OP ══════
 
-    %% Phase 10: API Usage
-    C->>SF: 26. Use Salesforce APIs
-    Note over C,SF: Authorization: Bearer SF_ACCESS_TOKEN
+        OP->>OP: ⚙️ Check for OP session
+        OP->>C: 📥 Display Login Page
+        C->>OP: 🔐 User authenticates
 
-    SF-->>C: 27. API Response ✅
+        OP->>OP: ⚙️ Validate credentials
+        OP->>C: 📥 Display Consent Screen
+        Note right of C: First time only
+        C->>OP: 🔐 User grants consent
 
-    Note over C,SF: OP session cookie enables<br/>silent re-auth (~15 min)
+        OP->>OP: ⚙️ Generate authorization code
+    end
+
+    %% ═══════════════════════════════════════════════════════════
+    %% PHASE 4: RETURN TO SALESFORCE
+    %% ═══════════════════════════════════════════════════════════
+    rect rgba(221,214,254,0.15)
+        Note over C,SF: ══════ RETURN TO SALESFORCE ══════
+
+        OP->>C: 📥 HTTP Redirect to Salesforce
+        Note right of C: Redirect: /services/authglobalcallback
+        Note left of OP: ?code=OP_AUTH_CODE │ state=...
+
+        C->>SF: 📤 Deliver OP Auth Code
+        Note right of SF: Endpoint: /services/authglobalcallback
+        Note left of C: code=OP_AUTH_CODE │ state
+    end
+
+    %% ═══════════════════════════════════════════════════════════
+    %% PHASE 5: TOKEN EXCHANGE (SF ↔ OP)
+    %% ═══════════════════════════════════════════════════════════
+    rect rgba(167,243,208,0.15)
+        Note over SF,OP: ══════ TOKEN EXCHANGE (SF ↔ OP) ══════
+
+        SF->>OP: 📤 Access Token Request
+        Note right of OP: Endpoint: OP Token Endpoint
+        Note left of SF: grant_type=authorization_code │ client_id │ client_secret │ code │ redirect_uri
+
+        OP->>OP: ⚙️ Validate client & code
+
+        OP-->>SF: 📥 Access Token Response
+        Note left of SF: id_token (JWT) │ access_token │ refresh_token
+
+        SF->>SF: 🔐 Verify ID token signature
+    end
+
+    %% ═══════════════════════════════════════════════════════════
+    %% PHASE 6: OPTIONAL USERINFO
+    %% ═══════════════════════════════════════════════════════════
+    rect rgba(248,250,252,0.5)
+        Note over SF,OP: ══════ OPTIONAL: USERINFO ══════
+
+        SF->>OP: 📤 Request User Information
+        Note right of OP: Endpoint: /userinfo
+        Note left of SF: Authorization: Bearer OP_ACCESS_TOKEN
+
+        OP-->>SF: 📥 User Info Response
+        Note left of SF: Claims: email │ name │ sub │ picture
+
+        SF->>SF: 🔐 Validate sub matches ID token
+    end
+
+    %% ═══════════════════════════════════════════════════════════
+    %% PHASE 7: USER PROVISIONING & SF CONSENT
+    %% ═══════════════════════════════════════════════════════════
+    rect rgba(221,214,254,0.15)
+        Note over C,SF: ══════ USER PROVISIONING & SF CONSENT ══════
+
+        SF->>SF: ⚙️ Invoke registration handler
+        Note right of SF: Create or update Salesforce User
+
+        SF->>C: 📥 Display Salesforce Consent
+        Note right of C: App requests: API Access │ Refresh Token
+
+        C->>SF: 🔐 User grants Salesforce consent
+    end
+
+    %% ═══════════════════════════════════════════════════════════
+    %% PHASE 8: API ACCESS
+    %% ═══════════════════════════════════════════════════════════
+    rect rgba(165,243,252,0.15)
+        Note over C,SF: ══════ API ACCESS ══════
+
+        SF->>C: 📥 Redirect to Client Callback
+        Note right of C: Redirect URI with tokens
+        Note left of SF: access_token │ refresh_token │ instance_url
+
+        C->>C: ⚙️ Store Salesforce tokens
+
+        C->>SF: 📤 Use Salesforce APIs
+        Note right of SF: Authorization: Bearer SF_ACCESS_TOKEN
+
+        SF-->>C: ✅ API Response
+    end
+
+    Note over C,SF: ⚠️ OP session cookie enables silent re-auth (~15 min)
 ```
 
 ## ASCII Fallback Template

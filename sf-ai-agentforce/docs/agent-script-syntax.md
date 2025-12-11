@@ -18,8 +18,8 @@ There are **two deployment methods** with **different capabilities**:
 |--------|-------------------|-------------------|
 | Deploy Command | `sf project deploy start` | `sf agent publish authoring-bundle` |
 | **Visible in Agentforce Studio** | ❌ NO | ✅ YES |
-| Flow Actions (`flow://`) | ✅ Supported | ❌ NOT Supported (Internal Error) |
-| Apex Actions (`apex://`) | ✅ Supported | ❌ NOT Supported (Internal Error) |
+| Flow Actions (`flow://`) | ✅ Supported | ✅ Supported (with exact name matching) |
+| Apex Actions (`apex://`) | ✅ Supported | ⚠️ Limited (class must exist) |
 | Escalation (`@utils.escalate with reason`) | ✅ Supported (tested Dec 2025) | ❌ NOT Supported (SyntaxError) |
 | `run` keyword (action callbacks) | ✅ Supported (tested Dec 2025) | ❌ NOT Supported (SyntaxError) |
 | Variables without defaults | ✅ Supported | ✅ Supported (tested Dec 2025) |
@@ -30,9 +30,9 @@ There are **two deployment methods** with **different capabilities**:
 
 **Why the difference?** These methods correspond to two authoring experiences:
 - **Script View** (GenAiPlannerBundle): Full Agent Script syntax with utility actions (transition, set variables, escalate) inherent to the script
-- **Canvas/Builder View** (AiAuthoringBundle): Low-code visual builder where utility actions are not yet available in the @-mention resource picker
+- **Canvas/Builder View** (AiAuthoringBundle): Low-code visual builder where some utility actions are not yet available
 
-Salesforce is working on feature parity - future releases will add flow actions, utility actions, and variable management to the Canvas view.
+Salesforce is working on feature parity - future releases will add more actions and variable management to the Canvas view.
 
 ---
 
@@ -497,18 +497,48 @@ namedQuery, prompt, quickAction, retriever, runExpressionSet,
 serviceCatalog, slack, standardInvocableAction
 ```
 
-⚠️ **CRITICAL**: Flow actions (`flow://`) are **ONLY supported in GenAiPlannerBundle** deployment!
-- AiAuthoringBundle CLI (`sf agent publish authoring-bundle`) fails with "Internal Error" for flow targets
-- **Even wrapping a Flow as GenAiFunction does NOT help** - the error persists
-- Apex targets (`apex://`) work in AiAuthoringBundle if the class/method exists
+### ⚠️ CRITICAL: Flow Action Requirements (Both Methods)
 
-**Workaround for visible agents needing Flow actions:**
-1. Create a GenAiFunction (Agentforce Action) wrapping your Flow
-2. Deploy the GenAiFunction via `sf project deploy start`
-3. Create/edit the agent in **Agentforce Studio UI** (not Agent Script)
-4. Add the action from the **Asset Library** in the UI
+**`flow://` actions work in BOTH AiAuthoringBundle and GenAiPlannerBundle**, but require **EXACT variable name matching**:
 
-This is a platform limitation until Salesforce adds flow action support to the Canvas/Builder view.
+```
+ERROR: "property account_id was not found in the available list of
+        properties: [inp_AccountId]"
+
+This error appears as generic "Internal Error, try again later" in CLI.
+```
+
+**The "Internal Error" typically means your Agent Script input/output names don't match the Flow variable names!**
+
+**✅ Correct Pattern:**
+```xml
+<!-- Flow variable -->
+<variables>
+    <name>inp_AccountId</name>     <!-- This is the API name -->
+    <isInput>true</isInput>
+</variables>
+```
+
+```agentscript
+# Agent Script - MUST use exact same name
+inputs:
+   inp_AccountId: string           # ← MATCHES Flow variable!
+      description: "Account ID"
+```
+
+**❌ Wrong Pattern (causes Internal Error):**
+```agentscript
+# Agent Script - different name fails!
+inputs:
+   account_id: string              # ← DOES NOT MATCH "inp_AccountId"!
+      description: "Account ID"
+```
+
+**Requirements for Flow Actions:**
+1. Agent Script input/output names **MUST exactly match** Flow variable API names
+2. Flow must be **Autolaunched Flow** (not Screen Flow)
+3. Flow variables marked "Available for input" / "Available for output"
+4. Flow must be deployed to org **BEFORE** agent publish
 
 ### Invoking Actions
 
@@ -845,7 +875,7 @@ instructions: ->
 | Missing label | Topic without label | Add `label:` to all topics |
 | Wrong config field | Using `developer_name` | Use `agent_name` |
 | Missing space | `instructions:->` | Use `instructions: ->` |
-| Internal Error, try again later | Flow action in AiAuthoringBundle | Use GenAiPlannerBundle for flow actions |
+| **Internal Error, try again later** | **Flow variable names don't match** | **Ensure Agent Script input/output names EXACTLY match Flow variable API names** |
 | SyntaxError: Unexpected 'with' | Escalate with reason in AiAuthoringBundle | Use basic `@utils.escalate` or GenAiPlannerBundle |
 | SyntaxError: Unexpected 'escalate' | Invalid escalation syntax in AiAuthoringBundle | Use GenAiPlannerBundle for `with reason=` syntax |
 | SyntaxError: Unexpected 'run' | `run` keyword in AiAuthoringBundle | Use GenAiPlannerBundle for action callbacks |
@@ -866,7 +896,7 @@ instructions: ->
 | No bundle XML | Deploy fails | Create `.bundle-meta.xml` |
 | No language block | Deploy fails | Add `language:` block |
 | Missing linked vars | Missing context | Add EndUserId, RoutableId, ContactId |
-| `flow://` in AiAuthoringBundle | Internal Error | Use GenAiPlannerBundle for flow actions |
+| **Mismatched Flow variable names** | **Internal Error** | **Agent Script input/output names MUST match Flow variable API names exactly** |
 | `@utils.escalate with reason=` in AiAuthoringBundle | SyntaxError | Use basic escalation or GenAiPlannerBundle |
 | `run` keyword in AiAuthoringBundle | SyntaxError | Use GenAiPlannerBundle for action callbacks |
 | Expecting UI visibility with GenAiPlannerBundle | Agent not visible | Use AiAuthoringBundle for UI visibility |

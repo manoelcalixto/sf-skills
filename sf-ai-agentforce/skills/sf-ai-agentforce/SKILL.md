@@ -23,8 +23,8 @@ There are **two deployment methods** with **different capabilities**:
 |--------|-------------------|-------------------|
 | Deploy Command | `sf project deploy start` | `sf agent publish authoring-bundle` |
 | **Visible in Agentforce Studio** | ❌ NO | ✅ YES |
-| Flow Actions (`flow://`) | ✅ Supported | ❌ NOT Supported (Internal Error) |
-| Apex Actions (`apex://`) | ✅ Supported | ❌ NOT Supported (Internal Error) |
+| Flow Actions (`flow://`) | ✅ Supported | ✅ Supported (see requirements below) |
+| Apex Actions (`apex://`) | ✅ Supported | ⚠️ Limited (class must exist) |
 | Escalation (`@utils.escalate with reason`) | ✅ Supported | ❌ NOT Supported (SyntaxError) |
 | `run` keyword (action callbacks) | ✅ Supported | ❌ NOT Supported (SyntaxError) |
 | Variables without defaults | ✅ Supported | ✅ Supported |
@@ -35,9 +35,9 @@ There are **two deployment methods** with **different capabilities**:
 
 **Why the difference?** These methods correspond to two authoring experiences:
 - **Script View** (GenAiPlannerBundle): Full Agent Script syntax with utility actions inherent to the script
-- **Canvas/Builder View** (AiAuthoringBundle): Low-code visual builder where utility actions are not yet available
+- **Canvas/Builder View** (AiAuthoringBundle): Low-code visual builder where some utility actions are not yet available
 
-**Recommendation**: Use **AiAuthoringBundle** if you need agents visible in Agentforce Studio. Use **GenAiPlannerBundle** if you need full Agent Script features (`run` keyword, `flow://` actions, escalate with reason).
+**Recommendation**: Use **AiAuthoringBundle** if you need agents visible in Agentforce Studio. Use **GenAiPlannerBundle** if you need full Agent Script features (`run` keyword, escalate with reason).
 
 ---
 
@@ -192,40 +192,85 @@ inputs:
 
 | Target Type | GenAiPlannerBundle | AiAuthoringBundle |
 |-------------|-------------------|-------------------|
-| `flow://FlowName` | ✅ Works | ❌ Internal Error |
-| `apex://ClassName` | ✅ Works | ❌ Internal Error |
+| `flow://FlowName` | ✅ Works | ✅ Works (with exact name matching) |
+| `apex://ClassName` | ✅ Works | ⚠️ Limited (class must exist) |
 | `prompt://TemplateName` | ✅ Works | ⚠️ Requires asset in org |
 
-### For AiAuthoringBundle (Agentforce Studio Visible)
+### ⚠️ CRITICAL: Flow Action Requirements (Both Methods)
 
-**⚠️ Action targets (`flow://`, `apex://`) do NOT work in AiAuthoringBundle!**
+**`flow://` actions work in BOTH AiAuthoringBundle and GenAiPlannerBundle**, but require:
 
-If you need agents visible in Agentforce Studio AND need actions:
-1. Deploy agent via `sf agent publish authoring-bundle` (without actions)
-2. Add actions manually in Agentforce Studio UI via Asset Library
+1. **EXACT variable name matching** between Agent Script and Flow
+2. Flow must be an **Autolaunched Flow** (not Screen Flow)
+3. Flow variables must be marked "Available for input" / "Available for output"
+4. Flow must be deployed to org **BEFORE** agent publish
 
-### For GenAiPlannerBundle (Full Feature Support)
+**⚠️ The "Internal Error" occurs when input/output names don't match Flow variables!**
 
-**Flow targets work with `flow://FlowAPIName` syntax in GenAiPlannerBundle:**
+```
+ERROR: "property account_id was not found in the available list of
+        properties: [inp_AccountId]"
 
+This error appears as generic "Internal Error, try again later" in CLI.
+```
+
+### ✅ Correct Flow Action Pattern
+
+**Step 1: Create Flow with specific variable names**
+```xml
+<!-- Get_Account_Info.flow-meta.xml -->
+<variables>
+    <name>inp_AccountId</name>     <!-- INPUT variable -->
+    <dataType>String</dataType>
+    <isInput>true</isInput>
+    <isOutput>false</isOutput>
+</variables>
+<variables>
+    <name>out_AccountName</name>   <!-- OUTPUT variable -->
+    <dataType>String</dataType>
+    <isInput>false</isInput>
+    <isOutput>true</isOutput>
+</variables>
+```
+
+**Step 2: Agent Script MUST use EXACT same names**
 ```agentscript
 actions:
    get_account:
       description: "Retrieves account information"
       inputs:
-         account_id: string
+         inp_AccountId: string        # ← MUST match Flow variable name!
             description: "Salesforce Account ID"
       outputs:
-         account_name: string
+         out_AccountName: string      # ← MUST match Flow variable name!
             description: "Account name"
-      target: "flow://Get_Account_Info"  # ✅ Works in GenAiPlannerBundle!
+      target: "flow://Get_Account_Info"
 ```
 
-**Requirements for Flow Integration (GenAiPlannerBundle only):**
-1. Flow must be an **Autolaunched Flow** (not Screen Flow)
-2. Flow variables must be marked "Available for input" / "Available for output"
-3. Variable names in Agent Script must match Flow variable API names exactly
-4. Flow must be deployed to org BEFORE agent deploy
+### ❌ Common Mistake (Causes "Internal Error")
+
+```agentscript
+# ❌ WRONG - Names don't match Flow variables
+actions:
+   get_account:
+      inputs:
+         account_id: string           # Flow expects "inp_AccountId"!
+      outputs:
+         account_name: string         # Flow expects "out_AccountName"!
+      target: "flow://Get_Account_Info"
+```
+
+This will fail with "Internal Error, try again later" because the schema validation fails silently.
+
+### Requirements Summary
+
+| Requirement | Details |
+|-------------|---------|
+| **Variable Name Matching** | Agent Script input/output names MUST exactly match Flow variable API names |
+| **Flow Type** | Must be **Autolaunched Flow** (not Screen Flow) |
+| **Flow Variables** | Mark as "Available for input" / "Available for output" |
+| **Deploy Order** | Deploy Flow to org BEFORE publishing agent |
+| **API Version** | API v64.0+ for AiAuthoringBundle, v65.0+ for GenAiPlannerBundle |
 
 ### Apex Actions in GenAiPlannerBundle
 
@@ -1371,12 +1416,11 @@ topic order_processing:
 | Pipe syntax in system: | SyntaxError | Use single quoted string for system instructions |
 | Inline escalate description | SyntaxError | Put `description:` on separate indented line |
 | Invalid default_agent_user | Internal Error | Use valid org user with Agentforce permissions |
-| `apex://` target | Not supported | Wrap Apex in Flow, use `flow://` |
+| **Mismatched Flow variable names** | **Internal Error** | **Input/output names MUST match Flow variable API names exactly** |
 | `action://` target | Not supported | Wrap Apex in Flow, use `flow://` |
 | `description` as input name | Reserved word | Use `case_description` or similar |
 | `true`/`false` booleans | Wrong case | Use `True`/`False` |
 | Actions at top level | Wrong location | Define actions inside topics |
-| Direct Apex call | Only flow:// works | Create Flow wrapper for Apex InvocableMethod |
 | Missing before_reasoning | Initialization skipped | Add before_reasoning for setup logic |
 
 ---
@@ -1439,12 +1483,10 @@ python3 ~/.claude/plugins/marketplaces/sf-skills/sf-agentforce/hooks/scripts/val
 | **Escalate Description** | Inline description fails | Put `description:` on separate indented line |
 | **Agent User** | Invalid user causes "Internal Error" | Use valid org user with proper permissions |
 | **Reserved Words** | `description` as input fails | Use alternative names (e.g., `case_description`) |
-| **Apex Targets** | `apex://` syntax not supported | Wrap Apex in Flow, use `flow://` |
-| **Action Targets** | `action://` syntax not supported | Wrap Apex in Flow, use `flow://` |
-| **Only flow:// Works** | Only `flow://` targets supported | All actions must use Flow targets |
+| **Flow Variable Names** | **Mismatched names cause "Internal Error"** | **Agent Script input/output names MUST match Flow variable API names exactly** |
 | **Action Location** | Top-level actions fail | Define actions inside topics |
-| **Flow Targets** | `flow://` works directly | Ensure Flow deployed before agent publish |
-| **`run` Keyword** | Action chaining syntax | Use `run @actions.x` for callbacks |
+| **Flow Targets** | `flow://` works in both deployment methods | Ensure Flow deployed before agent publish, names match exactly |
+| **`run` Keyword** | Action chaining syntax | Use `run @actions.x` for callbacks (GenAiPlannerBundle only) |
 | **Lifecycle Blocks** | before/after_reasoning available | Use for initialization and cleanup |
 
 ---

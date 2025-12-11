@@ -15,6 +15,32 @@ Expert Agentforce developer specializing in Agent Script syntax, topic design, a
 4. **Validation & Scoring**: Score agents against best practices (0-100 points)
 5. **Deployment**: Publish agents using `sf agent publish authoring-bundle`
 
+## ⚠️ CRITICAL: Two Deployment Methods (Tested Dec 2025)
+
+There are **two deployment methods** with **different capabilities**:
+
+| Aspect | GenAiPlannerBundle | AiAuthoringBundle |
+|--------|-------------------|-------------------|
+| Deploy Command | `sf project deploy start` | `sf agent publish authoring-bundle` |
+| **Visible in Agentforce Studio** | ❌ NO | ✅ YES |
+| Flow Actions (`flow://`) | ✅ Supported | ❌ NOT Supported (Internal Error) |
+| Apex Actions (`apex://`) | ✅ Supported | ❌ NOT Supported (Internal Error) |
+| Escalation (`@utils.escalate with reason`) | ✅ Supported | ❌ NOT Supported (SyntaxError) |
+| `run` keyword (action callbacks) | ✅ Supported | ❌ NOT Supported (SyntaxError) |
+| Variables without defaults | ✅ Supported | ✅ Supported |
+| Lifecycle blocks (`before/after_reasoning`) | ✅ Supported | ✅ Supported |
+| Topic transitions (`@utils.transition`) | ✅ Supported | ✅ Supported |
+| Basic escalation (`@utils.escalate`) | ✅ Supported | ✅ Supported |
+| API Version | v65.0+ required | v64.0+ |
+
+**Why the difference?** These methods correspond to two authoring experiences:
+- **Script View** (GenAiPlannerBundle): Full Agent Script syntax with utility actions inherent to the script
+- **Canvas/Builder View** (AiAuthoringBundle): Low-code visual builder where utility actions are not yet available
+
+**Recommendation**: Use **AiAuthoringBundle** if you need agents visible in Agentforce Studio. Use **GenAiPlannerBundle** if you need full Agent Script features (`run` keyword, `flow://` actions, escalate with reason).
+
+---
+
 ## ⚠️ CRITICAL: API Version Requirement
 
 **Agent Script requires API v64+ (Summer '25 or later)**
@@ -28,19 +54,50 @@ If API version < 64, Agent Script features won't be available.
 
 ---
 
-## ⚠️ CRITICAL: File Extension
+## ⚠️ CRITICAL: File Structure by Deployment Method
 
-**Agent Script files use `.agent` extension (NOT `.agentscript`)**
+### AiAuthoringBundle (Visible in Agentforce Studio)
 
-Files must be placed at:
+**Files must be placed at:**
 ```
-force-app/main/default/aiAuthoringBundles/[AgentName]/[AgentName].agent
+force-app/main/default/aiAuthoringBundles/[AgentName]/
+├── [AgentName].agent           # Agent Script file
+└── [AgentName].bundle-meta.xml # Metadata XML
 ```
 
-Each bundle also requires a metadata XML file:
+**bundle-meta.xml content:**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+  <bundleType>AGENT</bundleType>
+</AiAuthoringBundle>
 ```
-force-app/main/default/aiAuthoringBundles/[AgentName]/[AgentName].bundle-meta.xml
+
+**Deploy with:** `sf agent publish authoring-bundle --api-name [AgentName]`
+
+### GenAiPlannerBundle (Full Feature Support)
+
+**Files must be placed at:**
 ```
+force-app/main/default/genAiPlannerBundles/[AgentName]/
+├── [AgentName].genAiPlannerBundle           # XML manifest
+└── agentScript/
+    └── [AgentName]_definition.agent         # Agent Script file
+```
+
+**genAiPlannerBundle content:**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Agent description</description>
+    <masterLabel>Agent Label</masterLabel>
+    <plannerType>Atlas__ConcurrentMultiAgentOrchestration</plannerType>
+</GenAiPlannerBundle>
+```
+
+**Deploy with:** `sf project deploy start --source-dir force-app/main/default/genAiPlannerBundles/[AgentName]`
+
+**⚠️ WARNING**: Agents deployed via GenAiPlannerBundle do NOT appear in Agentforce Studio UI!
 
 ---
 
@@ -129,11 +186,27 @@ inputs:
 
 ---
 
-## ⚠️ CRITICAL: Action Target Syntax
+## ⚠️ CRITICAL: Action Target Syntax (Tested Dec 2025)
 
-### Flow Actions (SUPPORTED - Works Directly)
+### Action Targets by Deployment Method
 
-**Flow targets work directly with `flow://FlowAPIName` syntax:**
+| Target Type | GenAiPlannerBundle | AiAuthoringBundle |
+|-------------|-------------------|-------------------|
+| `flow://FlowName` | ✅ Works | ❌ Internal Error |
+| `apex://ClassName` | ✅ Works | ❌ Internal Error |
+| `prompt://TemplateName` | ✅ Works | ⚠️ Requires asset in org |
+
+### For AiAuthoringBundle (Agentforce Studio Visible)
+
+**⚠️ Action targets (`flow://`, `apex://`) do NOT work in AiAuthoringBundle!**
+
+If you need agents visible in Agentforce Studio AND need actions:
+1. Deploy agent via `sf agent publish authoring-bundle` (without actions)
+2. Add actions manually in Agentforce Studio UI via Asset Library
+
+### For GenAiPlannerBundle (Full Feature Support)
+
+**Flow targets work with `flow://FlowAPIName` syntax in GenAiPlannerBundle:**
 
 ```agentscript
 actions:
@@ -145,25 +218,29 @@ actions:
       outputs:
          account_name: string
             description: "Account name"
-      target: "flow://Get_Account_Info"  # ✅ Works directly!
+      target: "flow://Get_Account_Info"  # ✅ Works in GenAiPlannerBundle!
 ```
 
-**Requirements for Flow Integration:**
+**Requirements for Flow Integration (GenAiPlannerBundle only):**
 1. Flow must be an **Autolaunched Flow** (not Screen Flow)
 2. Flow variables must be marked "Available for input" / "Available for output"
 3. Variable names in Agent Script must match Flow variable API names exactly
-4. Flow must be deployed to org BEFORE agent publish
+4. Flow must be deployed to org BEFORE agent deploy
 
-### Apex Actions (USE FLOW WRAPPER - RECOMMENDED)
+### Apex Actions in GenAiPlannerBundle
 
-**⚠️ ONLY `flow://` targets work in Agent Script!**
+**`apex://` targets work in GenAiPlannerBundle if the Apex class exists:**
 
-The following target types do **NOT** work:
 ```agentscript
-# ❌ DOES NOT WORK - Invalid target format
-target: "apex://CaseService.createCase"
-target: "apex://CaseService"
-target: "action://Create_Support_Case"  # Also invalid!
+# ✅ Works in GenAiPlannerBundle (if class exists in org)
+target: "apex://CaseCreationService"
+```
+
+**The following do NOT work in either method:**
+```agentscript
+# ❌ DOES NOT WORK - Invalid format
+target: "apex://CaseService.createCase"  # No method name allowed
+target: "action://Create_Support_Case"   # action:// not supported
 ```
 
 **RECOMMENDED: Use Flow Wrapper Pattern**
@@ -504,12 +581,17 @@ variables:
 **Mutable Variables** (agent state):
 ```agentscript
 variables:
+   # Without defaults - works in both deployment methods (tested Dec 2025)
    user_name: mutable string
       description: "User's name"
    order_count: mutable number
       description: "Number of items in cart"
    is_verified: mutable boolean
       description: "Whether identity is verified"
+
+   # With explicit defaults - also valid (optional)
+   status: mutable string = ""
+      description: "Current status"
 ```
 
 ### Language Block

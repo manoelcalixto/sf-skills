@@ -18,9 +18,14 @@ There are **two deployment methods** with **different capabilities**:
 |--------|-------------------|-------------------|
 | Deploy Command | `sf project deploy start` | `sf agent publish authoring-bundle` |
 | **Visible in Agentforce Studio** | ❌ NO | ✅ YES |
-| Flow Actions (`flow://`) | ✅ Supported | ❌ NOT Supported |
-| Escalation (`@utils.escalate with reason`) | ✅ Supported | ❌ NOT Supported |
-| Variables without defaults | ✅ Supported | ❌ Requires default value |
+| Flow Actions (`flow://`) | ✅ Supported | ❌ NOT Supported (Internal Error) |
+| Apex Actions (`apex://`) | ✅ Supported | ❌ NOT Supported (Internal Error) |
+| Escalation (`@utils.escalate with reason`) | ✅ Supported (tested Dec 2025) | ❌ NOT Supported (SyntaxError) |
+| `run` keyword (action callbacks) | ✅ Supported (tested Dec 2025) | ❌ NOT Supported (SyntaxError) |
+| Variables without defaults | ✅ Supported | ✅ Supported (tested Dec 2025) |
+| Lifecycle blocks (`before/after_reasoning`) | ✅ Supported | ✅ Supported (tested Dec 2025) |
+| Topic transitions (`@utils.transition`) | ✅ Supported | ✅ Supported |
+| Basic escalation (`@utils.escalate`) | ✅ Supported | ✅ Supported |
 | API Version | v65.0+ required | v64.0+ |
 
 **Why the difference?** These methods correspond to two authoring experiences:
@@ -236,29 +241,24 @@ variables:
 
 **Mutable Variables** (agent state):
 
-⚠️ **IMPORTANT**: Syntax differs by deployment method!
-
-**GenAiPlannerBundle** (no default required):
 ```agentscript
 variables:
+   # Without defaults - works in both deployment methods
    user_name: mutable string
       description: "The customer's name"
    order_count: mutable number
       description: "Number of items in cart"
    is_verified: mutable boolean
       description: "Whether identity is verified"
+
+   # With explicit defaults - also valid (optional)
+   status: mutable string = ""
+      description: "Current status"
+   counter: mutable number = 0
+      description: "A counter"
 ```
 
-**AiAuthoringBundle** (default value REQUIRED):
-```agentscript
-variables:
-   user_name: mutable string = ""
-      description: "The customer's name"
-   order_count: mutable number = 0
-      description: "Number of items in cart"
-   is_verified: mutable boolean = False
-      description: "Whether identity is verified"
-```
+**Note**: Both syntaxes (with or without defaults) work in **both** GenAiPlannerBundle and AiAuthoringBundle deployments. Tested December 2025.
 
 ### Language Block
 
@@ -848,7 +848,7 @@ instructions: ->
 | Internal Error, try again later | Flow action in AiAuthoringBundle | Use GenAiPlannerBundle for flow actions |
 | SyntaxError: Unexpected 'with' | Escalate with reason in AiAuthoringBundle | Use basic `@utils.escalate` or GenAiPlannerBundle |
 | SyntaxError: Unexpected 'escalate' | Invalid escalation syntax in AiAuthoringBundle | Use GenAiPlannerBundle for `with reason=` syntax |
-| Variable requires default | Mutable variable without `= value` in AiAuthoringBundle | Add `= ""` or `= 0` or `= False` |
+| SyntaxError: Unexpected 'run' | `run` keyword in AiAuthoringBundle | Use GenAiPlannerBundle for action callbacks |
 
 ---
 
@@ -868,5 +868,5 @@ instructions: ->
 | Missing linked vars | Missing context | Add EndUserId, RoutableId, ContactId |
 | `flow://` in AiAuthoringBundle | Internal Error | Use GenAiPlannerBundle for flow actions |
 | `@utils.escalate with reason=` in AiAuthoringBundle | SyntaxError | Use basic escalation or GenAiPlannerBundle |
-| `mutable string` without `= ""` in AiAuthoringBundle | Variable error | Add default value |
+| `run` keyword in AiAuthoringBundle | SyntaxError | Use GenAiPlannerBundle for action callbacks |
 | Expecting UI visibility with GenAiPlannerBundle | Agent not visible | Use AiAuthoringBundle for UI visibility |

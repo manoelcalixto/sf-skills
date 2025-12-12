@@ -227,37 +227,16 @@ Keep labels short (icon + name only). Avoid `<br/>` and `<small>` tags:
 
 ## OAuth Flow Quick Reference
 
-### Authorization Code Flow
-- **Use Case**: Web apps with backend servers
-- **Actors**: User → Browser → App Server → Salesforce
-- **Key Steps**: Authorize → Login → Consent → Code → Token Exchange
-- **Template**: `templates/oauth/authorization-code.md`
+| Flow | Use Case | Key Detail | Template |
+|------|----------|------------|----------|
+| **Authorization Code** | Web apps with backend | User → Browser → App → SF | `oauth/authorization-code.md` |
+| **Auth Code + PKCE** | Mobile, SPAs, public clients | code_verifier + SHA256 challenge | `oauth/authorization-code-pkce.md` |
+| **JWT Bearer** | Server-to-server, CI/CD | Sign JWT with private key | `oauth/jwt-bearer.md` |
+| **Client Credentials** | Service accounts, background | No user context | `oauth/client-credentials.md` |
+| **Device Authorization** | CLI, IoT, Smart TVs | Poll for token after user auth | `oauth/device-authorization.md` |
+| **Refresh Token** | Extend access | Reuse existing tokens | `oauth/refresh-token.md` |
 
-### Authorization Code + PKCE
-- **Use Case**: Mobile apps, SPAs, public clients
-- **Extra**: code_verifier + code_challenge (SHA256)
-- **Template**: `templates/oauth/authorization-code-pkce.md`
-
-### JWT Bearer Flow
-- **Use Case**: Server-to-server, CI/CD, headless automation
-- **Actors**: Server → Salesforce (no user interaction)
-- **Key Steps**: Create JWT → Sign with Private Key → Token Request
-- **Template**: `templates/oauth/jwt-bearer.md`
-
-### Client Credentials Flow
-- **Use Case**: Service accounts, background processes
-- **Actors**: Service → Salesforce
-- **Note**: No user context, runs as designated user
-- **Template**: `templates/oauth/client-credentials.md`
-
-### Device Authorization Flow
-- **Use Case**: CLI tools, IoT devices, Smart TVs
-- **Key Steps**: Get Device Code → User Authorizes Separately → Poll for Token
-- **Template**: `templates/oauth/device-authorization.md`
-
-### Refresh Token Flow
-- **Use Case**: Extending access without re-authentication
-- **Template**: `templates/oauth/refresh-token.md`
+Templates in `templates/oauth/`.
 
 ---
 

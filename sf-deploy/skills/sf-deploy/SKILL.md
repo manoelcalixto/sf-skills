@@ -146,21 +146,7 @@ Provide summary with: deployed components, test results, coverage metrics, next 
 
 See [examples/deployment-report-template.md](examples/deployment-report-template.md) for output format.
 
-## Deployment Pattern
-
-Standard workflow for all scenarios:
-
-1. **Verify** org auth: `sf org display`
-2. **Identify** scope: [full | components | hotfix | scratch]
-3. **Validate**: `sf project deploy start --dry-run`
-4. **Execute**: `sf project deploy start [options]`
-5. **Verify**: `sf project deploy report`
-
-**Variants**:
-- **Production**: Full scope + backup + RunAllTests + documentation
-- **Hotfix**: Targeted components + RunLocalTests + fast deploy
-- **CI/CD**: Scripted + automated gates + notifications
-- **Scratch**: `sf project deploy start` (push source)
+**Deployment Variants**: Production (full + RunAllTests), Hotfix (targeted + RunLocalTests), CI/CD (scripted + gates), Scratch (push source).
 
 ## CLI Reference
 

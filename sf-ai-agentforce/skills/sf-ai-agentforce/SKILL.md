@@ -77,50 +77,16 @@ If API version < 64, Agent Script features won't be available.
 
 ---
 
-## ⚠️ CRITICAL: File Structure by Deployment Method
+## ⚠️ CRITICAL: File Structure
 
-### AiAuthoringBundle (Visible in Agentforce Studio)
+| Method | Path | Files | Deploy Command |
+|--------|------|-------|----------------|
+| **AiAuthoringBundle** | `aiAuthoringBundles/[Name]/` | `[Name].agent` + `.bundle-meta.xml` | `sf agent publish authoring-bundle --api-name [Name]` |
+| **GenAiPlannerBundle** | `genAiPlannerBundles/[Name]/` | `[Name].genAiPlannerBundle` + `agentScript/[Name]_definition.agent` | `sf project deploy start --source-dir [path]` |
 
-**Files must be placed at:**
-```
-force-app/main/default/aiAuthoringBundles/[AgentName]/
-├── [AgentName].agent           # Agent Script file
-└── [AgentName].bundle-meta.xml # Metadata XML
-```
+**XML templates**: See `templates/` for bundle-meta.xml and genAiPlannerBundle examples.
 
-**bundle-meta.xml content:**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<AiAuthoringBundle xmlns="http://soap.sforce.com/2006/04/metadata">
-  <bundleType>AGENT</bundleType>
-</AiAuthoringBundle>
-```
-
-**Deploy with:** `sf agent publish authoring-bundle --api-name [AgentName]`
-
-### GenAiPlannerBundle (Full Feature Support)
-
-**Files must be placed at:**
-```
-force-app/main/default/genAiPlannerBundles/[AgentName]/
-├── [AgentName].genAiPlannerBundle           # XML manifest
-└── agentScript/
-    └── [AgentName]_definition.agent         # Agent Script file
-```
-
-**genAiPlannerBundle content:**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>Agent description</description>
-    <masterLabel>Agent Label</masterLabel>
-    <plannerType>Atlas__ConcurrentMultiAgentOrchestration</plannerType>
-</GenAiPlannerBundle>
-```
-
-**Deploy with:** `sf project deploy start --source-dir force-app/main/default/genAiPlannerBundles/[AgentName]`
-
-**⚠️ WARNING**: Agents deployed via GenAiPlannerBundle do NOT appear in Agentforce Studio UI!
+⚠️ GenAiPlannerBundle agents do NOT appear in Agentforce Studio UI.
 
 ---
 
@@ -1556,33 +1522,7 @@ start_agent topic_selector:
          | Provide a helpful, accurate response.
 ```
 
-### Pattern 2: Multi-Topic Router
-```agentscript
-start_agent topic_selector:
-   label: "Topic Selector"
-   description: "Routes users to appropriate topics"
-
-   reasoning:
-      instructions: ->
-         | Determine what the user needs help with.
-         | Route to the appropriate topic.
-      actions:
-         orders: @utils.transition to @topic.order_management
-         support: @utils.transition to @topic.support
-         billing: @utils.transition to @topic.billing
-
-topic order_management:
-   label: "Order Management"
-   description: "Helps with orders"
-
-   reasoning:
-      instructions: ->
-         | Help with order-related questions.
-      actions:
-         back: @utils.transition to @topic.topic_selector
-```
-
-### Pattern 3: Flow Action with Variable Binding
+### Pattern 2: Flow Action with Variable Binding
 ```agentscript
 topic account_lookup:
    label: "Account Lookup"
@@ -1620,7 +1560,7 @@ topic account_lookup:
          back: @utils.transition to @topic.topic_selector
 ```
 
-### Pattern 4: Conditional Transitions
+### Pattern 3: Conditional Transitions
 ```agentscript
 topic order_processing:
    label: "Order Processing"
@@ -1641,33 +1581,6 @@ topic order_processing:
          get_approval: @utils.transition to @topic.approval
             available when @variables.needs_approval == True
 ```
-
----
-
-## Anti-Patterns
-
-| Anti-Pattern | Issue | Fix |
-|--------------|-------|-----|
-| Tab indentation | Syntax error | Use 3 spaces |
-| 4-space indentation | Wrong indent | Use 3 spaces (not 4!) |
-| `@variable.name` | Wrong syntax | Use `@variables.name` (plural) |
-| `developer_name:` in config | Wrong field | Use `agent_name:` |
-| `instructions:->` | Missing space | Use `instructions: ->` |
-| Missing `label:` | Deployment fails | Add label to all topics |
-| Missing linked variables | Missing context | Add EndUserId, RoutableId, ContactId |
-| `.agentscript` extension | Wrong format | Use `.agent` extension |
-| Nested `run` | Not supported | Flatten to sequential `run` |
-| Missing bundle-meta.xml | Deployment fails | Create XML alongside .agent |
-| No language block | Deployment fails | Add language block |
-| Pipe syntax in system: | SyntaxError | Use single quoted string for system instructions |
-| Inline escalate description | SyntaxError | Put `description:` on separate indented line |
-| Invalid default_agent_user | Internal Error | Use valid org user with Agentforce permissions |
-| **Mismatched Flow variable names** | **Internal Error** | **Input/output names MUST match Flow variable API names exactly** |
-| `action://` target | Not supported | Wrap Apex in Flow, use `flow://` |
-| `description` as input name | Reserved word | Use `case_description` or similar |
-| `true`/`false` booleans | Wrong case | Use `True`/`False` |
-| Actions at top level | Wrong location | Define actions inside topics |
-| Missing before_reasoning | Initialization skipped | Add before_reasoning for setup logic |
 
 ---
 

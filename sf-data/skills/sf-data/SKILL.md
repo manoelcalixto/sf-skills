@@ -78,56 +78,26 @@ See [../../shared/docs/orchestration.md](../../shared/docs/orchestration.md) for
 
 ## sf CLI v2 Data Commands Reference
 
-### Query Operations
+**All commands require**: `--target-org <alias>` | Optional: `--json` for parsing
 
-| Command | Purpose | Example |
-|---------|---------|---------|
-| `sf data query` | Execute SOQL | `sf data query --query "SELECT Id, Name FROM Account LIMIT 10" --target-org myorg --json` |
-| `sf data search` | Execute SOSL | `sf data search --query "FIND {Acme}" --target-org myorg --json` |
-| `sf data export bulk` | Bulk export (>10k) | `sf data export bulk --query "SELECT Id FROM Account" --output-file accounts.csv --target-org myorg` |
+| Category | Command | Purpose | Key Options |
+|----------|---------|---------|-------------|
+| **Query** | `sf data query` | Execute SOQL | `--query "SELECT..."` |
+| | `sf data search` | Execute SOSL | `--query "FIND {...}"` |
+| | `sf data export bulk` | Export >10k records | `--output-file file.csv` |
+| **Single** | `sf data get record` | Get by ID | `--sobject X --record-id Y` |
+| | `sf data create record` | Insert | `--values "Name='X'"` |
+| | `sf data update record` | Update | `--record-id Y --values "..."` |
+| | `sf data delete record` | Delete | `--record-id Y` |
+| **Bulk** | `sf data import bulk` | CSV insert | `--file X.csv --sobject Y --wait 10` |
+| | `sf data update bulk` | CSV update | `--file X.csv --sobject Y` |
+| | `sf data delete bulk` | CSV delete | `--file X.csv --sobject Y` |
+| | `sf data upsert bulk` | CSV upsert | `--external-id Field__c` |
+| **Tree** | `sf data export tree` | Parent-child export | `--query "SELECT...(SELECT...)"` |
+| | `sf data import tree` | Parent-child import | `--files data.json` |
+| **Apex** | `sf apex run` | Anonymous Apex | `--file script.apex` or interactive |
 
-### Single Record Operations
-
-| Command | Purpose | Example |
-|---------|---------|---------|
-| `sf data get record` | Get by ID | `sf data get record --sobject Account --record-id 001xx000003DGbw --target-org myorg` |
-| `sf data create record` | Insert record | `sf data create record --sobject Account --values "Name='Acme' Industry='Technology'" --target-org myorg --json` |
-| `sf data update record` | Update record | `sf data update record --sobject Account --record-id 001xx000003DGbw --values "Industry='Healthcare'" --target-org myorg` |
-| `sf data delete record` | Delete record | `sf data delete record --sobject Account --record-id 001xx000003DGbw --target-org myorg` |
-
-### Bulk Operations (Bulk API 2.0)
-
-| Command | Purpose | Example |
-|---------|---------|---------|
-| `sf data import bulk` | Bulk insert from CSV | `sf data import bulk --file accounts.csv --sobject Account --target-org myorg --wait 10` |
-| `sf data update bulk` | Bulk update from CSV | `sf data update bulk --file updates.csv --sobject Account --target-org myorg --wait 10` |
-| `sf data delete bulk` | Bulk delete from CSV | `sf data delete bulk --file deletes.csv --sobject Account --target-org myorg --wait 10` |
-| `sf data upsert bulk` | Bulk upsert | `sf data upsert bulk --file upserts.csv --sobject Account --external-id External_Id__c --target-org myorg` |
-
-### Hierarchical Data (sObject Tree API)
-
-| Command | Purpose | Example |
-|---------|---------|---------|
-| `sf data export tree` | Export parent-child | `sf data export tree --query "SELECT Id, Name, (SELECT Id, Name FROM Contacts) FROM Account WHERE Id='001xx'" --output-dir ./data --target-org myorg` |
-| `sf data import tree` | Import parent-child | `sf data import tree --files account-contacts.json --target-org myorg` |
-
-### Anonymous Apex Execution
-
-| Command | Purpose | Example |
-|---------|---------|---------|
-| `sf apex run` | Run anonymous Apex | `sf apex run --file setup-data.apex --target-org myorg` |
-| `sf apex run` | Inline Apex | `sf apex run --target-org myorg` (then enter code interactively) |
-
-### Key Flags
-
-| Flag | Purpose |
-|------|---------|
-| `--target-org`, `-o` | Target org alias or username |
-| `--json` | Output in JSON format (recommended for parsing) |
-| `--result-format` | human, csv, json (for query) |
-| `--wait` | Minutes to wait for bulk job (0 = async) |
-| `--use-tooling-api`, `-t` | Query Tooling API objects |
-| `--all-rows` | Include soft-deleted records |
+**Useful flags**: `--result-format csv`, `--use-tooling-api`, `--all-rows` (include deleted)
 
 ---
 

@@ -103,68 +103,20 @@ Next Steps: Run tests, verify behavior, monitor logs
 
 ---
 
-## Best Practices (Built-In Enforcement)
+## Best Practices (150-Point Scoring)
 
-### Critical Requirements
+| Category | Points | Key Rules |
+|----------|--------|-----------|
+| **Bulkification** | 25 | NO SOQL/DML in loops; collect first, operate after; test 251+ records |
+| **Security** | 25 | `WITH USER_MODE`; bind variables; `with sharing`; `Security.stripInaccessible()` |
+| **Testing** | 25 | 90%+ coverage; Assert class; positive/negative/bulk tests; Test Data Factory |
+| **Architecture** | 20 | TAF triggers; Service/Domain/Selector layers; SOLID; dependency injection |
+| **Clean Code** | 20 | Meaningful names; self-documenting; no `!= false`; single responsibility |
+| **Error Handling** | 15 | Specific before generic catch; no empty catch; custom business exceptions |
+| **Performance** | 10 | Monitor with `Limits`; cache expensive ops; scope variables; async for heavy |
+| **Documentation** | 10 | ApexDoc on classes/methods; meaningful params |
 
-**Bulkification** (25 points):
-- NO SOQL/DML inside loops - collect records, operate after loop
-- Use List, Set, Map for collections
-- Handle 200+ records per transaction
-- Test with 251+ records
-
-**Security** (25 points):
-- Use `WITH USER_MODE` for SOQL queries
-- Bind variables for dynamic SOQL (`:variable`)
-- Use `with sharing` by default, `inherited sharing` for utilities
-- Never hardcode credentials - use Named Credentials
-- Use `Security.stripInaccessible()` for FLS
-
-**Testing** (25 points):
-- 90%+ coverage (75% minimum)
-- Always use Assert class (Winter '23+)
-- Test positive, negative, bulk (251+), single record
-- Use Test Data Factory pattern
-- Use `Test.startTest()`/`Test.stopTest()` for async
-
-**Architecture** (20 points):
-- One trigger per object using Trigger Actions Framework
-- Separation of concerns: Service, Domain, Selector layers
-- SOLID principles compliance
-- Dependency injection for testability
-
-**Clean Code** (20 points):
-- Meaningful names (no abbreviations like `tks`, `rec`)
-- Self-documenting code
-- Boolean clarity (no `!= false`)
-- Single responsibility per method
-
-**Error Handling** (15 points):
-- Catch specific exceptions before generic
-- Never empty catch blocks
-- Use custom exceptions for business logic
-- Log errors appropriately
-
-**Performance** (10 points):
-- Use `Limits` class to monitor
-- Cache expensive operations
-- Let variables go out of scope for heap
-- Use async for heavy operations
-
-**Documentation** (10 points):
-- ApexDoc comments on classes/methods
-- Meaningful parameter names
-- Clear intent without external docs
-
-### Scoring Thresholds
-
-| Rating | Score |
-|--------|-------|
-| ⭐⭐⭐⭐⭐ Excellent | 135-150 |
-| ⭐⭐⭐⭐ Very Good | 112-134 |
-| ⭐⭐⭐ Good | 90-111 |
-| ⭐⭐ Needs Work | 67-89 |
-| ⭐ Critical Issues | <67 |
+See [../../shared/docs/scoring-overview.md](../../shared/docs/scoring-overview.md) for thresholds. Block if <67 points.
 
 ---
 
@@ -376,9 +328,7 @@ See [../../docs/trigger-actions-framework.md](../../docs/trigger-actions-framewo
 |-------------|-------------|---------|
 | sf-metadata | Discover object/fields before coding | `Skill(skill="sf-metadata")` → "Describe Invoice__c" |
 | sf-data | Generate 251+ test records after deploy | `Skill(skill="sf-data")` → "Create 251 Accounts for bulk testing" |
-| **sf-devops-architect** | ⚠️ MANDATORY for ALL deployments | `Task(subagent_type="sf-devops-architect", prompt="Deploy with RunLocalTests")` |
-
-❌ NEVER use `Skill(skill="sf-deploy")` directly - always route through sf-devops-architect sub-agent.
+| **sf-devops-architect** | ⚠️ MANDATORY - see Phase 4 | `Task(subagent_type="sf-devops-architect", ...)` |
 
 ## Dependencies
 

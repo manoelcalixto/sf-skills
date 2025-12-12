@@ -323,31 +323,9 @@ screens → start → status → subflows → textTemplates → variables → wa
 
 See [../../shared/docs/cross-skill-integration.md](../../shared/docs/cross-skill-integration.md)
 
-### ⚠️ MANDATORY: Use sf-devops-architect for Deployments
+**Deployment**: See Phase 4 above - sf-devops-architect is MANDATORY.
 
-**CRITICAL**: After creating a Flow, you MUST use the `sf-devops-architect` sub-agent to deploy it. **NEVER use direct CLI commands** or sf-deploy skill directly.
-
-**Why?**
-1. Centralized deployment orchestration
-2. sf-devops-architect delegates to sf-deploy with proper ordering
-3. Always validates with --dry-run before actual deployment
-4. Consistent error handling and troubleshooting
-
-**Deployment Pattern:**
-```bash
-# 1. Create Flow (sf-flow generates XML)
-# 2. Deploy Flow using sf-devops-architect (MANDATORY)
-Task(subagent_type="sf-devops-architect", prompt="Deploy Flow:Auto_Lead_Assignment to [alias] with --dry-run first")
-
-# 3. After dry-run succeeds, deploy for real
-Task(subagent_type="sf-devops-architect", prompt="Proceed with actual deployment")
-
-# 4. Activate Flow (edit status, redeploy via sf-devops-architect)
-```
-
-❌ NEVER use `Skill(skill="sf-deploy")` directly - always route through sf-devops-architect.
-
-### ⚠️ MANDATORY: Flows for sf-ai-agentforce
+### ⚠️ Flows for sf-ai-agentforce
 
 **When sf-ai-agentforce requests a Flow:**
 - sf-ai-agentforce will invoke sf-flow (this skill) to create Flows

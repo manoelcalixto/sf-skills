@@ -25,22 +25,9 @@ See [../../shared/docs/orchestration.md](../../shared/docs/orchestration.md) for
 
 ---
 
-## ⚠️ CRITICAL: Field-Level Security (FLS) Warning
+## ⚠️ CRITICAL: Field-Level Security
 
-**Deployed fields are INVISIBLE until FLS is configured!**
-
-When you create custom objects/fields, they deploy successfully but users cannot see them without:
-1. A Permission Set granting field access, OR
-2. Profile field-level security updates
-
-**After creating objects/fields, ALWAYS ask:**
-```
-AskUserQuestion:
-  question: "Would you like me to auto-generate a Permission Set for field access?"
-  options:
-    - "Yes, generate Permission Set" → Create [ObjectName]_Access.permissionset-meta.xml
-    - "No, I'll handle FLS manually" → Continue without Permission Set
-```
+**Deployed fields are INVISIBLE until FLS is configured!** Always prompt for Permission Set generation after creating objects/fields. See **Phase 3.5** for auto-generation workflow.
 
 ---
 
@@ -223,25 +210,13 @@ AskUserQuestion:
 
 ### Phase 4: Deployment
 
-**Step 1: Validation**
+**⚠️ MANDATORY: Use sf-devops-architect for ALL deployments**
+
 ```
-Skill(skill="sf-deploy")
-Request: "Deploy metadata at force-app/main/default/objects/[ObjectName] to [target-org] with --dry-run"
+Task(subagent_type="sf-devops-architect", prompt="Deploy metadata at force-app/main/default/objects/[ObjectName] and permission set to [target-org]")
 ```
 
-**Step 2: Deploy** (only if validation succeeds)
-```
-Skill(skill="sf-deploy")
-Request: "Proceed with actual deployment to [target-org]"
-```
-
-**Step 3: Deploy Permission Set** (if generated)
-```
-Skill(skill="sf-deployment")
-Request: "Deploy permission set at force-app/main/default/permissionsets/[ObjectName]_Access.permissionset-meta.xml to [target-org]"
-```
-
-**Step 4: Assign Permission Set** (optional)
+**Post-deployment** (optional - assign permission set):
 ```bash
 sf org assign permset --name [ObjectName]_Access --target-org [alias]
 ```

@@ -1,7 +1,7 @@
 ---
 name: sf-devops-architect
 description: MANDATORY DevOps gateway for ALL Salesforce deployments. MUST BE USED before any sf deploy, sf project deploy, or sf agent publish commands. Delegates to sf-deploy skill for execution. Triggers on deploy, deployment, publish agent, push to org, release to production.
-tools: Read, Glob, Grep, Skill, TodoWrite
+tools: Read, Glob, Grep, Bash, TodoWrite
 model: sonnet
 skills: sf-deploy
 ---

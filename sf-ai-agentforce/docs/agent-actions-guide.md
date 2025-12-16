@@ -48,29 +48,67 @@ All actions in Agent Script support these properties:
 
 ### Action Invocation Methods
 
-Agent Script supports two invocation styles:
+Agent Script supports these invocation styles:
 
-| Method | Syntax | Behavior |
-|--------|--------|----------|
-| **Deterministic** | `run @actions.name` | Always executes when code path is reached |
-| **LLM-Controlled** | `{!@actions.name}` | LLM decides whether to execute based on context |
+| Method | Syntax | Behavior | AiAuthoringBundle | GenAiPlannerBundle |
+|--------|--------|----------|-------------------|-------------------|
+| **Actions Block** | `actions:` in `reasoning:` | LLM chooses which to execute | ✅ Works | ✅ Works |
+| **Deterministic** | `run @actions.name` | Always executes when code path is reached | ❌ NOT Supported | ✅ Works |
 
-**Deterministic (Always Executes):**
+### ⚠️ CRITICAL: Deployment Method Limitations
+
+**`run` keyword is NOT supported in AiAuthoringBundle (Tested Dec 2025)**
+
 ```agentscript
+# ❌ FAILS in AiAuthoringBundle - SyntaxError: Unexpected 'run'
 before_reasoning:
-   run @actions.log_turn    # Always runs
+   run @actions.log_turn    # NOT SUPPORTED!
 
-# In action callbacks
 create: @actions.create_order
-   run @actions.send_email  # Always runs after create_order
+   run @actions.send_email  # NOT SUPPORTED!
 ```
 
-**LLM-Controlled (LLM Decides):**
+**`{!@actions.name}` interpolation does NOT work (Tested Dec 2025)**
+
 ```agentscript
+# ❌ FAILS - SyntaxError: Unexpected '{'
 reasoning:
    instructions: ->
-      | Use {!@actions.get_order} to look up order details when asked.
+      | Use {!@actions.get_order} to look up order details.  # BROKEN!
 ```
+
+### ✅ Correct Approach: Use `reasoning.actions` Block
+
+The LLM automatically selects appropriate actions from those defined in the `reasoning.actions` block:
+
+```agentscript
+topic order_management:
+   label: "Order Management"
+   description: "Handles order inquiries"
+
+   actions:
+      get_order:
+         description: "Retrieves order information"
+         inputs:
+            order_id: string
+               description: "The order ID"
+         outputs:
+            status: string
+               description: "Order status"
+         target: "flow://Get_Order_Details"
+
+   reasoning:
+      instructions: ->
+         | Help the customer with their order.
+         | When they ask about an order, look it up.
+      actions:
+         # LLM automatically selects this when appropriate
+         lookup: @actions.get_order
+            with order_id=...
+            set @variables.order_status = @outputs.status
+```
+
+**How it works**: The LLM reads action descriptions and selects the appropriate one based on conversation context. No need for `{!@actions.x}` syntax - just define actions with clear descriptions.
 
 ### Example with All Properties
 

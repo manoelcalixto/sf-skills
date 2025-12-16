@@ -15,6 +15,24 @@ Expert Agentforce developer specializing in Agent Script syntax, topic design, a
 4. **Validation & Scoring**: Score agents against best practices (0-100 points)
 5. **Deployment**: Publish agents using `sf agent publish authoring-bundle`
 
+## 📚 Document Map
+
+| Need | Document | Description |
+|------|----------|-------------|
+| **Complete syntax reference** | [agent-script-syntax.md](../../docs/agent-script-syntax.md) | Full Agent Script language spec, all blocks, types |
+| **AiAuthoringBundle gotchas** | [agent-script-quick-reference.md](../../docs/agent-script-quick-reference.md) | What DOESN'T work, error quick reference |
+| **Action implementation** | [agent-actions-guide.md](../../docs/agent-actions-guide.md) | Flow, Apex, API, Prompt Template actions |
+| **Escalation setup** | [connection-block-guide.md](../../docs/connection-block-guide.md) | OmniChannelFlow routing, human handoff |
+| **CLI commands** | [agent-cli-reference.md](../../docs/agent-cli-reference.md) | sf agent commands, preview, publish |
+| **Design patterns** | [pattern-catalog.md](../../docs/pattern-catalog.md) | Multi-topic, error handling, routing patterns |
+
+**⚡ Quick Links:**
+- [Key Insights Table](#-key-insights) - Common errors and fixes
+- [Scoring System](#scoring-system-100-points) - 6-category validation
+- [Required Files Checklist](#required-files-checklist) - Pre-deployment verification
+
+---
+
 ## ⚠️ CRITICAL: Two Deployment Methods (Tested Dec 2025)
 
 There are **two deployment methods** with **different capabilities**:
@@ -819,16 +837,23 @@ Next Steps:
 
 ---
 
-## Agent Script Syntax Reference
+## Agent Script Syntax Reference (Essentials)
 
-### Complete Working Example
+> **📖 Complete Reference**: See [agent-script-syntax.md](../../docs/agent-script-syntax.md) for full documentation.
+
+### Block Order (CRITICAL)
+
+Blocks MUST appear in this order:
+1. `system:` → 2. `config:` → 3. `variables:` → 4. `language:` → 5. `start_agent [name]:` → 6. `topic [name]:`
+
+### Minimal Working Example
 
 ```agentscript
 system:
-	instructions: "You are a helpful assistant for Acme Corporation. Be professional and friendly. Never share confidential information."
+	instructions: "You are a helpful assistant. Be professional and friendly."
 	messages:
 		welcome: "Hello! How can I help you today?"
-		error: "I apologize, but I encountered an issue. Please try again."
+		error: "I apologize, but I encountered an issue."
 
 config:
 	agent_name: "My_Agent"
@@ -846,8 +871,6 @@ variables:
 	ContactId: linked string
 		source: @MessagingEndUser.ContactId
 		description: "Contact ID"
-	user_query: mutable string
-		description: "The user's current question"
 
 language:
 	default_locale: "en_US"
@@ -861,10 +884,8 @@ start_agent topic_selector:
 	reasoning:
 		instructions: ->
 			| Determine what the user needs.
-			| Route to the appropriate topic.
 		actions:
-			go_to_help: @utils.transition to @topic.help
-			go_to_farewell: @utils.transition to @topic.farewell
+			go_help: @utils.transition to @topic.help
 
 topic help:
 	label: "Help"
@@ -873,675 +894,73 @@ topic help:
 	reasoning:
 		instructions: ->
 			| Answer the user's question helpfully.
-			| If you cannot help, offer alternatives.
-		actions:
-			back_to_selector: @utils.transition to @topic.topic_selector
-
-topic farewell:
-	label: "Farewell"
-	description: "Ends the conversation gracefully"
-
-	reasoning:
-		instructions: ->
-			| Thank the user for reaching out.
-			| Wish them a great day.
 ```
 
-### Block Order (CRITICAL)
+### Quick Syntax Reference
 
-The blocks MUST appear in this order:
-1. `system:` (instructions and messages)
-2. `config:` (agent_name, default_agent_user, agent_label, description)
-3. `variables:` (linked variables first, then mutable variables)
-4. `language:` (locale settings)
-5. `start_agent [name]:` (entry point topic)
-6. `topic [name]:` (additional topics)
+| Block | Key Rules |
+|-------|-----------|
+| **system** | `instructions:` MUST be a single quoted string (NO pipes `\|`) |
+| **config** | Use `agent_name` (not `developer_name`). `default_agent_user` must be valid org user. |
+| **variables** | Use `number` not `integer/long`. Use `list[type]` not `list<type>`. |
+| **language** | Required block - include even if only `en_US`. |
+| **topics** | Each topic MUST have both `label:` and `description:`. |
+| **instructions** | Use `instructions: ->` (space before arrow). |
 
-### Config Block
+### ⚠️ AiAuthoringBundle Limitations (Tested Dec 2025)
 
-**📝 NOTE: No Separate Config File!** All configuration goes directly in the `.agent` file's `config:` block. There is no separate `.agentscript`, `.agentconfig`, or similar config file format.
+| Feature | Status | Workaround |
+|---------|--------|------------|
+| `run` keyword | ❌ NOT Supported | Use `reasoning.actions` block (LLM chooses) |
+| `{!@actions.x}` | ❌ NOT Supported | Define actions with descriptions, LLM auto-selects |
+| `@utils.setVariables` | ❌ NOT Supported | Use `set @variables.x = ...` in instructions |
+| `@utils.escalate with reason` | ❌ NOT Supported | Use basic `@utils.escalate` with `description:` |
+| `integer`, `long` types | ❌ NOT Supported | Use `number` type |
+| `list<type>` syntax | ❌ NOT Supported | Use `list[type]` syntax |
+| Nested if statements | ❌ NOT Supported | Use flat `and` conditionals |
 
-```agentscript
-config:
-   agent_name: "Agent_API_Name"
-   default_agent_user: "user@org.salesforce.com"
-   agent_label: "Human Readable Name"
-   description: "What this agent does"
-```
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `agent_name` | Yes | API name (letters, numbers, underscores only, max 80 chars) |
-| `default_agent_user` | Yes | Username for agent execution context |
-| `agent_label` | Yes | Human-readable name |
-| `description` | Yes | What the agent does |
-
-**IMPORTANT**: Use `agent_name` (not `developer_name`)!
-
-**⚠️ default_agent_user Requirements**:
-- Must be a valid username in the target org
-- User must have Agentforce-related permissions
-- Using an invalid user causes "Internal Error" during publish
-- Recommended: Use a dedicated service account or admin user with proper licenses
-
-### System Block
-
-```agentscript
-system:
-   instructions: "Global instructions for the agent. Be helpful and professional."
-   messages:
-      welcome: "Hello! How can I help you today?"
-      error: "I'm sorry, something went wrong. Please try again."
-```
-
-**⚠️ IMPORTANT**: System instructions MUST be a single quoted string. The `|` pipe multiline syntax does NOT work in the `system:` block (it only works in `reasoning: instructions: ->`).
-
-```agentscript
-# ✅ CORRECT - Single quoted string
-system:
-   instructions: "You are a helpful assistant. Be professional. Never share secrets."
-
-# ❌ WRONG - Pipe syntax fails in system block
-system:
-   instructions:
-      | You are a helpful assistant.
-      | Be professional.
-```
-
-### Variables Block
-
-#### Variable Types (Complete Reference)
-
-| Type | Description | Example | AiAuthoringBundle |
-|------|-------------|---------|-------------------|
-| `string` | Text values | `name: mutable string = "John"` | ✅ Supported |
-| `number` | Numeric (integers & decimals) | `price: mutable number = 99.99` | ✅ Supported |
-| `boolean` | True/False (capitalized!) | `active: mutable boolean = True` | ✅ Supported |
-| `date` | YYYY-MM-DD format | `start: mutable date = 2025-01-15` | ✅ Supported |
-| `datetime` | Full timestamp | `created: mutable datetime` | ✅ Supported |
-| `time` | Time only | `appointment: mutable time` | ✅ Supported |
-| `currency` | Money values | `total: mutable currency` | ✅ Supported |
-| `id` | Salesforce Record ID | `record_id: mutable id` | ✅ Supported |
-| `object` | Complex JSON objects | `data: mutable object = {}` | ✅ Supported |
-| `list[type]` | Collections | `items: mutable list[string]` | ✅ Supported |
-| `integer` | Integer values only | `count: mutable integer = 5` | ❌ NOT Supported |
-| `long` | Long integers | `big_num: mutable long = 9999999999` | ❌ NOT Supported |
-
-**⚠️ CRITICAL: `integer` and `long` types are NOT supported in AiAuthoringBundle!**
-
-**⚠️ CRITICAL: Collection syntax uses SQUARE BRACKETS, not angle brackets!**
-- ✅ CORRECT: `list[string]`, `list[number]`, `list[boolean]`
-- ❌ WRONG: `list<string>` (causes "Unexpected '<'" syntax error)
-- Only primitive types allowed in lists: `string`, `number`, `boolean`
-- `list[object]` is NOT supported
-- Validation fails with: "Variable with type integer is not supported for mutable variables"
-- Use `number` instead for all numeric values (works for both integers and decimals)
-- These types may be supported in GenAiPlannerBundle or future releases
-
-**Note**: Linked variables support only: `string`, `number`, `boolean`, `date`, `id`
-
-#### Variable Declaration Syntax
-
-```
-variable_name: [linked|mutable] type [= default_value]
-   description: "..."
-   [source: @Object.Field]  # Only for linked variables
-```
-
-**Linked Variables** (connect to Salesforce data):
-```agentscript
-variables:
-   EndUserId: linked string
-      source: @MessagingSession.MessagingEndUserId
-      description: "Messaging End User ID"
-   RoutableId: linked string
-      source: @MessagingSession.Id
-      description: "Messaging Session ID"
-   ContactId: linked string
-      source: @MessagingEndUser.ContactId
-      description: "Contact ID"
-```
-
-**Mutable Variables** (agent state):
-```agentscript
-variables:
-   # Without defaults - works in both deployment methods (tested Dec 2025)
-   user_name: mutable string
-      description: "User's name"
-   order_count: mutable number
-      description: "Number of items in cart"
-   price_total: mutable number
-      description: "Total price with decimals"
-   is_verified: mutable boolean
-      description: "Whether identity is verified"
-   appointment_time: mutable time
-      description: "Scheduled appointment time"
-   birth_date: mutable date
-      description: "Customer's date of birth"
-
-   # With explicit defaults - also valid (optional)
-   status: mutable string = ""
-      description: "Current status"
-   counter: mutable number = 0
-      description: "A counter (use number, not integer!)"
-```
-
-### Language Block
-
-```agentscript
-language:
-   default_locale: "en_US"
-   additional_locales: ""
-   all_additional_locales: False
-```
-
-### Connection Block (Optional)
-
-**Required for**: `@utils.escalate` to work with Omni-Channel for human handoff.
+### Connection Block (for Escalation)
 
 ```agentscript
 connection messaging:
-   outbound_route_type: "OmniChannelFlow"
-   outbound_route_name: "Support_Queue_Flow"
-   escalation_message: "Transferring you to a human agent now..."
+   outbound_route_type: "OmniChannelFlow"    # MUST be this value!
+   outbound_route_name: "Support_Queue_Flow" # Must exist in org
+   escalation_message: "Transferring you..."  # REQUIRED field
 ```
 
-| Property | Required | Description |
-|----------|----------|-------------|
-| `outbound_route_type` | Yes | **MUST be `"OmniChannelFlow"`** - values like `"queue"`, `"skill"`, `"agent"` are NOT supported |
-| `outbound_route_name` | Yes | API name of the Omni-Channel Flow (must exist in org) |
-| `escalation_message` | Yes | Message shown to user during transfer (REQUIRED when other fields present) |
+### Resource Access
 
-**⚠️ CRITICAL: Connection Block Requirements (Tested Dec 2025)**
+| Resource | Syntax |
+|----------|--------|
+| Variables | `@variables.name` |
+| Actions | `@actions.name` |
+| Topics | `@topic.name` |
+| Outputs | `@outputs.field` |
+| Utilities | `@utils.transition to`, `@utils.escalate` |
 
-| Requirement | Details |
-|-------------|---------|
-| **`outbound_route_type`** | Must be `"OmniChannelFlow"` - other values (`queue`, `skill`, `agent`) cause validation errors |
-| **`escalation_message`** | REQUIRED field - missing this causes parse/validation errors |
-| **OmniChannelFlow Must Exist** | The referenced flow must exist in the org or publish fails at "Publish Agent" step |
-| **Publish Failure** | If flow doesn't exist, you'll see HTTP 404 at "Publish Agent" (NOT "Retrieve Metadata") - BotDefinition is NOT created |
+### Action Invocation (Simplified)
 
-**Note**: Without a connection block, `@utils.escalate` may not properly route to human agents. Configure this when building agents that need live agent escalation. Ensure the Omni-Channel Flow exists in your org before publishing the agent.
-
-### Topic Blocks
-
-**Entry point topic** (required):
 ```agentscript
-start_agent topic_selector:
-   label: "Topic Selector"
-   description: "Routes users to appropriate topics"
+# Define action in topic
+actions:
+   get_account:
+      description: "Gets account info"
+      inputs:
+         account_id: string
+            description: "Account ID"
+      outputs:
+         account_name: string
+            description: "Account name"
+      target: "flow://Get_Account_Info"
 
-   reasoning:
-      instructions: ->
-         | Determine what the user needs.
-         | Route to the appropriate topic.
-      actions:
-         go_to_orders: @utils.transition to @topic.orders
-         go_to_support: @utils.transition to @topic.support
-```
-
-**Additional topics**:
-```agentscript
-topic orders:
-   label: "Order Management"
-   description: "Handles order inquiries and processing"
-
-   reasoning:
-      instructions: ->
-         | Help the user with their order.
-         | Provide status updates and assistance.
-      actions:
-         back_to_menu: @utils.transition to @topic.topic_selector
-```
-
-**IMPORTANT**: Each topic MUST have both `label:` and `description:`!
-
-### Resource Access (@ prefix)
-
-| Resource | Syntax | Example |
-|----------|--------|---------|
-| Variables | `@variables.name` | `@variables.user_name` |
-| Actions | `@actions.name` | `@actions.get_weather` |
-| Topics | `@topic.name` | `@topic.checkout` |
-| Outputs | `@outputs.field` | `@outputs.temperature` |
-| Utilities | `@utils.transition` | `@utils.transition to @topic.X` |
-| Utilities | `@utils.escalate` | `@utils.escalate` |
-
-### Instructions Syntax
-
-**CRITICAL**: Use `instructions: ->` (space before arrow), NOT `instructions:->`
-
-**Procedural mode** (with logic):
-```agentscript
+# Invoke in reasoning (LLM chooses when to call)
 reasoning:
    instructions: ->
-      | Determine user intent.
-      | Provide helpful response.
-      | If unclear, ask clarifying questions.
-```
-
-**⚠️ CRITICAL: Pipes Cannot Be Nested Inside Pipes!**
-```agentscript
-# ❌ WRONG - Nested pipes cause "Start token somehow not of the form | + 2 spaces" error
-instructions: ->
-   | if @variables.name is None:
-   | 	| Please provide your name.    # NESTED PIPE - FAILS!
-
-# ✅ CORRECT - Conditionals at same level as pipes
-instructions: ->
-   if @variables.name is None:
-      | Please provide your name.
-   else:
-      | Hello, {!@variables.name}!
-```
-
-**System instructions** (must be single string):
-```agentscript
-# ✅ CORRECT - System instructions as single string
-system:
-   instructions: "You are a helpful assistant. Be professional and courteous. Never share confidential information."
-```
-
-**⚠️ NOTE**: The `|` pipe multiline syntax ONLY works inside `reasoning: instructions: ->` blocks, NOT in the top-level `system:` block.
-
-### Action Definitions
-
-**Actions must be defined INSIDE topics**, not at the top level.
-
-#### Action Properties (Complete Reference)
-
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `target` | String | Yes | Executable: `flow://`, `apex://`, `prompt://` |
-| `description` | String | Yes | Explains behavior/purpose for LLM decision-making |
-| `inputs` | Object | No | Input parameters and requirements |
-| `outputs` | Object | No | Return parameters |
-| `label` | String | No | Display name (auto-generated from action name if omitted) |
-| `available_when` | Expression | No | Conditional availability for the LLM |
-| `require_user_confirmation` | Boolean | No | Ask customer to confirm before execution |
-| `include_in_progress_indicator` | Boolean | No | Show progress indicator during execution |
-
-#### Output Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `description` | String | Explains the output parameter |
-| `filter_from_agent` | Boolean | Set `True` to hide sensitive data from LLM reasoning context |
-| `complex_data_type_name` | String | Lightning data type (e.g., `lightning__textType`) |
-
-**Example with all properties:**
-
-```agentscript
-topic account_lookup:
-   label: "Account Lookup"
-   description: "Looks up account information"
-
-   # ✅ CORRECT - Actions inside topic with full properties
+      | Help user look up accounts.
    actions:
-      get_account:
-         description: "Retrieves account information"
-         label: "Get Account"
-         require_user_confirmation: False
-         include_in_progress_indicator: True
-         inputs:
-            account_id: string
-               description: "Salesforce Account ID"
-         outputs:
-            account_name: string
-               description: "Account name"
-            ssn: string
-               description: "Social Security Number"
-               filter_from_agent: True    # Hide sensitive data from LLM
-            industry: string
-               description: "Account industry"
-         target: "flow://Get_Account_Info"
-         available_when: @variables.is_authenticated == True
-
-   reasoning:
-      instructions: ->
-         | Help the user look up account information.
-      actions:
-         lookup: @actions.get_account
-            with account_id=...
-            set @variables.account_name = @outputs.account_name
-```
-
-### Action Invocation
-
-**Slot Filling with `...` (Ellipsis)**
-
-The `...` (ellipsis) syntax enables **LLM slot filling** - the agent automatically extracts parameter values from the conversation context.
-
-```agentscript
-reasoning:
-   actions:
-      # SLOT FILLING: LLM extracts value from conversation
-      # If user says "Look up account 001ABC", the LLM fills account_id="001ABC"
       lookup: @actions.get_account
-         with account_id=...
-         set @variables.account_name = @outputs.account_name
-
-      # FIXED VALUE: Always uses this specific value
-      default_lookup: @actions.get_account
-         with account_id="001XX000003NGFQ"
-
-      # VARIABLE BINDING: Uses value from a variable
-      bound_lookup: @actions.get_account
-         with account_id=@variables.current_account_id
-```
-
-**Input Binding Patterns:**
-
-| Pattern | Syntax | When to Use |
-|---------|--------|-------------|
-| **Slot Filling** | `with param=...` | LLM extracts from conversation |
-| **Fixed Value** | `with param="value"` | Always use a constant |
-| **Variable** | `with param=@variables.x` | Use stored state |
-| **Output** | `with param=@outputs.x` | Chain from previous action |
-
-**How Slot Filling Works:**
-1. User mentions a value in conversation (e.g., "Check order ORD-12345")
-2. LLM recognizes this matches an action's input description
-3. LLM automatically populates the `...` with the extracted value
-4. Action executes with the filled parameter
-
-### Deterministic vs Non-Deterministic Actions
-
-Agent Script supports two invocation methods with different behaviors:
-
-| Method | Syntax | Behavior |
-|--------|--------|----------|
-| **Deterministic** | `run @actions.x` | Always executes when code path is reached |
-| **Non-Deterministic** | `{!@actions.x}` in reasoning | LLM decides whether to execute |
-
-**Deterministic (Always Executes):**
-```agentscript
-# In before_reasoning, after_reasoning, or action callbacks
-before_reasoning:
-   run @actions.log_event           # ALWAYS runs
-      with event_type="turn_started"
-
-# In action callbacks
-process_order: @actions.create_order
-   run @actions.send_confirmation   # ALWAYS runs after create_order
-```
-
-**Non-Deterministic (LLM Chooses):**
-```agentscript
-# In reasoning instructions - LLM decides based on context
-reasoning:
-   instructions: ->
-      | Help the user with their order.
-      | Use {!@actions.get_order} to look up order details.
-      | Use {!@actions.update_order} if they want to modify it.
-
-   # Alternative: actions block - LLM chooses which to call
-   actions:
-      lookup: @actions.get_order
-         with order_id=...
-      update: @actions.update_order
-         with order_id=...
-```
-
-**When to Use Each:**
-- **Deterministic (`run`)**: Audit logging, required follow-ups, guaranteed side effects
-- **Non-Deterministic (actions block)**: User-driven choices, context-dependent operations
-
-### Action Callbacks (Chaining)
-
-Use the `run` keyword to execute follow-up actions after a primary action completes:
-
-```agentscript
-process_order: @actions.create_order
-   with items=...
-   set @variables.order_id = @outputs.order_id
-   run @actions.send_confirmation
-      with order_id=@variables.order_id
-   run @actions.update_inventory
-      with order_id=@variables.order_id
-```
-
-**Note**: Only one level of nesting - cannot nest `run` inside `run`.
-
-### Tools (Reasoning Actions)
-
-**Tools** are wrapped actions or utils functions exposed to the LLM for decision-making. They differ from regular actions in how they're invoked.
-
-#### Tools vs Actions
-
-| Aspect | Actions | Tools (Reasoning Actions) |
-|--------|---------|---------------------------|
-| **Purpose** | Define executable tasks | Expose to LLM for context-based decisions |
-| **Binding** | Optional | Required (`with` or `to`) |
-| **Availability** | Always | Conditional (`available when`) |
-| **Location** | `topic.actions:` block | `reasoning.actions:` block |
-
-#### Tool Definition
-
-Tools are defined in the `reasoning.actions` block and wrap actions with parameter binding:
-
-```agentscript
-topic order_management:
-   label: "Order Management"
-   description: "Manages customer orders"
-
-   # Define the base action
-   actions:
-      get_order_details:
-         description: "Retrieves order information"
-         inputs:
-            order_id: string
-               description: "The order ID"
-         outputs:
-            status: string
-               description: "Order status"
-         target: "flow://Get_Order_Details"
-
-   reasoning:
-      instructions: ->
-         | Help the customer with their order.
-         | Look up order details when they provide an order ID.
-
-      # Tools: wrapped actions with binding
-      actions:
-         # Tool with slot filling
-         lookup_order: @actions.get_order_details
-            with order_id=...
-            available when @variables.has_order_id == True
-
-         # Tool with topic delegation (returns to caller)
-         check_shipping: @topic.shipping
-            available when @variables.order_status == "shipped"
-
-         # Tool with one-way transition (no return)
-         go_to_returns: @utils.transition to @topic.returns
-            available when @variables.wants_return == True
-```
-
-#### Tool Reference Methods
-
-| Method | Syntax | Behavior |
-|--------|--------|----------|
-| **Topic Delegation** | `@topic.<name>` | Delegates to topic, returns control after |
-| **Transition** | `@utils.transition to` | One-way flow, no return to caller |
-| **Action Binding** | `@actions.<name>` | Wraps action with parameter binding |
-
-### Lifecycle Blocks (before_reasoning / after_reasoning)
-
-**NEW**: Use lifecycle blocks for initialization and cleanup logic that runs automatically.
-
-#### ⚠️ CRITICAL SYNTAX RULES for Lifecycle Blocks
-
-| Rule | Details |
-|------|---------|
-| **Transition Syntax** | Use `transition to` NOT `@utils.transition to` |
-| **No Pipe (`\|`)** | The pipe command is NOT supported - use only logic/actions |
-| **after_reasoning May Skip** | If a transition occurs mid-topic, `after_reasoning` won't execute |
-
-```agentscript
-topic conversation:
-   label: "Conversation"
-   description: "Main conversation topic"
-
-   # Runs BEFORE each reasoning step - use for initialization, logging, validation
-   before_reasoning:
-      set @variables.turn_count = @variables.turn_count + 1
-      if @variables.turn_count == 1:
-         run @actions.get_timestamp
-            set @variables.session_start = @outputs.current_timestamp
-      # ✅ CORRECT - Use "transition to" in lifecycle blocks
-      if @variables.needs_reset == True:
-         transition to @topic.reset_session
-      run @actions.log_event
-         with event_type="reasoning_started"
-
-   # Main reasoning block
-   reasoning:
-      instructions: ->
-         | Respond to the user.
-         | Session started: {!@variables.session_start}
-         | Current turn: {!@variables.turn_count}
-
-   # Runs AFTER each reasoning step - use for cleanup, analytics, final logging
-   # ⚠️ NOTE: This block may NOT run if a transition occurred during reasoning
-   after_reasoning:
-      run @actions.log_event
-         with event_type="reasoning_completed"
-```
-
-**❌ Common Mistakes in Lifecycle Blocks:**
-```agentscript
-# ❌ WRONG - @utils.transition doesn't work in lifecycle blocks
-before_reasoning:
-   if @variables.expired == True:
-      @utils.transition to @topic.expired   # FAILS!
-
-# ❌ WRONG - Pipe (|) is not supported
-before_reasoning:
-   | Setting up the session...             # FAILS!
-
-# ✅ CORRECT - Use "transition to" (no @utils)
-before_reasoning:
-   if @variables.expired == True:
-      transition to @topic.expired         # WORKS!
-```
-
-**When to use:**
-- `before_reasoning`: Session initialization, turn counting, pre-validation, state setup, conditional routing
-- `after_reasoning`: Cleanup, analytics, audit logging, state updates (note: may not run if transition occurs)
-
-### Variable Setting Utilities
-
-**⚠️ CRITICAL: `@utils.setVariables` and `@utils.set` are NOT supported in AiAuthoringBundle (Tested Dec 2025)**
-
-These utilities cause "Unknown utils declaration type" errors when using `sf agent publish authoring-bundle`. Use the `set` keyword in procedural instructions instead:
-
-```agentscript
-# ✅ CORRECT - Use 'set' keyword in instructions (works in AiAuthoringBundle)
-reasoning:
-   instructions: ->
-      | Ask the user for their name.
-      set @variables.user_name = ...
-      | Verify the user's identity.
-      set @variables.is_verified = True
-
-# ❌ WRONG - @utils.setVariables NOT supported in AiAuthoringBundle
-reasoning:
-   actions:
-      update_state: @utils.setVariables
-         with user_name=...
-         with is_verified=True
-```
-
-| Utility | AiAuthoringBundle | GenAiPlannerBundle | Alternative |
-|---------|-------------------|-------------------|-------------|
-| `@utils.setVariables` | ❌ NOT Supported | ✅ Works | Use `set` keyword in instructions |
-| `@utils.set` | ❌ NOT Supported | ✅ Works | Use `set @variables.x = ...` in instructions |
-
-**Note**: The `set` keyword within `instructions: ->` blocks lets the LLM fill values from conversation context (slot filling with `...`).
-
-### Topic Transitions
-
-```agentscript
-# Simple transition
-go_checkout: @utils.transition to @topic.checkout
-
-# Conditional transition
-go_checkout: @utils.transition to @topic.checkout
-    available when @variables.cart_has_items == True
-```
-
-### Escalation to Human
-
-**⚠️ IMPORTANT**: `@utils.escalate` REQUIRES a `description:` on a separate indented line. The description tells the LLM when to trigger escalation.
-
-```agentscript
-topic escalation:
-   label: "Escalation"
-   description: "Handles requests to transfer to a live human agent"
-
-   reasoning:
-      instructions: ->
-         | If a user explicitly asks to transfer, escalate.
-         | Acknowledge and apologize for any inconvenience.
-      actions:
-         # ✅ CORRECT - description on separate indented line
-         escalate_to_human: @utils.escalate
-            description: "Transfer to human when customer requests or issue cannot be resolved"
-
-# ❌ WRONG - inline description fails
-#     escalate: @utils.escalate "description here"
-```
-
-### Conditional Logic
-
-```agentscript
-instructions: ->
-   if @variables.amount > 10000:
-      set @variables.needs_approval = True
-      | This amount requires manager approval.
-   else:
-      set @variables.needs_approval = False
-      | Processing your request.
-
-   if @variables.user_name is None:
-      | I don't have your name yet. What should I call you?
-```
-
-**Boolean Capitalization**: Use `True` and `False` (capital T and F), not `true`/`false`.
-
-### Operators
-
-| Type | Operators | Example |
-|------|-----------|---------|
-| Comparison | `==`, `!=`, `>`, `<`, `>=`, `<=` | `@variables.count == 10` |
-| Logical | `and`, `or`, `not` | `@variables.a and @variables.b` |
-| Math | `+`, `-` | `@variables.count + 1` |
-| Null check | `is`, `is not` | `@variables.value is None` |
-
-**Logical Operator Examples:**
-```agentscript
-# AND - both conditions must be true
-if @variables.verified == True and @variables.amount > 0:
-   | Processing your verified request.
-
-# OR - at least one condition must be true
-if @variables.is_vip == True or @variables.amount > 10000:
-   | You qualify for premium service.
-
-# NOT - negates the condition
-if not @variables.is_blocked:
-   | Access granted.
-```
-
-### Template Expressions
-
-Use `{!...}` for variable interpolation in instructions:
-
-```agentscript
-instructions: ->
-   | Hello {!@variables.user_name}!
-   | Your account balance is {!@variables.balance}.
+         with account_id=...    # Slot filling
+         set @variables.name = @outputs.account_name
 ```
 
 ---
@@ -1637,265 +1056,34 @@ instructions: ->
 
 ---
 
-## Agent Actions (Expanded)
+## Agent Actions (Summary)
 
-This section covers all four action types. See **Action Target Syntax** section above for deployment method compatibility.
+> **📖 Complete Reference**: See [agent-actions-guide.md](../../docs/agent-actions-guide.md) for detailed implementation of all action types.
 
 ### Action Target Summary
 
-| Action Type | Agent Script Target | Deployment Method | Recommended |
-|-------------|---------------------|-------------------|-------------|
-| Flow (native) | `flow://FlowAPIName` | Agent Script | ✅ Best choice |
-| Apex (via Flow wrapper) | `flow://ApexWrapperFlow` | Agent Script | ✅ Recommended |
-| Apex (via GenAiFunction) | N/A (metadata deploy) | Metadata API | ⚠️ Advanced |
-| External API | `flow://HttpCalloutFlow` | Agent Script + sf-integration | ✅ Via Flow |
-| Prompt Template | N/A (invoked by agent) | Metadata API | ✅ For LLM tasks |
+| Action Type | Target Syntax | Recommended |
+|-------------|---------------|-------------|
+| **Flow** (native) | `flow://FlowAPIName` | ✅ Best choice |
+| **Apex** (via Flow) | `flow://ApexWrapperFlow` | ✅ Recommended |
+| **External API** | `flow://HttpCalloutFlow` | ✅ Via sf-integration |
+| **Prompt Template** | Deploy via metadata | ✅ For LLM tasks |
 
-### A. Apex Actions (Direct via GenAiFunction)
+### Key Requirements for Flow Actions
 
-**Bypass Agent Script Limitation**: While `apex://` targets don't work in Agent Script, you can deploy Apex actions directly via GenAiFunction metadata.
-
-**Template**: `templates/genai-metadata/genai-function-apex.xml`
-
-**Workflow**:
-1. Create Apex class with `@InvocableMethod` annotation
-2. Generate GenAiFunction metadata pointing to Apex class
-3. Deploy both to org via Metadata API
-4. Optionally create GenAiPlugin to group functions
-5. Agent discovers function automatically
-
-**Example GenAiFunction Apex invocation**:
-```xml
-<GenAiFunction xmlns="http://soap.sforce.com/2006/04/metadata">
-    <masterLabel>Create Support Case</masterLabel>
-    <description>Creates a support case from user request</description>
-    <invocationTarget>CaseCreationService</invocationTarget>
-    <invocationTargetType>apex</invocationTargetType>
-    <isConfirmationRequired>true</isConfirmationRequired>
-    <capability>Create support cases for customers</capability>
-    <genAiFunctionParameters>
-        <parameterName>Subject</parameterName>
-        <parameterType>Input</parameterType>
-        <isRequired>true</isRequired>
-        <description>Case subject</description>
-        <dataType>Text</dataType>
-    </genAiFunctionParameters>
-</GenAiFunction>
-```
-
-**⚠️ NOTE**: This approach works but functions deployed via GenAiFunction are NOT managed via Agent Script. The agent will have access to the function, but it won't appear in your `.agent` file.
-
-### B. API Actions (External Service via sf-integration)
-
-**For agents that need to call external APIs**, use sf-integration to set up the connection:
-
-**Step 1: Create Named Credential (call sf-integration)**
-```
-Skill(skill="sf-integration")
-Request: "Create Named Credential for Stripe API with OAuth 2.0 Client Credentials"
-```
-
-**Step 2: Create HTTP Callout Flow wrapper**
-```
-Skill(skill="sf-flow")
-Request: "Create Autolaunched HTTP Callout Flow that calls Stripe_API Named Credential"
-```
-Or use template: `templates/flows/http-callout-flow.flow-meta.xml`
-
-**Step 3: Reference Flow in Agent Script**
-```agentscript
-topic payment_lookup:
-   label: "Payment Lookup"
-   description: "Looks up payment information from Stripe"
-
-   actions:
-      check_payment:
-         description: "Retrieves payment status from Stripe API"
-         inputs:
-            payment_id: string
-               description: "The Stripe payment ID"
-         outputs:
-            payment_status: string
-               description: "Current payment status"
-            amount: string
-               description: "Payment amount"
-         target: "flow://Get_Stripe_Payment"
-
-   reasoning:
-      instructions: ->
-         | Ask for the payment ID.
-         | Look up the payment status.
-         | Report the status and amount to the user.
-      actions:
-         lookup: @actions.check_payment
-            with payment_id=...
-            set @variables.payment_status = @outputs.payment_status
-```
-
-### C. Flow Actions (Already Working)
-
-Flow actions work directly with `flow://FlowAPIName` syntax. This is the **recommended approach** for most agent actions.
-
-**Templates**:
-- `templates/flows/http-callout-flow.flow-meta.xml` - For external API callouts
-- Use sf-flow skill for custom Flow creation
-
-**Key Requirements**:
 - Flow must be **Autolaunched Flow** (not Screen Flow)
-- Variables must be marked "Available for input" / "Available for output"
-- Variable names must match Agent Script input/output names exactly
-- Flow must be deployed BEFORE agent publish
+- Variables marked "Available for input/output"
+- Variable names **must match** Agent Script input/output names
+- Flow must be deployed **BEFORE** agent publish
 
-### D. Prompt Template Actions
+### Cross-Skill Integration
 
-**Use Case**: LLM-powered actions for content generation, summarization, or analysis
-
-**Templates**:
-- `templates/prompt-templates/basic-prompt-template.promptTemplate-meta.xml`
-- `templates/prompt-templates/record-grounded-prompt.promptTemplate-meta.xml`
-
-**Deployment**:
-1. Create PromptTemplate metadata
-2. Deploy via Metadata API
-3. Reference in GenAiFunction or Flow
-
-**Example PromptTemplate for record summarization**:
-```xml
-<PromptTemplate xmlns="http://soap.sforce.com/2006/04/metadata">
-    <fullName>Summarize_Account</fullName>
-    <masterLabel>Summarize Account</masterLabel>
-    <type>recordSummary</type>
-    <objectType>Account</objectType>
-    <promptContent>
-Summarize this account for a sales rep:
-- Name: {!recordName}
-- Industry: {!industry}
-- Annual Revenue: {!annualRevenue}
-
-Provide 3-4 bullet points highlighting key information.
-    </promptContent>
-    <promptTemplateVariables>
-        <developerName>recordName</developerName>
-        <promptTemplateVariableType>recordField</promptTemplateVariableType>
-        <objectType>Account</objectType>
-        <fieldName>Name</fieldName>
-    </promptTemplateVariables>
-</PromptTemplate>
-```
-
-### Full Example: Agent with External API Integration
-
-**User Request**: "Create an agent that can look up order status from our ERP API"
-
-**Step 1: Create Named Credential (sf-integration)**
-```bash
-Skill(skill="sf-integration")
-Request: "Create Named Credential for ERP API at https://erp.company.com with OAuth 2.0 Client Credentials"
-```
-
-**Step 2: Create HTTP Callout Flow (sf-flow)**
-```bash
-Skill(skill="sf-flow")
-Request: "Create Autolaunched Flow Get_Order_Status with input order_id (Text) that calls ERP_API Named Credential GET /orders/{order_id}"
-```
-
-**Step 3: Deploy Dependencies (sf-deploy)**
-```bash
-sf project deploy start --metadata NamedCredential:ERP_API,Flow:Get_Order_Status --target-org [alias]
-```
-
-**Step 4: Create Agent with API Action**
-```agentscript
-system:
-   instructions: "You are an order status assistant. Help customers check their order status. Be helpful and professional."
-   messages:
-      welcome: "Hello! I can help you check your order status."
-      error: "Sorry, I couldn't retrieve that information."
-
-config:
-   agent_name: "Order_Status_Agent"
-   default_agent_user: "agent@company.com"
-   agent_label: "Order Status Agent"
-   description: "Helps customers check order status from ERP system"
-
-variables:
-   EndUserId: linked string
-      source: @MessagingSession.MessagingEndUserId
-      description: "Messaging End User ID"
-   RoutableId: linked string
-      source: @MessagingSession.Id
-      description: "Messaging Session ID"
-   ContactId: linked string
-      source: @MessagingEndUser.ContactId
-      description: "Contact ID"
-   order_status: mutable string
-      description: "Current order status"
-   expected_delivery: mutable string
-      description: "Expected delivery date"
-
-language:
-   default_locale: "en_US"
-   additional_locales: ""
-   all_additional_locales: False
-
-start_agent topic_selector:
-   label: "Topic Selector"
-   description: "Routes to order status lookup"
-
-   reasoning:
-      instructions: ->
-         | Greet the user.
-         | Ask for their order ID.
-         | Route to order lookup.
-      actions:
-         check_order: @utils.transition to @topic.order_lookup
-
-topic order_lookup:
-   label: "Order Status"
-   description: "Looks up order status from ERP system"
-
-   actions:
-      get_order:
-         description: "Retrieves order status by order ID"
-         inputs:
-            order_id: string
-               description: "The order ID to look up"
-         outputs:
-            status: string
-               description: "Current order status"
-            delivery_date: string
-               description: "Expected delivery date"
-         target: "flow://Get_Order_Status"
-
-   reasoning:
-      instructions: ->
-         | Ask for the order ID if not provided.
-         | Look up the order status.
-         | Report the status and expected delivery.
-         |
-         | if @variables.order_status is None:
-         |     | I couldn't find that order. Please verify the order ID.
-      actions:
-         lookup: @actions.get_order
-            with order_id=...
-            set @variables.order_status = @outputs.status
-            set @variables.expected_delivery = @outputs.delivery_date
-         back: @utils.transition to @topic.topic_selector
-```
-
-**Step 5: Publish Agent**
-```bash
-sf agent publish authoring-bundle --api-name Order_Status_Agent --target-org [alias]
-```
-
-### Cross-Skill Integration for Actions
-
-| From Skill | To Agent/Skill | When | Example |
-|------------|----------------|------|---------|
-| sf-ai-agentforce | sf-integration | External API actions | "Create Named Credential for agent API action" |
-| sf-ai-agentforce | sf-flow | Flow wrappers for Apex/API | "Create HTTP Callout Flow for agent" |
-| sf-ai-agentforce | sf-apex | Business logic @InvocableMethod | "Create Apex for case creation" |
-| sf-ai-agentforce | **sf-devops-architect** | Deploy all components | `Task(subagent_type="sf-devops-architect")` - **MANDATORY** |
+| Need | Skill | Example |
+|------|-------|---------|
+| External API | sf-integration | "Create Named Credential for agent API action" |
+| Flow wrapper | sf-flow | "Create HTTP Callout Flow for agent" |
+| Apex logic | sf-apex | "Create Apex @InvocableMethod for case creation" |
+| **Deployment** | **sf-devops-architect** | `Task(subagent_type="sf-devops-architect")` **MANDATORY** |
 
 ---
 

@@ -15,24 +15,40 @@ The `connection` block in Agent Script describes how agents interact with extern
 
 ```agentscript
 connection messaging:
-   outbound_route_type: "queue"
-   outbound_route_name: "Support_Queue"
+   outbound_route_type: "OmniChannelFlow"
+   outbound_route_name: "Support_Queue_Flow"
+   escalation_message: "Transferring you to a human agent..."
 ```
 
-### Properties
+### ⚠️ CRITICAL: Valid Route Types (Tested Dec 2025)
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `outbound_route_type` | String | Yes | Routing type: `"queue"`, `"skill"`, or `"agent"` |
-| `outbound_route_name` | String | Yes | API name of the Omni-Channel queue, skill, or agent |
+| `outbound_route_type` | String | Yes | **MUST be `"OmniChannelFlow"`** - no other values work |
+| `outbound_route_name` | String | Yes | API name of the Omni-Channel Flow (must exist in org) |
+| `escalation_message` | String | Yes | Message shown to user during transfer |
 
-### Route Types
+**⚠️ Values like `"queue"`, `"skill"`, `"agent"` cause "Invalid value for restricted picklist field" errors!**
 
-| Type | Use Case | Example |
-|------|----------|---------|
-| `queue` | Route to a queue of agents | `"Support_Queue"` |
-| `skill` | Route based on agent skills | `"Technical_Support"` |
-| `agent` | Route to a specific agent | `"supervisor@company.com"` |
+### Valid vs Invalid Route Types
+
+```agentscript
+# ❌ WRONG - These values DO NOT work
+connection messaging:
+   outbound_route_type: "queue"           # FAILS!
+   outbound_route_name: "Support_Queue"
+
+# ❌ WRONG - skill routing not supported
+connection messaging:
+   outbound_route_type: "skill"           # FAILS!
+   outbound_route_name: "Technical_Skill"
+
+# ✅ CORRECT - Only OmniChannelFlow works
+connection messaging:
+   outbound_route_type: "OmniChannelFlow"
+   outbound_route_name: "Support_Queue_Flow"    # Must exist in org!
+   escalation_message: "Connecting you with a human agent now..."
+```
 
 ---
 
@@ -79,10 +95,11 @@ language:
    additional_locales: ""
    all_additional_locales: False
 
-# Connection block for escalation routing
+# Connection block for escalation routing (OmniChannelFlow required!)
 connection messaging:
-   outbound_route_type: "queue"
-   outbound_route_name: "Customer_Support_Queue"
+   outbound_route_type: "OmniChannelFlow"
+   outbound_route_name: "Customer_Support_Queue_Flow"
+   escalation_message: "I'm transferring you to a human agent now..."
 
 start_agent topic_selector:
    label: "Topic Selector"
@@ -169,34 +186,36 @@ When using Enhanced Chat as your messaging channel:
 
 ```agentscript
 connection messaging:
-   outbound_route_type: "queue"
-   outbound_route_name: "Chat_Support_Queue"
+   outbound_route_type: "OmniChannelFlow"
+   outbound_route_name: "Chat_Support_Queue_Flow"
+   escalation_message: "Connecting you with a support agent..."
 ```
 
 ### Setup Requirements
 
-1. **Enable Enhanced Chat** in Setup → Chat Settings
-2. **Create Omni-Channel Queue** with Chat routing
-3. **Deploy Agent** with connection block
-4. **Configure Embedded Service** to use the agent
+1. **Create Omni-Channel Flow** that routes to your queue or skill
+2. **Enable Enhanced Chat** in Setup → Chat Settings
+3. **Create Omni-Channel Queue** with Chat routing
+4. **Deploy Omni-Channel Flow** to org BEFORE publishing agent
+5. **Deploy Agent** with connection block
+6. **Configure Embedded Service** to use the agent
 
----
+### ⚠️ Important: Skill-Based Routing via Omni-Channel Flow
 
-## Skill-Based Routing
+Direct skill-based routing (`outbound_route_type: "skill"`) is **NOT supported**. To route based on skills:
 
-Route based on agent skills for specialized support:
+1. Create an **Omni-Channel Flow** that implements skill-based routing logic
+2. Reference that flow in your agent's connection block
 
 ```agentscript
+# Route to different skills via Omni-Channel Flow logic
 connection messaging:
-   outbound_route_type: "skill"
-   outbound_route_name: "Technical_Support_Skill"
+   outbound_route_type: "OmniChannelFlow"
+   outbound_route_name: "Skill_Based_Routing_Flow"    # Flow handles skill selection
+   escalation_message: "Routing you to a specialist..."
 ```
 
-### Use Case
-
-- Technical issues → Technical Support skill
-- Billing questions → Billing skill
-- Sales inquiries → Sales skill
+This approach lets you implement complex routing (skills, queues, business hours) within the Omni-Channel Flow itself.
 
 ---
 
@@ -206,8 +225,11 @@ connection messaging:
 
 | Issue | Cause | Solution |
 |-------|-------|----------|
+| "Invalid value for restricted picklist" | Using `"queue"`, `"skill"`, or `"agent"` | Use `"OmniChannelFlow"` only |
+| HTTP 404 at "Publish Agent" | OmniChannelFlow doesn't exist in org | Create and deploy the flow first |
 | "escalate" not recognized | Missing connection block | Add `connection messaging:` block |
-| Agent not transferring | Queue not configured | Verify Omni-Channel queue exists |
+| Missing `escalation_message` error | Required field not provided | Add `escalation_message:` field |
+| Agent not transferring | OmniChannelFlow not configured | Verify flow exists and routes correctly |
 | "SyntaxError: Unexpected 'with'" | Using `with reason` in AiAuthoringBundle | Use basic escalation or GenAiPlannerBundle |
 | Transfer fails silently | Agent user lacks permissions | Grant Omni-Channel permissions |
 

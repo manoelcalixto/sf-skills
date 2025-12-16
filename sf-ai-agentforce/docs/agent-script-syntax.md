@@ -1401,3 +1401,30 @@ instructions: ->
 | **`@utils.escalate` without `description:`** | **ValidationError** | **Always include `description:` field for escalation actions** |
 | **Empty lifecycle blocks (comments only)** | **SyntaxError** | **Remove empty blocks or add actual logic** |
 | **`{!@actions.x}` for dynamic action invocation** | **SyntaxError** | **Define multiple actions with descriptions, LLM auto-selects** |
+
+---
+
+## Test Matrix
+
+| Level | Complexity | Features Tested | Status |
+|-------|------------|-----------------|--------|
+| 1 | Basic | system, config, single start_agent topic | ✅ Verified |
+| 2 | Multi-topic | Multiple topics, @utils.transition routing | ✅ Verified |
+| 3 | Variables | linked, mutable, language block, variable templates | ✅ Verified |
+| 4 | Flow Actions | flow:// targets, inputs/outputs, @actions.* | ✅ Verified |
+| 5 | Complex | All features + @utils.escalate, multi-action topics | ✅ Verified |
+
+---
+
+## Testing Best Practices
+
+1. **Validate Early**: Run `sf agent validate authoring-bundle` before every publish
+2. **Start Simple**: Begin with Level 1 (no actions) to verify basic syntax
+3. **Deploy Dependencies First**: Flows and Apex must exist in org before agent publish
+4. **Test in Simulated Mode First**: Use simulated preview for rapid iteration
+5. **Validate Incrementally**: Test each feature addition before combining
+6. **Check User Permissions**: Ensure `default_agent_user` has Agentforce permissions
+7. **Use Explicit Errors**: If publish fails with "Internal Error", check dependencies first
+8. **Save Transcripts**: Use `--output-dir` to capture test sessions for review
+9. **Test Edge Cases**: Include unexpected inputs in test specs to validate guardrails
+10. **Automate Tests**: Use `sf agent test create` for regression testing

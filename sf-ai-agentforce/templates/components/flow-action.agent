@@ -2,6 +2,13 @@
 # Define an action that calls a Salesforce Flow
 # This is a PARTIAL template - define actions inside a topic block
 #
+# ⚠️ DEPLOYMENT METHOD MATTERS:
+#    - AiAuthoringBundle: `with`/`set` clauses in reasoning.actions NOT supported
+#    - GenAiPlannerBundle: Full syntax including `with`/`set` supported
+#
+# For AiAuthoringBundle: Define actions in topics, let LLM auto-invoke based on description
+# The LLM will automatically call actions when needed - no `with`/`set` required
+#
 # Usage: Replace {{placeholders}} with your values
 # Place this inside a topic's actions: block
 
@@ -22,6 +29,11 @@
 
 # Usage in reasoning block:
 #
+# ═══════════════════════════════════════════════════════════════════════════════
+# ⚠️ GenAiPlannerBundle ONLY - The following `with`/`set` syntax does NOT work
+#    in AiAuthoringBundle (causes "Internal Error" at publish time)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
 # reasoning:
 #    instructions: ->
 #       | Help the user with their request.
@@ -31,6 +43,17 @@
 #          with {{input_2_name}}=@variables.some_var  # From variable
 #          set @variables.result1 = @outputs.{{output_1_name}}
 #          set @variables.result2 = @outputs.{{output_2_name}}
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+# ✅ AiAuthoringBundle Pattern - Let LLM auto-invoke based on action description
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# reasoning:
+#    instructions: ->
+#       | Help the user with their request.
+#       | Use the available actions when needed.
+#    actions:
+#       back_to_menu: @utils.transition to @topic.topic_selector
 
 # Common Flow Target Patterns:
 # - flow://Get_Account_Details

@@ -1058,7 +1058,8 @@ topic help:
 
 | Feature | Status | Workaround |
 |---------|--------|------------|
-| `run` keyword | ❌ NOT Supported | Use `reasoning.actions` block (LLM chooses) |
+| `run` keyword | ❌ NOT Supported | Define actions in topic, LLM chooses when to call |
+| `with`/`set` in `reasoning.actions` | ❌ NOT Supported | Define actions in topic `actions:` block only |
 | `{!@actions.x}` | ❌ NOT Supported | Define actions with descriptions, LLM auto-selects |
 | `@utils.setVariables` | ❌ NOT Supported | Use `set @variables.x = ...` in instructions |
 | `@utils.escalate with reason` | ❌ NOT Supported | Use basic `@utils.escalate` with `description:` |
@@ -1066,6 +1067,78 @@ topic help:
 | `list<type>` syntax | ❌ NOT Supported | Use `list[type]` syntax |
 | Nested if statements | ❌ NOT Supported | Use flat `and` conditionals |
 | `filter_from_agent` | ❌ NOT Supported | Use `available when @var == val` syntax |
+
+### ⚠️ CRITICAL: Flow Actions in AiAuthoringBundle (Tested Dec 2025)
+
+**Flow actions (`flow://`) DO work in AiAuthoringBundle**, but require a specific pattern:
+
+```agentscript
+# ✅ CORRECT PATTERN FOR AiAuthoringBundle
+# 1. Define actions in topic blocks (NOT start_agent)
+# 2. Use simple action definition (no with/set in reasoning.actions)
+# 3. Let the LLM decide when to call the action based on description
+
+start_agent topic_selector:
+   label: "Topic Selector"
+   description: "Routes users to topics"
+
+   # ✅ start_agent should ONLY have @utils.transition actions
+   reasoning:
+      instructions: ->
+         | Route the user to the appropriate topic.
+      actions:
+         go_to_orders: @utils.transition to @topic.order_lookup
+
+topic order_lookup:
+   label: "Order Lookup"
+   description: "Looks up order information"
+
+   # ✅ Define flow actions in the topic's actions: block
+   actions:
+      get_order:
+         description: "Retrieves order details by order number"
+         inputs:
+            inp_OrderNumber: string
+               description: "The order number to look up"
+         outputs:
+            out_OrderStatus: string
+               description: "Status of the order"
+            out_OrderTotal: number
+               description: "Total amount of the order"
+         target: "flow://Get_Order_Details"
+
+   # ✅ Simple reasoning - no with/set in reasoning.actions
+   reasoning:
+      instructions: ->
+         | Help the user look up their order.
+         | Ask for the order number if not provided.
+         | Use the get_order action to retrieve details.
+      actions:
+         back_to_menu: @utils.transition to @topic.topic_selector
+```
+
+**❌ WRONG PATTERN (causes "Internal Error" at publish):**
+
+```agentscript
+# ❌ DO NOT put flow actions in start_agent
+start_agent topic_selector:
+   actions:
+      my_flow_action:    # ❌ WRONG - actions in start_agent fail
+         target: "flow://..."
+
+# ❌ DO NOT use with/set in reasoning.actions (AiAuthoringBundle only)
+reasoning:
+   actions:
+      lookup: @actions.get_order
+         with inp_OrderNumber=...              # ❌ WRONG - causes Internal Error
+         set @variables.status = @outputs...   # ❌ WRONG - causes Internal Error
+```
+
+**Key Requirements:**
+1. **Flow actions in `topic` blocks only** - NOT in `start_agent`
+2. **`start_agent` uses only `@utils.transition`** - for routing to topics
+3. **No `with`/`set` in `reasoning.actions`** - just define actions, LLM auto-calls
+4. **Input/output names must match Flow exactly** - Case-sensitive!
 
 ### Connection Block (for Escalation)
 
@@ -1558,6 +1631,8 @@ python3 ~/.claude/plugins/marketplaces/sf-skills/sf-agentforce/hooks/scripts/val
 | **Flow Variable Names** | **Mismatched names cause "Internal Error"** | **Agent Script input/output names MUST match Flow variable API names exactly** |
 | **Action Location** | Top-level actions fail | Define actions inside topics |
 | **Flow Targets** | `flow://` works in both deployment methods | Ensure Flow deployed before agent publish, names match exactly |
+| **AiAuthoringBundle Flow Actions** | `with`/`set` in `reasoning.actions` causes "Internal Error" | Define actions in topic `actions:` block, let LLM auto-call (no `with`/`set`) |
+| **start_agent Actions** | Flow actions in `start_agent` fail in AiAuthoringBundle | Use `start_agent` only for `@utils.transition`, put flow actions in `topic` blocks |
 | **`run` Keyword** | Action chaining syntax | Use `run @actions.x` for callbacks (GenAiPlannerBundle only) |
 | **Lifecycle Blocks** | before/after_reasoning available | Use bare `transition to` (not `@utils.transition`) in lifecycle blocks |
 | **`@utils.set`/`setVariables`** | "Unknown utils declaration type" error | Use `set` keyword in instructions instead (AiAuthoringBundle) |

@@ -2,13 +2,12 @@
 
 > 💙 **Community-powered agentic coding knowledge, shared by a Salesforce Certified Technical Architect (CTA)**
 
-**Author:** [Jag Valaiyapathy](https://github.com/Jaganpro) • **License:** [MIT](LICENSE)
+[![Author](https://img.shields.io/badge/Author-Jag_Valaiyapathy-blue?logo=github)](https://github.com/Jaganpro)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 A collection of reusable skills for **Agentic Salesforce Development**, enabling AI-powered code generation, validation, testing, debugging, and deployment. Built for Claude Code with planned support for other agentic coding tools.
 
 > **14 skills** • **50+ templates** • **420+ validation points** • **LSP integration**
-
-> ⚠️ **Alpha Software** — This project is under active development. Expect breaking changes between releases. Pin to a specific commit hash for stability.
 
 ---
 

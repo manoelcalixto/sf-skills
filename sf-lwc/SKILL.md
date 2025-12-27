@@ -283,12 +283,16 @@ export default class ContactList extends LightningElement {
 }
 ```
 
-### 3. GraphQL Wire Pattern (NEW)
+### 3. GraphQL Patterns (Queries & Mutations)
+
+> **Module Note**: `lightning/graphql` supersedes `lightning/uiGraphQLApi` and provides newer features like mutations, optional fields, and dynamic query construction.
+
+#### 3a. GraphQL Query (Wire Adapter)
 
 ```javascript
 // graphqlContacts.js
 import { LightningElement, wire } from 'lwc';
-import { gql, graphql } from 'lightning/uiGraphQLApi';
+import { gql, graphql } from 'lightning/graphql';
 
 const CONTACTS_QUERY = gql`
     query ContactsQuery($first: Int, $after: String) {
@@ -350,6 +354,172 @@ export default class GraphqlContacts extends LightningElement {
         }
     }
 }
+```
+
+#### 3b. GraphQL Mutations (Spring '26 - GA in API 66.0)
+
+Mutations allow create, update, and delete operations via GraphQL. Use `executeMutation` for imperative operations.
+
+```javascript
+// graphqlAccountMutation.js
+import { LightningElement, track } from 'lwc';
+import { gql, executeMutation } from 'lightning/graphql';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+
+// Create mutation
+const CREATE_ACCOUNT = gql`
+    mutation CreateAccount($name: String!, $industry: String) {
+        uiapi {
+            AccountCreate(input: {
+                Account: {
+                    Name: $name
+                    Industry: $industry
+                }
+            }) {
+                Record {
+                    Id
+                    Name { value }
+                    Industry { value }
+                }
+            }
+        }
+    }
+`;
+
+// Update mutation
+const UPDATE_ACCOUNT = gql`
+    mutation UpdateAccount($id: ID!, $name: String!) {
+        uiapi {
+            AccountUpdate(input: {
+                Account: {
+                    Id: $id
+                    Name: $name
+                }
+            }) {
+                Record {
+                    Id
+                    Name { value }
+                }
+            }
+        }
+    }
+`;
+
+// Delete mutation
+const DELETE_ACCOUNT = gql`
+    mutation DeleteAccount($id: ID!) {
+        uiapi {
+            AccountDelete(input: { Account: { Id: $id } }) {
+                Id
+            }
+        }
+    }
+`;
+
+export default class GraphqlAccountMutation extends LightningElement {
+    @track accountName = '';
+    @track industry = '';
+    isLoading = false;
+
+    handleNameChange(event) {
+        this.accountName = event.target.value;
+    }
+
+    handleIndustryChange(event) {
+        this.industry = event.target.value;
+    }
+
+    async handleCreate() {
+        if (!this.accountName) return;
+
+        this.isLoading = true;
+        try {
+            const result = await executeMutation(CREATE_ACCOUNT, {
+                variables: {
+                    name: this.accountName,
+                    industry: this.industry || null
+                }
+            });
+
+            const newRecord = result.data.uiapi.AccountCreate.Record;
+            this.showToast('Success', `Account "${newRecord.Name.value}" created`, 'success');
+            this.resetForm();
+        } catch (error) {
+            this.handleError(error);
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    async handleUpdate(accountId, newName) {
+        try {
+            const result = await executeMutation(UPDATE_ACCOUNT, {
+                variables: { id: accountId, name: newName }
+            });
+            this.showToast('Success', 'Account updated', 'success');
+            return result.data.uiapi.AccountUpdate.Record;
+        } catch (error) {
+            this.handleError(error);
+        }
+    }
+
+    async handleDelete(accountId) {
+        try {
+            await executeMutation(DELETE_ACCOUNT, {
+                variables: { id: accountId }
+            });
+            this.showToast('Success', 'Account deleted', 'success');
+        } catch (error) {
+            this.handleError(error);
+        }
+    }
+
+    handleError(error) {
+        const message = error.graphQLErrors
+            ? error.graphQLErrors.map(e => e.message).join(', ')
+            : error.message || 'Unknown error';
+        this.showToast('Error', message, 'error');
+    }
+
+    showToast(title, message, variant) {
+        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
+    }
+
+    resetForm() {
+        this.accountName = '';
+        this.industry = '';
+    }
+}
+```
+
+#### GraphQL Mutation Operations
+
+| Operation | Mutation Type | Notes |
+|-----------|---------------|-------|
+| **Create** | `{Object}Create` | Can request fields from newly created record |
+| **Update** | `{Object}Update` | Cannot query fields in same request |
+| **Delete** | `{Object}Delete` | Cannot query fields in same request |
+
+#### allOrNone Parameter
+
+Control transaction behavior with `allOrNone` (default: `true`):
+
+```javascript
+const BATCH_CREATE = gql`
+    mutation BatchCreate($allOrNone: Boolean = true) {
+        uiapi(allOrNone: $allOrNone) {
+            acc1: AccountCreate(input: { Account: { Name: "Account 1" } }) {
+                Record { Id }
+            }
+            acc2: AccountCreate(input: { Account: { Name: "Account 2" } }) {
+                Record { Id }
+            }
+        }
+    }
+`;
+
+// If allOrNone=true: All rollback if any fails
+// If allOrNone=false: Only failed operations rollback
 ```
 
 ### 4. Modal Component Pattern (Composable)
@@ -1097,7 +1267,7 @@ public static void deleteAccounts(List<Id> accountIds) {
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
-    <apiVersion>62.0</apiVersion>
+    <apiVersion>66.0</apiVersion>
     <isExposed>true</isExposed>
     <masterLabel>Account Dashboard</masterLabel>
     <description>SLDS 2 compliant account dashboard with dark mode support</description>
@@ -1219,6 +1389,321 @@ handleNext() {
 | Flow Screen Component Template | `templates/flow-screen-component/` |
 | Flow Integration Guide | [docs/flow-integration-guide.md](docs/flow-integration-guide.md) |
 | Triangle Architecture | [shared/docs/flow-lwc-apex-triangle.md](../shared/docs/flow-lwc-apex-triangle.md) |
+
+---
+
+## TypeScript Support (Spring '26 - GA in API 66.0)
+
+Lightning Web Components now support TypeScript with the `@salesforce/lightning-types` package. TypeScript provides type safety, better IDE support, and compile-time error detection.
+
+### Setup
+
+```bash
+# Install TypeScript dependencies
+npm install @salesforce/lightning-types @salesforce/i18n lwc typescript
+
+# TypeScript version requirement: 5.4.5+
+```
+
+### tsconfig.json Configuration
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["@salesforce/lightning-types"],
+    "lib": ["ES2022", "DOM"],
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false
+  },
+  "include": ["force-app/**/*.ts"],
+  "exclude": ["node_modules", "**/__tests__/**"]
+}
+```
+
+### TypeScript Component Pattern
+
+```typescript
+// accountList.ts
+import { LightningElement, api, wire, track } from 'lwc';
+import { getRecord, getFieldValue } from 'lightning/uiRecordApi';
+import getAccounts from '@salesforce/apex/AccountController.getAccounts';
+import ACCOUNT_NAME_FIELD from '@salesforce/schema/Account.Name';
+
+// Define interfaces for type safety
+interface AccountRecord {
+    Id: string;
+    Name: string;
+    Industry?: string;
+    AnnualRevenue?: number;
+}
+
+interface WireResult<T> {
+    data?: T;
+    error?: Error;
+}
+
+export default class AccountList extends LightningElement {
+    // Typed @api properties
+    @api recordId: string | undefined;
+
+    @api
+    get maxRecords(): number {
+        return this._maxRecords;
+    }
+    set maxRecords(value: number) {
+        this._maxRecords = value;
+    }
+
+    // Typed @track properties
+    @track private _accounts: AccountRecord[] = [];
+    @track private _error: string | null = null;
+
+    private _maxRecords: number = 10;
+    private _wiredResult: WireResult<AccountRecord[]> | undefined;
+
+    // Typed wire service
+    @wire(getAccounts, { maxRecords: '$maxRecords' })
+    wiredAccounts(result: WireResult<AccountRecord[]>): void {
+        this._wiredResult = result;
+        const { data, error } = result;
+
+        if (data) {
+            this._accounts = data;
+            this._error = null;
+        } else if (error) {
+            this._error = this.reduceErrors(error);
+            this._accounts = [];
+        }
+    }
+
+    // Typed getters
+    get accounts(): AccountRecord[] {
+        return this._accounts;
+    }
+
+    get hasAccounts(): boolean {
+        return this._accounts.length > 0;
+    }
+
+    // Typed event handlers
+    handleSelect(event: CustomEvent<{ accountId: string }>): void {
+        const { accountId } = event.detail;
+        this.dispatchEvent(new CustomEvent('accountselected', {
+            detail: { accountId },
+            bubbles: true,
+            composed: true
+        }));
+    }
+
+    // Typed utility methods
+    private reduceErrors(error: Error | Error[]): string {
+        const errors = Array.isArray(error) ? error : [error];
+        return errors
+            .filter((e): e is Error => e !== null)
+            .map(e => e.message || 'Unknown error')
+            .join('; ');
+    }
+}
+```
+
+### TypeScript Jest Test Pattern
+
+```typescript
+// accountList.test.ts
+import { createElement, LightningElement } from 'lwc';
+import AccountList from 'c/accountList';
+import getAccounts from '@salesforce/apex/AccountController.getAccounts';
+
+// Type definitions for tests
+interface AccountRecord {
+    Id: string;
+    Name: string;
+    Industry?: string;
+}
+
+// Mock Apex
+jest.mock(
+    '@salesforce/apex/AccountController.getAccounts',
+    () => ({ default: jest.fn() }),
+    { virtual: true }
+);
+
+const MOCK_ACCOUNTS: AccountRecord[] = [
+    { Id: '001xx000003DGQ', Name: 'Acme Corp', Industry: 'Technology' }
+];
+
+describe('c-account-list', () => {
+    let element: LightningElement & { maxRecords?: number };
+
+    afterEach(() => {
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
+        }
+        jest.clearAllMocks();
+    });
+
+    it('displays accounts after data loads', async () => {
+        (getAccounts as jest.Mock).mockResolvedValue(MOCK_ACCOUNTS);
+
+        element = createElement('c-account-list', { is: AccountList });
+        document.body.appendChild(element);
+
+        await Promise.resolve();
+
+        const items = element.shadowRoot?.querySelectorAll('.slds-item');
+        expect(items?.length).toBe(MOCK_ACCOUNTS.length);
+    });
+});
+```
+
+### Key TypeScript Features
+
+| Feature | LWC Support | Notes |
+|---------|-------------|-------|
+| **Interface definitions** | ✅ | Define shapes for records, events, props |
+| **Typed @api properties** | ✅ | Getter/setter patterns with types |
+| **Typed @wire results** | ✅ | Generic `WireResult<T>` pattern |
+| **Typed event handlers** | ✅ | `CustomEvent<T>` for event detail typing |
+| **Private class fields** | ✅ | Use `private` keyword |
+| **Strict null checking** | ✅ | Optional chaining `?.` and nullish coalescing `??` |
+
+### Template
+
+| Resource | Location |
+|----------|----------|
+| TypeScript Component Template | `templates/typescript-component/` |
+
+> **Note**: TypeScript files must be compiled to JavaScript before deployment. The Salesforce platform does not store TypeScript source files.
+
+---
+
+## LWC in Dashboards (Beta - Spring '26)
+
+> **⚠️ Beta Feature**: This feature requires enablement via Salesforce Customer Support and may change before GA.
+
+Lightning Web Components can now be embedded as custom dashboard widgets, enabling rich, interactive visualizations in Lightning Dashboards.
+
+### Enabling LWC in Dashboards
+
+1. Contact Salesforce Customer Support to enable "LWC in Dashboards" for your org
+2. Configure component for `lightning__Dashboard` target
+3. Define widget properties for dashboard configuration
+
+### Dashboard Component Configuration
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Pipeline Dashboard Widget</masterLabel>
+    <description>Custom pipeline visualization for dashboards</description>
+
+    <targets>
+        <target>lightning__Dashboard</target>
+        <target>lightning__AppPage</target>
+    </targets>
+
+    <targetConfigs>
+        <targetConfig targets="lightning__Dashboard">
+            <property
+                name="metricType"
+                type="String"
+                label="Metric Type"
+                datasource="apex://DashboardMetricProvider"
+                description="Select the metric to display"/>
+            <property
+                name="refreshInterval"
+                type="Integer"
+                label="Refresh Interval (seconds)"
+                default="30"
+                min="10"
+                max="300"/>
+            <property
+                name="chartColor"
+                type="Color"
+                label="Chart Color"
+                default="#0176D3"/>
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
+```
+
+### Dashboard Widget Best Practices
+
+| Guideline | Implementation |
+|-----------|----------------|
+| **Responsive sizing** | Use relative units, handle container resize |
+| **Loading states** | Show spinners during data fetch |
+| **Error handling** | Display user-friendly error messages |
+| **Performance** | Cache data, minimize re-renders |
+| **Refresh support** | Implement `@api refresh()` method |
+
+---
+
+## Agentforce Discoverability (Spring '26 - GA in API 66.0)
+
+Make your Lightning Web Components discoverable by Agentforce agents by adding the `lightning__agentforce` capability to your component metadata.
+
+### Agentforce-Enabled Component Configuration
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Account Dashboard</masterLabel>
+    <description>Displays account metrics and KPIs for sales analysis</description>
+
+    <!-- Agentforce Discoverability -->
+    <capabilities>
+        <capability>lightning__agentforce</capability>
+    </capabilities>
+
+    <targets>
+        <target>lightning__RecordPage</target>
+        <target>lightning__AppPage</target>
+    </targets>
+
+    <targetConfigs>
+        <targetConfig targets="lightning__RecordPage">
+            <objects>
+                <object>Account</object>
+            </objects>
+            <!-- Descriptive properties help agents understand usage -->
+            <property
+                name="recordId"
+                type="String"
+                label="Record ID"
+                description="The ID of the Account record to display metrics for"/>
+            <property
+                name="timeRange"
+                type="String"
+                label="Time Range"
+                datasource="Last 7 Days,Last 30 Days,Last Quarter,Last Year"
+                default="Last 30 Days"
+                description="The time period for calculating metrics"/>
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
+```
+
+### Agentforce Discoverability Checklist
+
+| Requirement | Implementation |
+|-------------|----------------|
+| **Capability declaration** | Add `<capability>lightning__agentforce</capability>` |
+| **Clear masterLabel** | Human-readable component name |
+| **Detailed description** | Explain what the component does |
+| **Property descriptions** | Describe each property's purpose |
+| **Semantic naming** | Use descriptive property names |
 
 ---
 

@@ -26,6 +26,14 @@ Created by [Jag Valaiyapathy](https://github.com/Jaganpro)
 - [SLDS 2 Blog Post](https://www.salesforce.com/blog/new-design-system/) - Salesforce official announcement
 - [SLDS 2 Trailhead Module](https://trailhead.salesforce.com/content/learn/modules/lightning-design-system) - Learn SLDS fundamentals
 
+### Spring '26 Release (API 66.0)
+- [9 Features for Salesforce Developers in Spring '26](https://www.salesforceben.com/9-features-for-salesforce-developers-in-the-spring-26-release/) - Salesforce Ben
+- [LWC Directives Reference](https://developer.salesforce.com/docs/platform/lwc/guide/reference-directives.html) - lwc:on directive documentation
+- [GraphQL Mutations Guide](https://developer.salesforce.com/docs/platform/graphql/guide/mutations-use.html) - Salesforce GraphQL API
+- [TypeScript in LWC Guide](https://developer.salesforce.com/docs/platform/lwc/guide/ts.html) - Official TypeScript documentation
+- [@salesforce/lightning-types](https://www.npmjs.com/package/@salesforce/lightning-types) - NPM package for TypeScript types
+- [LWC GitHub Releases](https://github.com/salesforce/lwc/releases) - LWC Engine changelog
+
 ### Saurabh Samir
 **[Medium @saurabh.samirs](https://medium.com/@saurabh.samirs)**
 
@@ -44,6 +52,11 @@ Key contributions:
 | GraphQL Wire Adapter | Salesforce Docs | Cursor-based pagination pattern |
 | SLDS 2 Styling Hooks | SLDS Guide | `--slds-g-*` CSS variables for dark mode |
 | lwc:spread Directive | Saurabh Samir | Dynamic attribute spreading pattern |
+| lwc:on Directive | Spring '26 Docs | Dynamic event binding from JavaScript |
+| GraphQL Mutations | Spring '26 Docs | `executeMutation` for create/update/delete |
+| TypeScript LWC | Spring '26 Docs | Type-safe components with `@salesforce/lightning-types` |
+| Complex Template Expressions | Spring '26 (Beta) | JavaScript expressions in templates |
+| Agentforce Discoverability | Spring '26 Docs | `lightning__agentforce` capability |
 
 ## License
 

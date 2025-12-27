@@ -288,6 +288,154 @@ get inputAttributes() {
 <!-- buttonProps = { label: 'Save', onclick: this.handleClick } -->
 ```
 
+### lwc:on Directive (Spring '26 - API 66.0)
+
+The `lwc:on` directive solves the limitation above by enabling **dynamic event binding** directly from JavaScript. It allows you to bind multiple event handlers at runtime.
+
+**Requires**: API 66.0+ (Spring '26)
+
+#### Basic Usage
+
+```javascript
+// component.js
+export default class DynamicEventComponent extends LightningElement {
+    // Define event handlers as object properties
+    eventHandlers = {
+        click: this.handleClick.bind(this),
+        mouseover: this.handleMouseOver.bind(this),
+        focus: this.handleFocus.bind(this)
+    };
+
+    handleClick() {
+        console.log('Element clicked!');
+    }
+
+    handleMouseOver() {
+        console.log('Mouse over!');
+    }
+
+    handleFocus() {
+        console.log('Element focused!');
+    }
+}
+```
+
+```html
+<!-- template.html -->
+<template>
+    <!-- Bind multiple event handlers dynamically -->
+    <button lwc:on={eventHandlers}>Click Me</button>
+</template>
+```
+
+#### Combining lwc:spread and lwc:on
+
+For fully dynamic components, combine both directives:
+
+```javascript
+// component.js
+export default class FullyDynamicButton extends LightningElement {
+    // Properties via lwc:spread
+    buttonAttributes = {
+        label: 'Save',
+        variant: 'brand',
+        disabled: false
+    };
+
+    // Events via lwc:on
+    buttonEvents = {
+        click: this.handleClick.bind(this),
+        focus: this.handleFocus.bind(this)
+    };
+
+    handleClick() {
+        this.dispatchEvent(new CustomEvent('save'));
+    }
+
+    handleFocus() {
+        console.log('Button focused');
+    }
+}
+```
+
+```html
+<!-- template.html -->
+<template>
+    <!-- Best of both worlds: dynamic props AND dynamic events -->
+    <lightning-button
+        lwc:spread={buttonAttributes}
+        lwc:on={buttonEvents}>
+    </lightning-button>
+</template>
+```
+
+#### Dynamic Event Handlers from @api
+
+Pass event handler configurations from parent components:
+
+```javascript
+// childComponent.js
+export default class ChildComponent extends LightningElement {
+    @api eventConfig; // { click: handler, change: handler }
+
+    get resolvedHandlers() {
+        // Ensure handlers are properly bound
+        const handlers = {};
+        if (this.eventConfig) {
+            Object.entries(this.eventConfig).forEach(([event, handler]) => {
+                handlers[event] = typeof handler === 'function' ? handler : () => {};
+            });
+        }
+        return handlers;
+    }
+}
+```
+
+```html
+<!-- childComponent.html -->
+<template>
+    <div lwc:on={resolvedHandlers}>
+        <slot></slot>
+    </div>
+</template>
+```
+
+#### Removing Event Listeners
+
+Remove specific event listeners by omitting them from the object:
+
+```javascript
+// Toggle mouseover handler on/off
+toggleHoverHandler() {
+    if (this._hoverEnabled) {
+        // Remove mouseover by omitting it
+        this.eventHandlers = {
+            click: this.handleClick.bind(this)
+        };
+    } else {
+        // Add mouseover back
+        this.eventHandlers = {
+            click: this.handleClick.bind(this),
+            mouseover: this.handleMouseOver.bind(this)
+        };
+    }
+    this._hoverEnabled = !this._hoverEnabled;
+}
+```
+
+#### lwc:spread vs lwc:on Comparison
+
+| Directive | Purpose | Use Case |
+|-----------|---------|----------|
+| `lwc:spread` | Dynamic **properties/attributes** | Pass label, variant, disabled dynamically |
+| `lwc:on` | Dynamic **event handlers** | Bind click, change, custom events dynamically |
+| Both together | Fully dynamic configuration | Reusable wrapper components, dynamic UIs |
+
+**Important Notes**:
+- Do NOT mutate the object passed to `lwc:on` - create a new object to update handlers
+- Event type names should be lowercase without the `on` prefix (use `click` not `onclick`)
+- Always use `.bind(this)` or arrow functions to preserve context
+
 ### Object Spread & Destructuring
 
 Modern JavaScript patterns for cleaner data handling in LWC.
@@ -393,6 +541,109 @@ async handleSubmit() {
 | Object spread | Config merging, immutable updates | Deep objects (consider structuredClone) |
 | Destructuring | Extracting multiple values, API responses | Simple single-property access |
 | Array spread | Adding/removing items immutably | Large arrays (performance concern) |
+
+---
+
+## Complex Template Expressions (Spring '26 Beta - API 66.0)
+
+Spring '26 introduces **complex template expressions**, enabling JavaScript expressions directly in templates. This was previously limited to simple property and getter bindings.
+
+> ⚠️ **Beta Feature**: Use getters in production until this becomes GA. Document any complex expressions for future migration.
+
+### Before vs After
+
+```html
+<!-- BEFORE Spring '26: Required getters for any logic -->
+<template>
+    <!-- Simple property binding only -->
+    <template lwc:if={isValid}>...</template>
+
+    <!-- Complex conditions needed a getter -->
+    <template lwc:if={showLoadingState}>...</template>
+</template>
+```
+
+```javascript
+// Required getter in JS
+get showLoadingState() {
+    return this.isLoading && this.items.length === 0;
+}
+```
+
+```html
+<!-- AFTER Spring '26 (Beta): Complex expressions in template -->
+<template>
+    <!-- Logical operators -->
+    <template lwc:if={!isLoading && items.length > 0}>
+        <c-item-list items={items}></c-item-list>
+    </template>
+
+    <!-- Optional chaining -->
+    <template lwc:if={user?.permissions?.canEdit}>
+        <lightning-button label="Edit"></lightning-button>
+    </template>
+
+    <!-- Arithmetic expressions -->
+    <span class="slds-text-body_small">
+        Total: ${total * taxRate}
+    </span>
+
+    <!-- Comparison operators -->
+    <template lwc:if={items.length >= minItems}>
+        <c-pagination></c-pagination>
+    </template>
+</template>
+```
+
+### Supported Expression Types
+
+| Expression Type | Example | Notes |
+|-----------------|---------|-------|
+| **Logical NOT** | `{!isLoading}` | Negation |
+| **Logical AND** | `{a && b}` | Short-circuit evaluation |
+| **Logical OR** | `{a \|\| b}` | Short-circuit evaluation |
+| **Comparison** | `{count > 0}`, `{status === 'active'}` | `==`, `===`, `!=`, `!==`, `<`, `>`, `<=`, `>=` |
+| **Arithmetic** | `{price * quantity}` | `+`, `-`, `*`, `/`, `%` |
+| **Optional Chaining** | `{user?.profile?.name}` | Safe property access |
+| **Nullish Coalescing** | `{value ?? 'default'}` | Default for null/undefined |
+| **Ternary** | `{isActive ? 'Yes' : 'No'}` | Conditional value |
+| **Array Access** | `{items[0]}` | Index-based access |
+| **String Concatenation** | `{firstName + ' ' + lastName}` | String joining |
+
+### Best Practices for Complex Expressions
+
+```html
+<!-- ✅ GOOD: Simple inline logic -->
+<template lwc:if={!isLoading && hasData}>
+    ...
+</template>
+
+<!-- ✅ GOOD: Optional chaining for safety -->
+<span>{account?.Owner?.Name}</span>
+
+<!-- ⚠️ CAUTION: Keep expressions readable -->
+<!-- If expression is long, consider a getter for maintainability -->
+<template lwc:if={isEditable && hasPermission && !isLocked && status === 'draft'}>
+    <!-- Consider: get canEdit() { return ...; } -->
+</template>
+
+<!-- ❌ AVOID: Side effects in expressions -->
+<!-- Don't call methods that modify state -->
+```
+
+### Migration Strategy
+
+1. **New code**: Use complex expressions for simple conditions
+2. **Existing code**: Keep getters that have unit tests
+3. **Complex logic**: Continue using getters for maintainability
+4. **Document**: Mark complex expressions in templates for review when GA
+
+### Limitations (Beta)
+
+- No function calls in expressions (use getters)
+- No template literals with `${}` interpolation
+- Cannot reference `this` directly
+- No destructuring in expressions
 
 ---
 

@@ -1,19 +1,26 @@
 /**
  * GraphQL Component Template
  *
- * Demonstrates the GraphQL wire adapter pattern for LWC with:
+ * Demonstrates GraphQL patterns for LWC with:
  * - GraphQL query definition using gql tagged template
+ * - GraphQL mutations (Create, Update, Delete) - Spring '26 GA
  * - Cursor-based pagination
  * - Reactive variables
  * - Error handling
  * - Data transformation
  *
+ * Module: lightning/graphql supersedes lightning/uiGraphQLApi
+ * Requires: API 66.0+ for mutations (GA in Spring '26)
+ *
  * @see https://developer.salesforce.com/docs/platform/lwc/guide/data-graphql.html
  */
 import { LightningElement, wire, track } from 'lwc';
-import { gql, graphql, refreshGraphQL } from 'lightning/uiGraphQLApi';
+import { gql, graphql, refreshGraphQL, executeMutation } from 'lightning/graphql';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 
-// Define your GraphQL query using the gql tagged template literal
+// ═══════════════════════════════════════════════════════════════════════════
+// GRAPHQL QUERY
+// ═══════════════════════════════════════════════════════════════════════════
 const CONTACTS_QUERY = gql`
     query ContactsWithAccount($first: Int!, $after: String, $orderBy: ContactOrderByInput) {
         uiapi {
@@ -41,6 +48,71 @@ const CONTACTS_QUERY = gql`
                     }
                     totalCount
                 }
+            }
+        }
+    }
+`;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GRAPHQL MUTATIONS (Spring '26 - API 66.0+)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Create a new Contact record
+ * Returns the newly created record fields
+ */
+const CREATE_CONTACT = gql`
+    mutation CreateContact($firstName: String, $lastName: String!, $email: String, $accountId: ID) {
+        uiapi {
+            ContactCreate(input: {
+                Contact: {
+                    FirstName: $firstName
+                    LastName: $lastName
+                    Email: $email
+                    AccountId: $accountId
+                }
+            }) {
+                Record {
+                    Id
+                    Name { value }
+                    Email { value }
+                }
+            }
+        }
+    }
+`;
+
+/**
+ * Update an existing Contact record
+ * Note: Cannot query fields in update response
+ */
+const UPDATE_CONTACT = gql`
+    mutation UpdateContact($id: ID!, $firstName: String, $lastName: String, $email: String) {
+        uiapi {
+            ContactUpdate(input: {
+                Contact: {
+                    Id: $id
+                    FirstName: $firstName
+                    LastName: $lastName
+                    Email: $email
+                }
+            }) {
+                Record {
+                    Id
+                }
+            }
+        }
+    }
+`;
+
+/**
+ * Delete a Contact record
+ */
+const DELETE_CONTACT = gql`
+    mutation DeleteContact($id: ID!) {
+        uiapi {
+            ContactDelete(input: { Contact: { Id: $id } }) {
+                Id
             }
         }
     }
@@ -158,5 +230,107 @@ export default class GraphqlComponent extends LightningElement {
                 return 'Unknown error';
             })
             .join('; ');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // MUTATION METHODS (Spring '26 - API 66.0+)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Create a new Contact via GraphQL mutation
+     * @param {Object} contactData - { firstName, lastName, email, accountId }
+     * @returns {Promise<Object>} - Created record
+     */
+    async createContact(contactData) {
+        try {
+            const result = await executeMutation(CREATE_CONTACT, {
+                variables: {
+                    firstName: contactData.firstName || null,
+                    lastName: contactData.lastName,
+                    email: contactData.email || null,
+                    accountId: contactData.accountId || null
+                }
+            });
+
+            const newRecord = result.data.uiapi.ContactCreate.Record;
+            this._showToast('Success', `Contact "${newRecord.Name.value}" created`, 'success');
+
+            // Refresh the query to show new record
+            await refreshGraphQL(this._wiredResult);
+
+            return newRecord;
+        } catch (error) {
+            this._handleMutationError(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update an existing Contact via GraphQL mutation
+     * @param {String} contactId - ID of contact to update
+     * @param {Object} updates - { firstName, lastName, email }
+     * @returns {Promise<Object>} - Updated record ID
+     */
+    async updateContact(contactId, updates) {
+        try {
+            const result = await executeMutation(UPDATE_CONTACT, {
+                variables: {
+                    id: contactId,
+                    firstName: updates.firstName,
+                    lastName: updates.lastName,
+                    email: updates.email
+                }
+            });
+
+            this._showToast('Success', 'Contact updated successfully', 'success');
+
+            // Refresh the query to show updated data
+            await refreshGraphQL(this._wiredResult);
+
+            return result.data.uiapi.ContactUpdate.Record;
+        } catch (error) {
+            this._handleMutationError(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete a Contact via GraphQL mutation
+     * @param {String} contactId - ID of contact to delete
+     */
+    async deleteContact(contactId) {
+        try {
+            await executeMutation(DELETE_CONTACT, {
+                variables: { id: contactId }
+            });
+
+            this._showToast('Success', 'Contact deleted successfully', 'success');
+
+            // Refresh the query to remove deleted record
+            await refreshGraphQL(this._wiredResult);
+        } catch (error) {
+            this._handleMutationError(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Handle mutation errors with proper GraphQL error parsing
+     */
+    _handleMutationError(error) {
+        let message;
+        if (error.graphQLErrors && error.graphQLErrors.length > 0) {
+            message = error.graphQLErrors.map(e => e.message).join(', ');
+        } else {
+            message = error.message || 'An unknown error occurred';
+        }
+        this._showToast('Error', message, 'error');
+    }
+
+    /**
+     * Display toast notification
+     */
+    _showToast(title, message, variant) {
+        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
     }
 }

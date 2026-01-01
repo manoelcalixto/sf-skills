@@ -1645,6 +1645,9 @@ python3 ~/.claude/plugins/marketplaces/sf-skills/sf-agentforce/hooks/scripts/val
 | **Topic delegation vs transition** | `@utils.transition` = permanent; `@topic.*` = can return | See [agent-script-reference.md](docs/agent-script-reference.md#topic-delegation-vs-transition) |
 | **Math operators (`+`, `-`)** | Works in set and conditions | `set @variables.x = @variables.x + 1` is valid |
 | **Action attributes** | `require_user_confirmation`, `include_in_progress_indicator`, `label` | Work in AiAuthoringBundle (validated Dec 2025) |
+| **⚠️ Slot Filling Reliability** | **LLM sends empty JSON, wrong field names, or wrong values** | **Use deterministic collection: first-interaction instructions + setter action + null guards. See [patterns-and-practices.md](docs/patterns-and-practices.md#slot-filling-reliability-patterns)** |
+| **Critical Input Pattern** | Agent proceeds without required data (e.g., account_id) | Create dedicated setter action + single-use (`available when @var == ""`) + null guards on ALL downstream actions |
+| **Explicit Action References** | LLM doesn't consistently call correct actions | Reference actions in instructions: `{!@actions.capture_id}`. Improves LLM reliability. |
 
 ---
 

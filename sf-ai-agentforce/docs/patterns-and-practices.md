@@ -651,6 +651,177 @@ Before deploying an agent, verify:
 
 ---
 
+## Slot Filling Reliability Patterns
+
+### Problem: LLM Fails to Extract Values Correctly
+
+Slot filling (`with param=...`) relies on LLM inference, which can fail in subtle ways:
+
+| Symptom | What Happened | Example |
+|---------|---------------|---------|
+| Empty JSON `{}` sent to action | LLM couldn't find value in conversation | User said "look up my account" without ID |
+| Wrong field names | LLM abbreviated or guessed | `_id` instead of `account_id` |
+| Wrong value extracted | LLM picked similar value from context | Picked Contact ID instead of Account ID |
+| Retry/crash cycles | No recovery path after failure | Agent keeps trying same extraction |
+
+### Root Cause
+
+The `...` syntax is **probabilistic** - the LLM infers what value to use. For critical inputs (IDs, amounts, required fields), this unreliability causes downstream failures.
+
+### Solution: Deterministic Critical Input Collection
+
+Instead of relying on slot filling for critical inputs, use this 5-pattern approach:
+
+#### Pattern 1: First-Interaction Collection
+
+Tell the LLM its PRIMARY GOAL is to collect the input:
+
+```agentscript
+reasoning:
+   instructions: ->
+      | YOUR PRIMARY GOAL: Collect the account ID from the user.
+      | Do NOT proceed with any other actions until account_id is captured.
+      |
+      if @variables.account_id == "":
+         | ⚠️ Account ID not yet collected. ASK the user for it.
+```
+
+**Why it works:** Explicit priority instructions override LLM's tendency to "help" by guessing.
+
+#### Pattern 2: Variable Setter Action
+
+Create a **dedicated action** to capture and validate critical input:
+
+```agentscript
+actions:
+   capture_account_id:
+      description: "Captures and validates the Salesforce Account ID from user"
+      inputs:
+         account_id: string
+            description: "The 18-character Salesforce Account ID (starts with 001)"
+            is_required: True
+      outputs:
+         validated_id: string
+            description: "The validated account ID (empty if invalid)"
+         is_valid: boolean
+            description: "Whether the ID is valid"
+      target: "flow://Validate_Account_Id"
+```
+
+**Why it works:** The Flow performs server-side validation, ensuring only valid IDs are stored.
+
+#### Pattern 3: Single-Use Pattern
+
+Make the setter action **unavailable once the variable is set**:
+
+```agentscript
+reasoning:
+   actions:
+      validate_id: @actions.capture_account_id
+         with account_id=...
+         set @variables.account_id = @outputs.validated_id
+         set @variables.account_id_validated = @outputs.is_valid
+         # ★ SINGLE-USE: Becomes unavailable after successful capture
+         available when @variables.account_id == ""
+```
+
+**Why it works:** Prevents redundant re-collection attempts that can introduce errors.
+
+#### Pattern 4: Null Guard All Downstream Actions
+
+Block ALL other actions until critical input is validated:
+
+```agentscript
+reasoning:
+   actions:
+      # ★ RESEARCH ACTION - Uses variable, NOT slot filling
+      do_research: @actions.research_account
+         with account_id=@variables.account_id    # Variable binding!
+         available when @variables.account_id_validated == True
+
+      # ★ TOPIC TRANSITION - Also guarded
+      go_research: @utils.transition to @topic.research
+         available when @variables.account_id_validated == True
+```
+
+**Why it works:** Ensures downstream actions receive valid data, not LLM guesses.
+
+#### Pattern 5: Explicit Action References in Instructions
+
+Guide the LLM on WHICH action to use:
+
+```agentscript
+instructions: ->
+   | To capture the account ID, use {!@actions.capture_account_id}.
+   | This ensures the ID is validated before proceeding.
+```
+
+**Why it works:** Reduces ambiguity about which action handles input collection.
+
+---
+
+### When NOT to Use Slot Filling
+
+| Use Slot Filling (`...`) | Use Variable/Fixed Value |
+|--------------------------|--------------------------|
+| Optional, non-critical inputs | Critical IDs (account, order, case) |
+| User preference inputs | Values that must be validated |
+| One-time collection | Values used across multiple actions |
+| Simple text descriptions | Values with specific formats (dates, IDs) |
+
+**Decision Rule:** If invalid input would cause downstream failure, use deterministic collection.
+
+---
+
+### Troubleshooting Slot Filling Issues
+
+#### Symptom: Empty JSON Sent to Action
+
+```
+ERROR: Action received {} instead of {account_id: "001..."}
+```
+
+**Cause:** LLM couldn't extract value from conversation.
+
+**Fix:**
+1. Add explicit collection instructions: "YOUR PRIMARY GOAL: collect account_id"
+2. Use a dedicated setter action with clear input description
+3. Add `available when @var != ""` guard on downstream actions
+
+#### Symptom: Wrong Field Names
+
+```
+ERROR: Property _id not found. Expected: account_id
+```
+
+**Cause:** LLM inferred/abbreviated field name.
+
+**Fix:**
+1. Use exact field name in action input description
+2. Add instruction: "The account_id must be the exact value provided by user"
+3. Use validation action that normalizes input
+
+#### Symptom: Agent Retries Then Crashes
+
+```
+Agent attempted 5 times, then failed with: Internal Error
+```
+
+**Cause:** No recovery path after extraction failure.
+
+**Fix:**
+1. Add retry counter: `collection_attempts: mutable number = 0`
+2. Increment on each attempt: `set @var = @var + 1`
+3. Add escape condition: `if @variables.attempts > 3: | Please verify your ID format`
+
+---
+
+### Complete Pattern Template
+
+See `templates/patterns/critical-input-collection.agent` for a complete implementation demonstrating all five patterns together.
+
+---
+
 ## Related Documentation
 
 - [Agent Script Reference](agent-script-reference.md) - Complete syntax guide

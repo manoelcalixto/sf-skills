@@ -7,7 +7,7 @@
 
 A collection of reusable skills for **Agentic Salesforce Development**, enabling AI-powered code generation, validation, testing, debugging, and deployment. Built for Claude Code with planned support for other agentic coding tools.
 
-> **14 skills** • **50+ templates** • **420+ validation points** • **LSP integration**
+> **16 skills** • **60+ templates** • **520+ validation points** • **LSP integration**
 
 ---
 
@@ -227,7 +227,7 @@ python tools/installer.py --cli agentforce-vibes --all
 ├── 01-sf-apex.md
 ├── 02-sf-flow.md
 ├── 03-sf-lwc.md
-└── ... (13 skills total)
+└── ... (16 skills total)
 ```
 
 **Why Agentforce Vibes:** Strong MCP support enables integration with Salesforce DX MCP Server (20+ tools) for org connectivity, metadata operations, and deployment.
@@ -266,8 +266,10 @@ python tools/installer.py --cli agentforce-vibes --all
 | 🔐 | **[sf-connected-apps](sf-connected-apps/)** | OAuth apps & ECAs | 🔌 Integration | 120 | 🔬 Alpha |
 | 🔗 | **[sf-integration](sf-integration/)** | Callouts, Events, CDC | 🔌 Integration | 120 | 🔬 Alpha |
 | 🤖 | **[sf-ai-agentforce](sf-ai-agentforce/)** | Agent Script, Topics, Actions (API v64+) | 🤖 AI & Automation | 150 | 🔬 Alpha |
+| 🧪 | **[sf-ai-agentforce-testing](sf-ai-agentforce-testing/)** | Agent test specs, agentic fix loops | 🤖 AI & Automation | 100 | 🔬 Alpha |
 | 🚀 | **[sf-deploy](sf-deploy/)** | CI/CD automation (sf CLI v2) | 🚀 DevOps | — | 🔬 Alpha |
 | 📊 | **[sf-diagram](sf-diagram/)** | Mermaid diagrams & ERD | 🛠️ Tooling | — | 🔬 Alpha |
+| 📸 | **[sf-imagen](sf-imagen/)** | Visual ERD, LWC mockups, Gemini sub-agent | 🛠️ Tooling | — | 🔬 Alpha |
 | 🛠️ | **[skill-builder](skill-builder/)** | Skill creation wizard | 🛠️ Tooling | — | ✅ Stable |
 
 ## 🚀 Installation
@@ -331,6 +333,7 @@ See [tools/README.md](tools/README.md) for detailed installer documentation.
 flowchart TB
     subgraph ai["🤖 AI & AGENTS"]
         agentforce["🤖 sf-ai-agentforce"]
+        agentforcetesting["🧪 sf-ai-agentforce-testing"]
     end
 
     subgraph integration["🔌 INTEGRATION & SECURITY"]
@@ -362,12 +365,14 @@ flowchart TB
 
     subgraph tooling["🔧 TOOLING"]
         skillbuilder["🛠️ skill-builder"]
+        imagen["📸 sf-imagen"]
     end
 
     %% AI & Agent relationships
     agentforce -->|"flow actions"| flow
     agentforce -->|"API actions"| sfintegration
     agentforce -->|"GenAiFunction"| apex
+    agentforcetesting -->|"validates"| agentforce
 
     %% Integration relationships
     sfintegration -->|"OAuth apps"| connectedapps
@@ -377,6 +382,8 @@ flowchart TB
     diagram -->|"schema"| metadata
     diagram -.->|"documents"| connectedapps
     diagram -.->|"documents"| sfintegration
+    imagen -->|"renders"| diagram
+    imagen -->|"mockups"| lwc
 
     %% Development relationships
     apex -->|"schema"| metadata
@@ -406,6 +413,7 @@ flowchart TB
 
     %% Styling - AI (pink-200)
     style agentforce fill:#fbcfe8,stroke:#be185d,color:#1f2937
+    style agentforcetesting fill:#fce7f3,stroke:#be185d,color:#1f2937
 
     %% Styling - Integration (orange-200/teal-200/sky-200)
     style connectedapps fill:#fed7aa,stroke:#c2410c,color:#1f2937
@@ -431,6 +439,7 @@ flowchart TB
 
     %% Styling - Tooling (slate-200)
     style skillbuilder fill:#e2e8f0,stroke:#334155,color:#1f2937
+    style imagen fill:#fef3c7,stroke:#d97706,color:#1f2937
 
     %% Subgraph styling
     style ai fill:#fdf2f8,stroke:#be185d,stroke-dasharray:5
@@ -467,8 +476,10 @@ Each skill includes validation hooks that run automatically on **Write** and **E
 | 📋 | sf-metadata | `*.object-meta.xml`, `*.field-meta.xml` | Metadata best practices |
 | 💾 | sf-data | `*.apex`, `*.soql` | SOQL patterns, governor limits |
 | 🤖 | sf-ai-agentforce | `*.agent`, `*.genAiFunction-meta.xml` | Agent Script syntax + LSP |
+| 🧪 | sf-ai-agentforce-testing | Test spec YAML | 100-pt scoring + fix loops |
 | 🔐 | sf-connected-apps | `*.connectedApp-meta.xml` | OAuth security |
 | 🔗 | sf-integration | `*.namedCredential-meta.xml` | Callout patterns |
+| 📸 | sf-imagen | Generated images | Prerequisites check |
 | 🛠️ | skill-builder | `SKILL.md` | YAML frontmatter |
 
 #### 🔬 Code Analyzer V5 Integration
@@ -716,6 +727,7 @@ sf-industry-{name}        # Industries (healthcare, finserv)
 | 🔍 | `sf-soql` | Natural language to SOQL, optimization | ✅ Live |
 | 🧪 | `sf-testing` | Test execution, coverage, bulk testing | ✅ Live |
 | 🐛 | `sf-debug` | Debug log analysis, governor fixes | ✅ Live |
+| 📸 | `sf-imagen` | Visual ERD, LWC mockups, Gemini sub-agent | ✅ Live |
 | 🔒 | `sf-security` | Sharing rules, org-wide defaults, encryption | 📋 Planned |
 | 📦 | `sf-migration` | Org-to-org, metadata comparison | 📋 Planned |
 
@@ -723,6 +735,7 @@ sf-industry-{name}        # Industries (healthcare, finserv)
 | | Skill | Description | Status |
 |--|-------|-------------|--------|
 | 🤖 | `sf-ai-agentforce` | Agent Script, Topics, Actions (API v64+) | ✅ Live |
+| 🧪 | `sf-ai-agentforce-testing` | Agent test specs, agentic fix loops | ✅ Live |
 | 🧠 | `sf-ai-copilot` | Einstein Copilot, Prompts | 📋 Planned |
 | 🔮 | `sf-ai-einstein` | Prediction Builder, NBA | 📋 Planned |
 
@@ -746,7 +759,7 @@ sf-industry-{name}        # Industries (healthcare, finserv)
 | 🏦 | `sf-industry-finserv` | KYC, AML, Wealth Management | 📋 Planned |
 | 💵 | `sf-industry-revenue` | CPQ, Billing, Revenue Lifecycle | 📋 Planned |
 
-**Total: 24 skills** (14 skills ✅ live, 10 planned 📋)
+**Total: 26 skills** (16 skills ✅ live, 10 planned 📋)
 
 </details>
 

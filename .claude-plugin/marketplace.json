@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Salesforce development skills for Claude Code",
-    "version": "2.2.0"
+    "version": "2.3.0"
   },
   "plugins": [
     {
@@ -28,7 +28,9 @@
         "./sf-lwc",
         "./sf-debug",
         "./sf-soql",
-        "./sf-testing"
+        "./sf-testing",
+        "./sf-imagen",
+        "./sf-ai-agentforce-testing"
       ]
     },
     {
@@ -100,6 +102,16 @@
       "name": "sf-testing",
       "description": "Apex test execution, coverage analysis, and agentic test-fix loops with 120-point scoring",
       "source": "./sf-testing"
+    },
+    {
+      "name": "sf-imagen",
+      "description": "AI-powered visual content generation for Salesforce using Nano Banana Pro (Gemini 3 Pro Image)",
+      "source": "./sf-imagen"
+    },
+    {
+      "name": "sf-ai-agentforce-testing",
+      "description": "Agentforce agent testing with test execution, coverage analysis, and agentic fix loops",
+      "source": "./sf-ai-agentforce-testing"
     }
   ]
 }

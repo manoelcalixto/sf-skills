@@ -6,7 +6,7 @@ description: >
   Also provides Gemini as a parallel sub-agent for code review and research.
 license: MIT
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   author: "Jag Valaiyapathy"
   scoring: "80 points across 5 categories"
 ---
@@ -159,6 +159,88 @@ gemini --yolo "/generate 'Account ERD' --seed=42"
 
 ---
 
+## 🎤 Interview-First Workflow (Recommended)
+
+**Before generating any image, Claude MUST ask clarifying questions using `AskUserQuestion`.**
+
+This ensures high-quality output by gathering requirements upfront rather than guessing.
+
+### Automatic Interview Triggers
+
+| User Request | Interview Questions |
+|--------------|---------------------|
+| ERD, data model, schema | Objects, Style, Purpose, Extras |
+| LWC, component, mockup, wireframe | Component type, Object, Context, Style |
+| Architecture, integration, flow | Diagram type, Systems, Protocols, Elements |
+
+### Interview Flow
+
+```
+User: "Generate an ERD for my org"
+        │
+        ▼
+┌─────────────────────────────────────────────────────────┐
+│  Claude invokes AskUserQuestion with 4 questions:       │
+│                                                         │
+│  Objects: [Core CRM / Sales Cloud / Service Cloud / Custom]  │
+│  Style:   [Professional / Whiteboard / Technical / Minimalist]│
+│  Purpose: [Documentation 4K / Quick draft 1K / Presentation]  │
+│  Extras:  [Legend / Field names / Color-code] (multi-select)  │
+└─────────────────────────────────────────────────────────┘
+        │
+        ▼
+Claude builds optimized prompt from answers
+        │
+        ▼
+Generate image with gathered requirements
+```
+
+### Example Questions for ERD
+
+```
+Question 1: "Which objects should be included in the ERD?"
+- Core CRM (Account, Contact, Opportunity, Case) ← Recommended
+- Sales Cloud (Lead, Campaign, Quote, Order)
+- Service Cloud (Case, Knowledge, Entitlement, Asset)
+- Custom objects (I'll specify)
+
+Question 2: "What visual style do you prefer?"
+- Professional (clean lines, SLDS colors) ← Recommended
+- Whiteboard (hand-drawn, casual)
+- Technical (with field names)
+- Minimalist (simple boxes)
+
+Question 3: "What's the primary purpose?"
+- Documentation (4K quality)
+- Quick draft (1K, fast iteration) ← Recommended for first attempt
+- Presentation slides
+- Architecture review
+
+Question 4: "Any special requirements?" (multi-select)
+- Include legend
+- Show field names
+- Color-code by object type
+- None
+```
+
+### Skip Interview (Quick Mode)
+
+To skip questions and use defaults, include these keywords:
+- **"quick"** → `"Quick ERD of Account-Contact"`
+- **"simple"** → `"Simple LWC mockup"`
+- **"just generate"** → `"Just generate an architecture diagram"`
+
+Quick mode uses: Professional style, 1K resolution, legend included.
+
+### Full Question Reference
+
+See `docs/interview-questions.md` for:
+- Complete question sets for all image types
+- Answer-to-prompt mapping tables
+- Default values for skip mode
+
+---
+
 ## Workflow Patterns
 
 ### Pattern A: Visual ERD Generation
@@ -166,9 +248,10 @@ gemini --yolo "/generate 'Account ERD' --seed=42"
 **Trigger**: User asks for visual ERD, rendered diagram, or image-based data model
 
 **Workflow**:
+0. **Run Interview** (unless "quick" mode) - Ask about objects, style, purpose, extras
 1. Run prerequisites check
 2. Query object metadata via sf-metadata (if org connected)
-3. Build Nano Banana prompt with object relationships
+3. Build Nano Banana prompt using interview answers + object relationships
 4. Execute Gemini CLI with `/generate` command (requires --yolo flag)
 5. **Open result in macOS Preview app using `open` command**
 
@@ -190,8 +273,9 @@ open ~/nanobanana-output/[generated-file].png
 **Trigger**: User asks for component mockup, wireframe, or UI design
 
 **Workflow**:
+0. **Run Interview** (unless "quick" mode) - Ask about component type, object, context, style
 1. Load appropriate template from `templates/lwc/`
-2. Customize prompt with user requirements
+2. Customize prompt using interview answers + template
 3. Execute via Nano Banana
 4. Open in Preview app
 

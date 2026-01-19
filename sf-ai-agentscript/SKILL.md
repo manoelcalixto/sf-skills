@@ -37,6 +37,83 @@ Agent Script transforms agent development from prompt-based suggestions to **cod
 3. **Booleans are capitalized** - Use `True`/`False`, not `true`/`false`
 4. **Exactly one `start_agent` block** - Multiple entry points cause compilation failure
 
+### ⛔ SYNTAX CONSTRAINTS (Validated via Testing + Official Spec)
+
+| Constraint | ❌ WRONG | ✅ CORRECT |
+|------------|----------|-----------|
+| **No nested if statements** | `if x:` then `if y:` (nested) | `if x and y:` (compound) |
+| **One `available when` per action** | Two `available when` clauses | `available when A and B` |
+| **Avoid reserved action names** | `escalate: @utils.escalate` | `escalate_now: @utils.escalate` |
+| **`...` is slot-filling only** | `my_var: mutable string = ...` | `my_var: mutable string = ""` |
+| **No defaults on linked vars** | `id: linked string = ""` | `id: linked string` + `source:` |
+| **Linked vars: no object/list** | `data: linked object` | Use `linked string` or parse in Flow |
+| **Post-action only on @actions** | `@utils.X` with `set`/`run` | Only `@actions.X` supports post-action |
+| **agent_name must match folder** | Folder: `MyAgent`, config: `my_agent` | Both must be identical (case-sensitive) |
+
+#### No Nested `if` - Use Compound Conditions
+```yaml
+# ❌ WRONG - Nested if (causes SyntaxError)
+if @variables.software_cost > 0:
+   if @variables.software_cost <= 500:
+      | Auto-approve this software request.
+
+# ✅ CORRECT - Compound condition
+if @variables.software_cost > 0 and @variables.software_cost <= 500:
+   | Auto-approve this software request.
+```
+
+#### `...` is Slot-Filling Syntax (LLM Extracts from Conversation)
+```yaml
+# ❌ WRONG - Using ... as default value
+order_id: mutable string = ...
+
+# ✅ CORRECT - Use ... only in action parameter binding
+reasoning:
+   actions:
+      search: @actions.search_products
+         with query=...           # LLM extracts from user message
+         with category=...        # LLM decides based on context
+         with limit=10            # Fixed value
+```
+
+#### Post-Action Directives: Only on `@actions.*`
+```yaml
+# ❌ WRONG - @utils does NOT support set/run/if
+go_next: @utils.transition to @topic.main
+   set @variables.visited = True   # ERROR!
+
+# ✅ CORRECT - Only @actions.* supports post-action
+process: @actions.process_order
+   with order_id=@variables.order_id
+   set @variables.status = @outputs.status        # ✅ Works
+   run @actions.send_notification                 # ✅ Works
+   if @outputs.needs_review:                      # ✅ Works
+      transition to @topic.review
+```
+
+#### Helper Topic Pattern (For Demo Agents Without Flows/Apex)
+When you need to set variables without backend actions, use dedicated "helper topics":
+```yaml
+# Main topic offers LLM-selectable action
+topic verify_employee:
+   reasoning:
+      actions:
+         complete_verification: @utils.transition to @topic.verification_success
+            description: "Mark employee as verified"
+            available when @variables.employee_verified == False
+
+# Helper topic sets variables in instructions, then returns
+topic verification_success:
+   description: "Set verified state and return"
+   reasoning:
+      instructions: ->
+         set @variables.employee_verified = True
+         set @variables.employee_name = "Demo Employee"
+         | ✓ Identity verified!
+         transition to @topic.verify_employee  # Return to parent
+```
+> **Why this works**: `set` statements ARE valid inside `instructions: ->` blocks. The topic loop pattern lets you change state without Flows/Apex.
+
 ### Cross-Skill Orchestration
 
 | Direction | Pattern | Priority |
@@ -49,47 +126,84 @@ Agent Script transforms agent development from prompt-based suggestions to **cod
 
 ## 📋 QUICK REFERENCE: Agent Script Syntax
 
-### Block Structure (Required Order)
+### Block Structure (CORRECTED Order per Official Spec)
 ```yaml
-system:        # Required: Global messages and instructions
-config:        # Required: Agent metadata (agent_name, default_agent_user)
-variables:     # Optional: State management (mutable/linked)
-language:      # Optional: Supported languages
-connections:   # Optional: External system integrations
-topic:         # Required: Conversation topics (one or more)
-start_agent:   # Required: Entry point (exactly one)
+config:        # 1. Required: Agent metadata (agent_name, default_agent_user)
+variables:     # 2. Optional: State management (mutable/linked)
+system:        # 3. Required: Global messages and instructions
+connections:   # 4. Optional: Escalation routing
+knowledge:     # 5. Optional: Knowledge base config
+language:      # 6. Optional: Locale settings
+start_agent:   # 7. Required: Entry point (exactly one)
+topic:         # 8. Required: Conversation topics (one or more)
 ```
+
+### Naming Rules (All Identifiers)
+- Only letters, numbers, underscores
+- Must begin with a letter
+- No spaces, no consecutive underscores, cannot end with underscore
+- **Maximum 80 characters**
 
 ### Instruction Syntax Patterns
 | Pattern | Purpose | Example |
 |---------|---------|---------|
-| `instructions: \|` | Simple multi-line text | `instructions: \| Help the user.` |
-| `instructions: ->` | Arrow syntax (enables expressions) | `instructions: -> if @variables.x:` |
+| `instructions: \|` | Literal multi-line (no expressions) | `instructions: \| Help the user.` |
+| `instructions: ->` | Procedural (enables expressions) | `instructions: -> if @variables.x:` |
 | `\| text` | Literal text for LLM prompt | `\| Hello {!@variables.name}!` |
 | `if @variables.x:` | Conditional (resolves before LLM) | `if @variables.verified == True:` |
 | `run @actions.x` | Execute action during resolution | `run @actions.load_customer` |
 | `set @var = @outputs.y` | Capture action output | `set @variables.risk = @outputs.score` |
+| `set @var = value` | Set variable in instructions | `set @variables.count = 0` |
 | `{!@variables.x}` | Variable injection in text | `Risk score: {!@variables.risk}` |
+| `{!expr if cond else alt}` | Conditional interpolation | `{!@variables.status if @variables.status else "pending"}` |
 | `available when` | Control action visibility to LLM | `available when @variables.verified == True` |
-| `transition to @topic.x` | Deterministic topic change | `transition to @topic.escalation` |
-| `@utils.transition to` | LLM-chosen topic change | `go_main: @utils.transition to @topic.main` |
-| `@utils.escalate` | Hand off to human agent | `escalate: @utils.escalate` |
+| `with param=...` | LLM slot-filling (extracts from conversation) | `with query=...` |
+| `with param=value` | Fixed parameter value | `with limit=10` |
+
+### Transition vs Delegation (CRITICAL DISTINCTION)
+| Syntax | Behavior | Returns? | Use When |
+|--------|----------|----------|----------|
+| `@utils.transition to @topic.X` | Permanent handoff | ❌ No | Checkout, escalation, final states |
+| `@topic.X` (in reasoning.actions) | Delegation | ✅ Yes | Get expert advice, sub-tasks |
+| `transition to @topic.X` (inline) | Deterministic jump | ❌ No | Post-action routing, gates |
+
+```yaml
+# Delegation - returns to current topic after specialist finishes
+consulting: @topic.expert_topic
+   description: "Get expert advice"
+
+# Transition - permanent handoff, no return
+checkout: @utils.transition to @topic.checkout
+   description: "Proceed to purchase"
+```
+
+### Expression Operators (Safe Subset)
+| Category | Operators | NOT Supported |
+|----------|-----------|---------------|
+| Comparison | `==`, `!=`, `<`, `<=`, `>`, `>=`, `is`, `is not` | |
+| Logical | `and`, `or`, `not` | |
+| Arithmetic | `+`, `-` | ❌ `*`, `/`, `%` |
+| Access | `.` (property), `[]` (index) | |
+| Conditional | `x if condition else y` | |
 
 ### Variable Types
-| Modifier | Behavior | Example |
-|----------|----------|---------|
-| `mutable` | Read/write state | `counter: mutable number = 0` |
-| `linked` | Read-only from external source | `session_id: linked string` + `source: @session.sessionID` |
+| Modifier | Behavior | Supported Types | Default Required? |
+|----------|----------|-----------------|-------------------|
+| `mutable` | Read/write state | `string`, `number`, `boolean`, `object`, `date`, `timestamp`, `currency`, `id`, `list[T]` | ✅ Yes |
+| `linked` | Read-only from source | `string`, `number`, `boolean`, `date`, `timestamp`, `currency`, `id` | ❌ No (has `source:`) |
+
+> ⚠️ **Linked variables CANNOT use `object` or `list` types**
 
 ### Action Target Protocols
-| Protocol | Use When | Example |
-|----------|----------|---------|
-| `flow://` | Data operations, business logic | `target: "flow://GetOrderStatus"` |
-| `apex://` | Custom calculations, validation | `target: "apex://RefundCalculator"` |
-| `generatePromptResponse://` | Grounded LLM responses | `target: "generatePromptResponse://Case_Summary"` |
-| `retriever://` | RAG knowledge search | `target: "retriever://Policy_Index"` |
-| `externalService://` | Third-party APIs | `target: "externalService://AddressValidation"` |
-| `standardInvocableAction://` | Built-in SF actions | `target: "standardInvocableAction://emailSimple"` |
+| Short | Long Form | Use When |
+|-------|-----------|----------|
+| `flow` | `flow://` | Data operations, business logic |
+| `apex` | `apex://` | Custom calculations, validation |
+| `prompt` | `generatePromptResponse://` | Grounded LLM responses |
+| `api` | `api://` | REST API calls |
+| `retriever` | `retriever://` | RAG knowledge search |
+| `externalService` | `externalService://` | Third-party APIs via Named Credentials |
+| `standardInvocableAction` | `standardInvocableAction://` | Built-in SF actions (email, tasks) |
 
 ---
 
@@ -400,15 +514,23 @@ topic refund:
 
 | Issue | Symptom | Fix |
 |-------|---------|-----|
-| `Internal Error, try again later` | Invalid `default_agent_user` | Query for valid Einstein Agent User |
+| `Internal Error, try again later` | Invalid `default_agent_user` | Query: `SELECT Username FROM User WHERE Profile.Name = 'Einstein Agent User'` |
+| `Default agent user X could not be found` | User doesn't exist | Use exact username from query above |
+| `No .agent file found in directory` | `agent_name` doesn't match folder | Make `agent_name` identical to folder name (case-sensitive) |
 | `SyntaxError: cannot mix spaces and tabs` | Mixed indentation | Use consistent spacing throughout |
+| `SyntaxError: Unexpected 'if'` | Nested if statements | Use compound condition: `if A and B:` |
+| `SyntaxError: Unexpected 'set'` | `set` after `@utils.setVariables` | Use Helper Topic Pattern (set in `instructions: ->`) |
+| `Duplicate 'available when' clause` | Multiple guards on action | Combine: `available when A and B` |
+| `Unexpected 'escalate'` | Reserved action name | Rename to `escalate_now` or `escalate_to_human` |
 | `Transition to undefined topic` | Typo in topic reference | Check spelling, ensure topic exists |
 | `Variables cannot be both mutable AND linked` | Conflicting modifiers | Choose one: mutable for state, linked for external |
 | `Required fields missing: [BundleType]` | Using wrong deploy command | Use `sf agent publish authoring-bundle`, NOT `sf project deploy start` |
 | `Cannot find a bundle-meta.xml file` | Wrong file naming | Rename to `AgentName.bundle-meta.xml`, NOT `.aiAuthoringBundle-meta.xml` |
+| `ValidationError: Tool target 'X' is not an action definition` | Action references non-existent Flow/Apex | Create the action definition first, or use Helper Topic Pattern |
 | LLM bypasses security check | Using prompts for security | Use `available when` guards instead |
 | Post-action logic doesn't run | Check not at TOP | Move post-action check to first lines |
 | Wrong data retrieved | Missing filter | Wrap retriever in Flow with filter inputs |
+| Variables don't change | Using `@utils.setVariables` with `set` | Post-action `set` only works on `@actions.*`, use Helper Topics |
 
 ### Deployment Gotchas (Validated by Testing)
 
@@ -487,17 +609,17 @@ topic refund:
 ## 🚀 MINIMAL WORKING EXAMPLE
 
 ```yaml
-system:
-  messages:
-    welcome: "Hello! How can I help you today?"
-    error: "Sorry, something went wrong."
-  instructions: "You are a helpful customer service agent."
-
 config:
   agent_name: "simple_agent"
   agent_label: "Simple Agent"
   description: "A minimal working agent example"
   default_agent_user: "agent_user@yourorg.com"
+
+system:
+  messages:
+    welcome: "Hello! How can I help you today?"
+    error: "Sorry, something went wrong."
+  instructions: "You are a helpful customer service agent."
 
 variables:
   customer_verified: mutable boolean = False
@@ -540,4 +662,6 @@ start_agent entry:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0.2 | 2026-01-19 | **Major corrections from GitHub reference**: Fixed block order (config→system), added Helper Topic Pattern, transition vs delegation, expression operators (+/- only), naming rules (80 char max), slot-filling `...` syntax, post-action directives (@actions.* only) |
+| 1.0.1 | 2026-01-19 | Added syntax constraints from 0-shot testing: no nested if, one available when per action, reserved action names |
 | 1.0.0 | 2026-01 | Initial release with 8-module coverage |

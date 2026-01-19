@@ -471,6 +471,8 @@ python3 ~/.claude/plugins/marketplaces/sf-skills/sf-agentforce/hooks/scripts/val
 - [actions-guide.md](resources/actions-guide.md) - Action implementation patterns
 - [testing-guide.md](resources/testing-guide.md) - Testing approaches
 - [deployment-guide.md](resources/deployment-guide.md) - Deployment and CLI
+- [models-api.md](docs/models-api.md) - **NEW**: Native AI API (aiplatform.ModelsAPI) usage in Queueable/Batch
+- [custom-lightning-types.md](docs/custom-lightning-types.md) - **NEW**: LightningTypeBundle for custom agent action UIs
 
 **Quick References**:
 - [agent-script-reference.md](docs/agent-script-reference.md) - Full syntax + gotchas

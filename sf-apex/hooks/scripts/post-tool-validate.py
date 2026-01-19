@@ -59,6 +59,31 @@ def validate_apex_with_ca(file_path: str) -> dict:
         custom_rating = custom_results.get('rating', '')
 
         # ═══════════════════════════════════════════════════════════════════
+        # PHASE 1.5: LLM Pattern Validation (Java types, hallucinated methods)
+        # ═══════════════════════════════════════════════════════════════════
+        llm_issues = []
+        try:
+            from llm_pattern_validator import LLMPatternValidator
+            llm_validator = LLMPatternValidator(file_path)
+            llm_results = llm_validator.validate()
+            llm_issues = llm_results.get('issues', [])
+
+            # Add LLM issues to custom_issues with adjusted severity
+            for issue in llm_issues:
+                custom_issues.append({
+                    'severity': issue.get('severity', 'WARNING'),
+                    'category': issue.get('category', 'llm_pattern'),
+                    'message': issue.get('message', ''),
+                    'line': issue.get('line', 0),
+                    'fix': issue.get('fix', ''),
+                    'source': 'llm-validator'
+                })
+        except ImportError:
+            pass  # LLM validator not available
+        except Exception:
+            pass  # Don't fail validation on LLM check errors
+
+        # ═══════════════════════════════════════════════════════════════════
         # PHASE 2: Code Analyzer V5 scanning (if available)
         # ═══════════════════════════════════════════════════════════════════
         ca_violations = []

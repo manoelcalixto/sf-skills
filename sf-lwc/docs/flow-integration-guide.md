@@ -433,6 +433,236 @@ Use the template at `templates/flow-screen-component/` as a starting point.
 
 ---
 
+## Passing sObjects and Wrapper Classes to Flow
+
+### Overview
+
+Flow can receive complex Apex types through `apex://` type bindings. This enables:
+- Passing sObjects directly (not just IDs)
+- Passing wrapper/DTO classes with multiple fields
+- Two-way data binding for record editing
+
+### apex:// Type Syntax
+
+In your meta.xml, reference Apex classes using the `apex://` prefix:
+
+```xml
+<targetConfig targets="lightning__FlowScreen">
+    <!-- Pass entire Account record -->
+    <property
+        name="accountRecord"
+        type="apex://Account"
+        label="Account Record"
+        role="inputOnly"/>
+
+    <!-- Pass custom wrapper class -->
+    <property
+        name="orderSummary"
+        type="apex://OrderController.OrderSummaryWrapper"
+        label="Order Summary"
+        role="inputOnly"/>
+
+    <!-- Output a modified record -->
+    <property
+        name="updatedAccount"
+        type="apex://Account"
+        label="Updated Account"
+        role="outputOnly"/>
+</targetConfig>
+```
+
+### Wrapper Class Requirements
+
+Apex wrapper classes must be **public** and have **public properties**:
+
+```apex
+public class OrderController {
+
+    // Wrapper class for Flow
+    public class OrderSummaryWrapper {
+        @AuraEnabled public String orderId;
+        @AuraEnabled public String orderName;
+        @AuraEnabled public Decimal totalAmount;
+        @AuraEnabled public List<LineItemWrapper> lineItems;
+        @AuraEnabled public Account customer;
+    }
+
+    public class LineItemWrapper {
+        @AuraEnabled public String productName;
+        @AuraEnabled public Integer quantity;
+        @AuraEnabled public Decimal unitPrice;
+    }
+
+    // Invocable method to create the wrapper
+    @InvocableMethod(label='Get Order Summary')
+    public static List<OrderSummaryWrapper> getOrderSummary(List<Id> orderIds) {
+        // Query and build wrapper...
+    }
+}
+```
+
+### Using sObjects in LWC
+
+```javascript
+import { api, LightningElement } from 'lwc';
+import { FlowAttributeChangeEvent } from 'lightning/flowSupport';
+
+export default class AccountEditor extends LightningElement {
+    // Receive sObject from Flow
+    @api accountRecord;
+
+    // Track local modifications
+    _modifiedAccount;
+
+    connectedCallback() {
+        // Create a working copy
+        this._modifiedAccount = { ...this.accountRecord };
+    }
+
+    handleNameChange(event) {
+        this._modifiedAccount.Name = event.target.value;
+    }
+
+    handleSave() {
+        // Send modified record back to Flow
+        this.dispatchEvent(
+            new FlowAttributeChangeEvent('updatedAccount', this._modifiedAccount)
+        );
+    }
+}
+```
+
+### Using Wrapper Classes in LWC
+
+```javascript
+import { api, LightningElement } from 'lwc';
+
+export default class OrderSummaryViewer extends LightningElement {
+    @api orderSummary; // apex://OrderController.OrderSummaryWrapper
+
+    get formattedTotal() {
+        return this.orderSummary?.totalAmount?.toLocaleString('en-US', {
+            style: 'currency',
+            currency: 'USD'
+        });
+    }
+
+    get lineItems() {
+        return this.orderSummary?.lineItems || [];
+    }
+
+    get customerName() {
+        // Access nested sObject
+        return this.orderSummary?.customer?.Name || 'Unknown';
+    }
+}
+```
+
+### Flow Configuration for apex:// Types
+
+1. **Create an Invocable Action** that returns your wrapper:
+   ```apex
+   @InvocableMethod
+   public static List<MyWrapper> getData(List<String> inputs) { ... }
+   ```
+
+2. **In Flow Builder**, call the Invocable Action before the screen
+
+3. **Store result** in an Apex-Defined Variable
+
+4. **Pass to LWC** via the screen component input mapping
+
+### Common Patterns
+
+#### Pattern 1: Record Edit with Validation
+
+```javascript
+// LWC that receives, edits, and returns an sObject
+@api inputRecord;      // apex://Contact (inputOnly)
+@api outputRecord;     // apex://Contact (outputOnly)
+@api isValid = false;  // Boolean (outputOnly)
+
+handleFieldChange(event) {
+    const field = event.target.dataset.field;
+    this.workingRecord[field] = event.target.value;
+
+    // Validate and update outputs
+    this.isValid = this.validateRecord();
+    this.dispatchEvent(new FlowAttributeChangeEvent('outputRecord', this.workingRecord));
+    this.dispatchEvent(new FlowAttributeChangeEvent('isValid', this.isValid));
+}
+```
+
+#### Pattern 2: Multi-Record Selection
+
+```javascript
+// Select from a list, output selected items
+@api availableRecords;  // apex://Account[] (inputOnly)
+@api selectedRecords = []; // apex://Account[] (outputOnly)
+
+handleSelect(event) {
+    const id = event.target.dataset.id;
+    const record = this.availableRecords.find(r => r.Id === id);
+
+    if (record && !this.selectedRecords.find(r => r.Id === id)) {
+        this.selectedRecords = [...this.selectedRecords, record];
+        this.dispatchEvent(
+            new FlowAttributeChangeEvent('selectedRecords', this.selectedRecords)
+        );
+    }
+}
+```
+
+#### Pattern 3: Master-Detail Editing
+
+```javascript
+// Edit parent with nested child records
+@api orderWrapper;  // apex://OrderController.OrderWithLines (inputOnly)
+@api updatedOrder;  // apex://OrderController.OrderWithLines (outputOnly)
+
+handleLineItemChange(event) {
+    const index = event.target.dataset.index;
+    const field = event.target.dataset.field;
+    const value = event.target.value;
+
+    // Update nested structure
+    const updated = JSON.parse(JSON.stringify(this.orderWrapper));
+    updated.lineItems[index][field] = value;
+
+    // Recalculate totals
+    updated.totalAmount = updated.lineItems.reduce(
+        (sum, item) => sum + (item.quantity * item.unitPrice), 0
+    );
+
+    this.updatedOrder = updated;
+    this.dispatchEvent(new FlowAttributeChangeEvent('updatedOrder', updated));
+}
+```
+
+### Limitations
+
+| Limitation | Workaround |
+|------------|------------|
+| No `@JsonAccess` support | Ensure wrapper classes don't require JSON annotation |
+| 1000 record limit per collection | Paginate or filter in Apex before passing |
+| No generic types | Create specific wrapper classes |
+| Complex nesting depth | Flatten deep hierarchies |
+
+### Debugging Tips
+
+1. **Console log received data** to verify structure:
+   ```javascript
+   connectedCallback() {
+       console.log('Received from Flow:', JSON.stringify(this.inputWrapper));
+   }
+   ```
+
+2. **Check Apex class visibility** - inner classes need `public` modifier
+
+3. **Verify @AuraEnabled** on all properties you need to access
+
+---
+
 ## Cross-Skill Integration
 
 | Integration | See Also |
@@ -440,3 +670,5 @@ Use the template at `templates/flow-screen-component/` as a starting point.
 | Flow → Apex → LWC | [triangle-pattern.md](triangle-pattern.md) |
 | Apex @AuraEnabled | [sf-apex/docs/best-practices.md](../../sf-apex/docs/best-practices.md) |
 | Flow Templates | [sf-flow/templates/](../../sf-flow/templates/) |
+| Async Notifications | [async-notification-patterns.md](async-notification-patterns.md) |
+| State Management | [state-management.md](state-management.md) |

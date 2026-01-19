@@ -501,6 +501,7 @@ sf project deploy start --metadata ExternalCredential:WeatherAPI \
 📚 **Detailed Documentation**:
 - [Callout Patterns](resources/callout-patterns.md) - REST and SOAP callout implementations
 - [Event Patterns](resources/event-patterns.md) - Platform Events and Change Data Capture
+- [Messaging API v2](docs/messaging-api-v2.md) - **NEW**: MIAW custom client architecture (Agentforce external chat)
 
 📁 **Templates**:
 - `templates/named-credentials/` - Authentication templates

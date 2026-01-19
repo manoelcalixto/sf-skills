@@ -75,6 +75,35 @@ def validate_lwc_file(file_path: str) -> dict:
         rating = results.get('rating', '')
 
         # ═══════════════════════════════════════════════════════════════════
+        # PHASE 1.5: LWC Template Anti-Pattern Validation (for HTML files)
+        # ═══════════════════════════════════════════════════════════════════
+        if ext == '.html':
+            try:
+                from template_validator import LWCTemplateValidator
+                template_validator = LWCTemplateValidator(file_path)
+                template_results = template_validator.validate()
+                template_issues = template_results.get('issues', [])
+
+                # Add template issues to main issues list
+                for tpl_issue in template_issues:
+                    issues.append({
+                        'severity': tpl_issue.get('severity', 'WARNING'),
+                        'category': 'template_' + tpl_issue.get('category', 'pattern'),
+                        'message': tpl_issue.get('message', ''),
+                        'line': tpl_issue.get('line', 0),
+                        'fix': tpl_issue.get('fix', ''),
+                        'source': 'template-validator'
+                    })
+
+                    # Deduct from score for critical template issues
+                    if tpl_issue.get('severity') == 'CRITICAL':
+                        scores['component_structure'] = max(0, scores['component_structure'] - 3)
+            except ImportError:
+                pass  # Template validator not available
+            except Exception:
+                pass  # Don't fail validation on template check errors
+
+        # ═══════════════════════════════════════════════════════════════════
         # PHASE 2: Official SLDS Linter (if available)
         # ═══════════════════════════════════════════════════════════════════
         linter_available = False

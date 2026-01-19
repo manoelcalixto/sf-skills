@@ -486,6 +486,10 @@ Install: `/plugin install github:Jaganpro/sf-skills/sf-lwc`
 | [resources/jest-testing.md](resources/jest-testing.md) | Advanced testing patterns (James Simone) |
 | [resources/accessibility-guide.md](resources/accessibility-guide.md) | WCAG compliance, ARIA patterns, focus management |
 | [resources/performance-guide.md](resources/performance-guide.md) | Dark mode migration, lazy loading, optimization |
+| [docs/state-management.md](docs/state-management.md) | **NEW**: @track, Singleton Store, @lwc/state, Platform State Managers |
+| [docs/template-anti-patterns.md](docs/template-anti-patterns.md) | **NEW**: LLM template mistakes (inline expressions, ternary operators) |
+| [docs/async-notification-patterns.md](docs/async-notification-patterns.md) | **NEW**: Platform Events + empApi subscription patterns |
+| [docs/flow-integration-guide.md](docs/flow-integration-guide.md) | Flow-LWC communication, apex:// type bindings |
 
 ### External References
 

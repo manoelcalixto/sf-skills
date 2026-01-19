@@ -421,6 +421,7 @@ For LSP validation to work, users must have:
 | `code-review-checklist.md` | 150-point scoring criteria |
 | `flow-integration.md` | Complete @InvocableMethod guide |
 | `triangle-pattern.md` | Flow-LWC-Apex integration |
+| `llm-anti-patterns.md` | **NEW**: Common LLM code generation mistakes (Java types, non-existent methods, Map patterns) |
 
 **Path**: `~/.claude/plugins/marketplaces/sf-skills/sf-apex/docs/`
 

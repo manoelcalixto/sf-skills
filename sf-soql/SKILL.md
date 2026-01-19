@@ -540,6 +540,7 @@ Install: `/plugin install github:Jaganpro/sf-skills/sf-soql`
 | [cli-commands.md](docs/cli-commands.md) | SF CLI query commands |
 | [anti-patterns.md](docs/anti-patterns.md) | Common mistakes and how to avoid them |
 | [selector-patterns.md](docs/selector-patterns.md) | Query abstraction patterns (vanilla Apex) |
+| [field-coverage-rules.md](docs/field-coverage-rules.md) | **NEW**: Ensure queries include all accessed fields (LLM mistake prevention) |
 
 ## Templates
 

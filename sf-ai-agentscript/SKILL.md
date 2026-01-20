@@ -12,6 +12,12 @@ metadata:
   author: "Jag Valaiyapathy"
   scoring: "100 points across 6 categories"
   validated: "0-shot generation tested (Pet_Adoption_Advisor, TechCorp_IT_Agent, Quiz_Master, Expense_Calculator, Order_Processor)"
+  # Validation Framework
+  last_validated: "2026-01-20"
+  validation_status: "PASS"
+  validation_agents: 8
+  validate_by: "2026-02-19"  # 30 days from last validation
+  validation_org: "R6-Agentforce-SandboxFull"
 ---
 
 # SF-AI-AgentScript Skill

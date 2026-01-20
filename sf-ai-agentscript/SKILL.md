@@ -8,7 +8,7 @@ description: >
 license: MIT
 compatibility: "Requires Agentforce license, API v65.0+, Einstein Agent User"
 metadata:
-  version: "1.0.4"
+  version: "1.1.0"
   author: "Jag Valaiyapathy"
   scoring: "100 points across 6 categories"
   validated: "0-shot generation tested (Pet_Adoption_Advisor, TechCorp_IT_Agent, Quiz_Master, Expense_Calculator, Order_Processor)"
@@ -52,6 +52,90 @@ Agent Script transforms agent development from prompt-based suggestions to **cod
 | **Linked vars: no object/list** | `data: linked object` | Use `linked string` or parse in Flow |
 | **Post-action only on @actions** | `@utils.X` with `set`/`run` | Only `@actions.X` supports post-action |
 | **agent_name must match folder** | Folder: `MyAgent`, config: `my_agent` | Both must be identical (case-sensitive) |
+| **Reserved field names** | `description: string`, `label: string` | Use `descriptions`, `label_text`, or suffix with `_field` |
+
+### 🔴 Reserved Field Names (Breaking in Recent Releases)
+
+Common field names that cause parse errors:
+```
+❌ RESERVED (cannot use as variable/field names):
+description, label, is_required, is_displayable, is_used_by_planner
+
+✅ WORKAROUNDS:
+description  → descriptions, description_text, desc_field
+label        → label_text, display_label, label_field
+```
+
+### 🔴 `complex_data_type_name` Mapping Table (Critical for Actions)
+
+> **"#1 source of compile errors"** - Use this table when defining action inputs/outputs in Agentforce Assets.
+
+| Data Type | `complex_data_type_name` Value | Notes |
+|-----------|-------------------------------|-------|
+| `string` | *(none needed)* | Primitive type |
+| `number` | *(none needed)* | Primitive type |
+| `boolean` | *(none needed)* | Primitive type |
+| `object` (SObject) | `lightning__recordInfoType` | Use for Account, Contact, etc. |
+| `list[string]` | `lightning__textType` | Collection of text values |
+| `list[object]` | `lightning__textType` | Serialized as JSON text |
+| Apex Inner Class | `@apexClassType/NamespacedClass__InnerClass` | Namespace required |
+| Custom LWC Type | `lightning__c__CustomTypeName` | Custom component types |
+| Currency field | `lightning__currencyType` | For monetary values |
+
+**Pro Tip**: Don't manually edit `complex_data_type_name` - use the UI dropdown in **Agentforce Assets > Action Definition**, then export/import the action definition.
+
+### ⚠️ Canvas View Corruption Bugs
+
+> **CRITICAL**: Canvas view can silently corrupt Agent Script syntax. Make complex edits in **Script view**.
+
+| Original Syntax | Canvas Corrupts To | Impact |
+|-----------------|-------------------|--------|
+| `==` | `{! OPERATOR.EQUAL }` | Breaks conditionals |
+| `if condition:` | `if condition` (missing colon) | Parse error |
+| `with email =` | `with @inputs.email =` | Invalid syntax |
+| 4-space indent | De-indented (breaks nesting) | Structure lost |
+| `@topic.X` (supervision) | `@utils.transition to @topic.X` (handoff) | Changes return behavior |
+| `A and B` | `A {! and } B` | Breaks compound conditions |
+
+**Safe Workflow**:
+1. Use **Script view** for all structural edits (conditionals, actions, transitions)
+2. Use Canvas only for visual validation and simple text changes
+3. **Always review in Script view** after any Canvas edit
+
+### ⚠️ Preview Mode Critical Bugs
+
+> **CRITICAL REFRESH BUG**: Browser refresh required after **every** Agent Script save before preview works properly.
+
+| Issue | Error Message | Workaround |
+|-------|---------------|------------|
+| Linked vars in context, not state | `"Cannot access 'X': Not a declared field in dict"` | Convert to mutable + hardcode for testing |
+| Output property access fails | Silent failure, no error | Assign to variable first, then use in conditional |
+| Simulate vs Live behavior differs | Works in Simulate, fails in Live | Test in **BOTH** modes before committing |
+
+**Pattern for Testing Linked Variables:**
+```yaml
+# ❌ DOESN'T WORK IN PREVIEW (linked var from session):
+RoutableId: linked string
+   source: @MessagingSession.Id
+
+# ✅ WORKAROUND FOR TESTING (hardcode value):
+RoutableId: mutable string = "test-session-123"
+   description: "MessagingSession Id (hardcoded for testing)"
+
+# After testing, switch back to linked for production
+```
+
+**Output Property Access Pattern:**
+```yaml
+# ❌ DOESN'T WORK IN PREVIEW (direct output access):
+if @actions.check_status.result == "approved":
+   | Approved!
+
+# ✅ CORRECT (assign to variable first):
+set @variables.status = @outputs.result
+if @variables.status == "approved":
+   | Approved!
+```
 
 #### No Nested `if` - Two Valid Approaches
 ```yaml
@@ -128,6 +212,195 @@ topic verification_success:
          transition to @topic.verify_employee  # Return to parent
 ```
 > **Why this works**: `set` statements ARE valid inside `instructions: ->` blocks. The topic loop pattern lets you change state without Flows/Apex.
+
+---
+
+## 💰 PRODUCTION GOTCHAS: Billing, Determinism & Performance
+
+### Credit Consumption Table
+
+> **Key insight**: Framework operations are FREE. Only actions that invoke external services consume credits.
+
+| Operation | Credits | Notes |
+|-----------|---------|-------|
+| `@utils.transition` | FREE | Framework navigation |
+| `@utils.setVariables` | FREE | Framework state management |
+| `@utils.escalate` | FREE | Framework escalation |
+| `if`/`else` control flow | FREE | Deterministic resolution |
+| `before_reasoning` | FREE | Deterministic pre-processing |
+| `after_reasoning` | FREE | Deterministic post-processing |
+| `reasoning` (LLM turn) | FREE | LLM reasoning itself is not billed |
+| Prompt Templates | 2-16 | Per invocation (varies by complexity) |
+| Flow actions | 20 | Per action execution |
+| Apex actions | 20 | Per action execution |
+| Any other action | 20 | Per action execution |
+
+**Cost Optimization Pattern**: Fetch data once in `before_reasoning`, cache in variables, reuse across topics.
+
+### Supervision vs Handoff (Clarified Terminology)
+
+| Term | Syntax | Behavior | Use When |
+|------|--------|----------|----------|
+| **Handoff** | `@utils.transition to @topic.X` | Control transfers completely, child generates final response | Checkout, escalation, terminal states |
+| **Supervision** | `@topic.X` (as action reference) | Parent orchestrates, child returns, parent synthesizes | Expert consultation, sub-tasks |
+
+```yaml
+# HANDOFF - child topic takes over completely:
+checkout: @utils.transition to @topic.order_checkout
+   description: "Proceed to checkout"
+# → @topic.order_checkout generates the user-facing response
+
+# SUPERVISION - parent remains in control:
+get_advice: @topic.product_expert
+   description: "Consult product expert"
+# → @topic.product_expert returns, parent topic synthesizes final response
+```
+
+**KNOWN BUG**: Adding ANY new action in Canvas view may inadvertently change Supervision references to Handoff transitions.
+
+### Action Output Flags for Zero-Hallucination Routing
+
+> **Key Pattern for Determinism**: Control what the LLM can see and say.
+
+When defining actions in Agentforce Assets, use these output flags:
+
+| Flag | Effect | Use When |
+|------|--------|----------|
+| `is_displayable: False` | LLM **cannot** show this value to user | Preventing hallucinated responses |
+| `is_used_by_planner: True` | LLM **can** reason about this value | Decision-making, routing |
+
+**Zero-Hallucination Intent Classification Pattern:**
+```yaml
+# In Agentforce Assets - Action Definition outputs:
+outputs:
+   intent_classification: string
+      is_displayable: False       # LLM cannot show this to user
+      is_used_by_planner: True    # LLM can use for routing decisions
+
+# In Agent Script - LLM routes but cannot hallucinate:
+topic intent_router:
+   reasoning:
+      instructions: ->
+         run @actions.classify_intent
+         set @variables.intent = @outputs.intent_classification
+
+         if @variables.intent == "refund":
+            transition to @topic.refunds
+         if @variables.intent == "order_status":
+            transition to @topic.orders
+```
+
+### Action Chaining with `run` Keyword
+
+> **Known quirk**: Parent action may complain about inputs needed by chained action - this is expected.
+
+```yaml
+# Chained action execution:
+process_order: @actions.create_order
+   with customer_id = @variables.customer_id
+   run @actions.send_confirmation        # Chains after create_order completes
+   set @variables.order_id = @outputs.id
+```
+
+**KNOWN BUG**: Chained actions with Prompt Templates don't properly map inputs using `Input:Query` format:
+```yaml
+# ❌ MAY NOT WORK with Prompt Templates:
+run @actions.transform_recommendation
+   with "Input:Reco_Input" = @variables.ProductReco
+
+# ⚠️ TRY THIS (may still have issues):
+run @actions.transform_recommendation
+   with Reco_Input = @variables.ProductReco
+```
+
+### Latch Variable Pattern for Topic Re-entry
+
+> **Problem**: Topic selector doesn't properly re-evaluate after user provides missing input.
+
+**Solution**: Use a "latch" variable to force re-entry:
+
+```yaml
+variables:
+   verification_in_progress: mutable boolean = False
+
+start_agent topic_selector:
+   reasoning:
+      instructions: ->
+         # LATCH CHECK - force re-entry if verification was started
+         if @variables.verification_in_progress == True:
+            transition to @topic.verification
+
+         | How can I help you today?
+      actions:
+         start_verify: @topic.verification
+            description: "Start identity verification"
+            # Set latch when user chooses this action
+            set @variables.verification_in_progress = True
+
+topic verification:
+   reasoning:
+      instructions: ->
+         | Please provide your email to verify your identity.
+      actions:
+         verify: @actions.verify_identity
+            with email = ...
+            set @variables.verified = @outputs.success
+            # Clear latch when verification completes
+            set @variables.verification_in_progress = False
+```
+
+### Loop Protection Guardrail
+
+> Agent Scripts have a built-in guardrail that limits iterations to approximately **3-4 loops** before breaking out and returning to the Topic Selector.
+
+**Best Practice**: Map out your execution paths - particularly topic transitions. Ensure testing covers all paths and specifically check for unintended circular references between topics.
+
+### Token & Size Limits
+
+| Limit Type | Value | Notes |
+|------------|-------|-------|
+| Max response size | 1,048,576 bytes (1MB) | Per agent response |
+| Plan trace limit (Frontend) | 1M characters | For debugging UI |
+| Transformed plan trace (Backend) | 32k tokens | Internal processing |
+| Active/Committed Agents per org | 100 max | Org limit |
+
+### Progress Indicators
+
+Add user feedback during long-running actions:
+
+```yaml
+actions:
+   fetch_data: @actions.get_customer_data
+      description: "Fetch customer information"
+      include_in_progress_indicator: True
+      progress_indicator_message: "Fetching your account details..."
+```
+
+### VS Code Pull/Push NOT Supported
+
+```bash
+# ❌ ERROR when using source tracking:
+Failed to retrieve components using source tracking:
+[SfError [UnsupportedBundleTypeError]: Unsupported Bundle Type: AiAuthoringBundle
+
+# ✅ WORKAROUND - Use CLI directly:
+sf project retrieve start -m AiAuthoringBundle:MyAgent
+sf agent publish authoring-bundle --source-dir ./force-app/main/default/aiAuthoringBundles/MyAgent
+```
+
+### Language Block Quirks
+
+- Hebrew and Indonesian appear **twice** in the language dropdown
+- Selecting from the second set causes save errors
+- Use `adaptive_response_allowed: True` for automatic language adaptation
+
+```yaml
+language:
+   locale: en_US
+   adaptive_response_allowed: True  # Allow language adaptation
+```
+
+---
 
 ### Cross-Skill Orchestration
 
@@ -219,6 +492,39 @@ checkout: @utils.transition to @topic.checkout
 | `retriever` | `retriever://` | RAG knowledge search |
 | `externalService` | `externalService://` | Third-party APIs via Named Credentials |
 | `standardInvocableAction` | `standardInvocableAction://` | Built-in SF actions (email, tasks) |
+
+### Connection Block (Full Escalation Pattern)
+
+```yaml
+connections:
+   # Messaging channel escalation
+   connection messaging:
+      escalation_message: "One moment, I'm transferring our conversation to get you more help."
+      outbound_route_type: "OmniChannelFlow"
+      outbound_route_name: "<flow://Escalate_Messaging_To_Live_Agent>"
+      adaptive_response_allowed: False
+
+   # Voice channel escalation
+   connection voice:
+      escalation_message: "Please hold while I transfer you to a specialist."
+      outbound_route_type: "Queue"
+      outbound_route_name: "Support_Queue"
+      adaptive_response_allowed: True
+
+   # Web chat escalation
+   connection web:
+      escalation_message: "Connecting you with a live agent now."
+      outbound_route_type: "OmniChannelFlow"
+      outbound_route_name: "<flow://Web_Chat_Escalation>"
+```
+
+**Key Properties:**
+| Property | Required | Description |
+|----------|----------|-------------|
+| `escalation_message` | ✅ | Message shown to user during handoff |
+| `outbound_route_type` | ✅ | `OmniChannelFlow`, `Queue`, or `Skill` |
+| `outbound_route_name` | ✅ | Flow API name or Queue name |
+| `adaptive_response_allowed` | ❌ | Allow LLM to adapt escalation message |
 
 ---
 
@@ -699,6 +1005,7 @@ start_agent entry:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | 2026-01-20 | **"Ultimate Guide" tribal knowledge integration**: Added `complex_data_type_name` mapping table, Canvas View corruption bugs, Reserved field names, Preview mode workarounds, Credit consumption table, Supervision vs Handoff clarification, Action output flags for zero-hallucination routing, Latch variable pattern, Loop protection guardrails, Token/size limits, Progress indicators, Connection block escalation patterns, VS Code limitations, Language block quirks. Added 4 new templates: flow-action-lookup, prompt-rag-search, deterministic-routing, escalation-pattern |
 | 1.0.4 | 2026-01-19 | **Progressive testing validation** (Quiz_Master, Expense_Calculator, Order_Processor): Added constraints for no top-level `actions:` block, no `inputs:`/`outputs:` in reasoning.actions, expanded nested-if guidance with flattening approach, added new SyntaxError entries to common issues |
 | 1.0.3 | 2026-01-19 | Added Einstein Agent User interview requirement - mandatory user confirmation when creating new agents |
 | 1.0.2 | 2026-01-19 | **Major corrections from GitHub reference**: Fixed block order (config→system), added Helper Topic Pattern, transition vs delegation, expression operators (+/- only), naming rules (80 char max), slot-filling `...` syntax, post-action directives (@actions.* only) |

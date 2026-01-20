@@ -67,6 +67,20 @@ The **PICKLES Framework** provides a structured approach to designing robust Lig
 
 ## Key Component Patterns
 
+### Wire vs Imperative Apex Calls
+
+| Aspect | Wire (@wire) | Imperative Calls |
+|--------|--------------|------------------|
+| **Execution** | Automatic / Reactive | Manual / Programmatic |
+| **DML** | ❌ Read-Only | ✅ Insert/Update/Delete |
+| **Data Updates** | ✅ Auto on param change | ❌ Manual refresh |
+| **Control** | Low (framework decides) | Full (you decide) |
+| **Caching** | ✅ Built-in | ❌ None |
+
+**Quick Decision**: Use `@wire` for read-only display with auto-refresh. Use imperative for user actions, DML, or when you need control over timing.
+
+**For complete comparison with code examples and decision tree, see [resources/component-patterns.md](resources/component-patterns.md#wire-vs-imperative-apex-calls)**
+
 ### Data Source Decision Tree
 
 | Scenario | Recommended Approach |

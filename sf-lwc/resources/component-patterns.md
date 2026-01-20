@@ -8,6 +8,7 @@ Comprehensive code examples for common Lightning Web Component patterns.
 
 1. [PICKLES Framework Details](#pickles-framework-details)
 2. [Wire Service Patterns](#wire-service-patterns)
+   - [Wire vs Imperative Apex Calls](#wire-vs-imperative-apex-calls)
 3. [GraphQL Patterns](#graphql-patterns)
 4. [Modal Component Pattern](#modal-component-pattern)
 5. [Record Picker Pattern](#record-picker-pattern)
@@ -145,6 +146,142 @@ public static List<Account> getAccounts(String searchTerm) {
 ---
 
 ## Wire Service Patterns
+
+### Wire vs Imperative Apex Calls
+
+LWC can interact with Apex in two ways: **@wire** (reactive/declarative) and **imperative calls** (manual/programmatic). Understanding when to use each is critical for building performant, maintainable components.
+
+#### Quick Comparison
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                    WIRE vs IMPERATIVE APEX CALLS                                     │
+├──────────────────┬──────────────────────────────┬────────────────────────────────────┤
+│    Aspect        │      Wire (@wire)            │      Imperative Calls              │
+├──────────────────┼──────────────────────────────┼────────────────────────────────────┤
+│ Execution        │ Automatic / Reactive         │ Manual / Programmatic              │
+│ DML Operations   │ ❌ Read-Only                 │ ✅ Insert / Update / Delete        │
+│ Data Updates     │ ✅ Auto on Parameter Change  │ ❌ Manual Refresh Required         │
+│ Control          │ ⚠️ Low (framework decides)   │ ✅ Full (you decide when/how)      │
+│ Error Handling   │ ✅ Framework Managed         │ ⚠️ Developer Managed               │
+│ Supported Objects│ ⚠️ UI API Only               │ ✅ All Objects                     │
+│ Caching          │ ✅ Built-in (cacheable=true) │ ❌ No automatic caching            │
+└──────────────────┴──────────────────────────────┴────────────────────────────────────┘
+```
+
+#### Pros & Cons
+
+| Wire (@wire) | Imperative Calls |
+|--------------|------------------|
+| ✅ Auto UI sync & caching | ✅ Supports DML & all objects |
+| ✅ Less boilerplate code | ✅ Full control over timing |
+| ✅ Reactive to parameter changes | ✅ Can handle complex logic |
+| ❌ Read-only, limited objects | ❌ Manual handling, no auto refresh |
+| ❌ Can't control execution timing | ❌ More error handling code needed |
+
+#### When to Use Each
+
+**Use Wire (@wire) when:**
+- 📌 Read-only data display
+- 📌 Auto-refresh UI when parameters change
+- 📌 Stable parameters (recordId, filter values)
+- 📌 Working with UI API supported objects
+
+**Use Imperative Calls when:**
+- 📌 User actions (clicks, form submissions)
+- 📌 DML operations (Insert, Update, Delete)
+- 📌 Dynamic parameters determined at runtime
+- 📌 Custom objects or complex queries
+- 📌 Need control over execution timing
+
+#### Side-by-Side Code Examples
+
+**Wire Example** - Data loads automatically when `selectedIndustry` changes:
+
+```javascript
+import { LightningElement, wire } from 'lwc';
+import fetchAccounts from '@salesforce/apex/AccountController.fetchAccounts';
+
+export default class WireExample extends LightningElement {
+    selectedIndustry = 'Technology';
+    accounts;
+    error;
+
+    // Automatically re-fetches when selectedIndustry changes
+    @wire(fetchAccounts, { industry: '$selectedIndustry' })
+    wiredAccounts({ data, error }) {
+        if (data) {
+            this.accounts = data;
+            this.error = undefined;
+        } else if (error) {
+            this.error = error;
+            this.accounts = undefined;
+        }
+    }
+}
+```
+
+**Imperative Example** - Data loads only when user triggers action:
+
+```javascript
+import { LightningElement } from 'lwc';
+import fetchAccounts from '@salesforce/apex/AccountController.fetchAccounts';
+
+export default class ImperativeExample extends LightningElement {
+    selectedIndustry = 'Technology';
+    accounts;
+    error;
+    isLoading = false;
+
+    // Called explicitly when user clicks button or submits form
+    async fetchAccounts() {
+        this.isLoading = true;
+        try {
+            this.accounts = await fetchAccounts({
+                industry: this.selectedIndustry
+            });
+            this.error = undefined;
+        } catch (error) {
+            this.error = error;
+            this.accounts = undefined;
+        } finally {
+            this.isLoading = false;
+        }
+    }
+}
+```
+
+#### Decision Tree
+
+```
+                    ┌─────────────────────────────┐
+                    │   Need to modify data?      │
+                    │   (Insert/Update/Delete)    │
+                    └─────────────┬───────────────┘
+                                  │
+                    ┌─────────────┴───────────────┐
+                    │                             │
+                   YES                            NO
+                    │                             │
+                    ▼                             ▼
+         ┌─────────────────┐        ┌─────────────────────────┐
+         │   IMPERATIVE    │        │  Should data auto-      │
+         │   (Use await)   │        │  refresh on param       │
+         └─────────────────┘        │  change?                │
+                                    └───────────┬─────────────┘
+                                                │
+                                    ┌───────────┴───────────┐
+                                    │                       │
+                                   YES                      NO
+                                    │                       │
+                                    ▼                       ▼
+                         ┌─────────────────┐     ┌─────────────────┐
+                         │   @WIRE         │     │   IMPERATIVE    │
+                         │   (Reactive)    │     │   (On-demand)   │
+                         └─────────────────┘     └─────────────────┘
+```
+
+---
 
 ### 1. Basic Data Display (Wire Service)
 

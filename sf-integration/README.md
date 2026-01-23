@@ -93,7 +93,7 @@ Automate credential configuration without manual UI steps:
 | sf-apex | Custom callout services beyond templates |
 | sf-flow | HTTP Callout Flow for Agentforce |
 | sf-deploy | Deploy credentials and callout code |
-| sf-ai-agentforce | Agent actions using External Services |
+| sf-ai-agentscript | Agent actions using External Services |
 
 ## Documentation
 

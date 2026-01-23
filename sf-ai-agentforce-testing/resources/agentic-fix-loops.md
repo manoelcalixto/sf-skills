@@ -4,7 +4,7 @@ Complete reference for automated agent testing and fix workflows.
 
 ## Overview
 
-Agentic fix loops enable automated test-fix cycles: when agent tests fail, the system analyzes failures, generates fixes via sf-ai-agentforce skill, re-publishes the agent, and re-runs tests.
+Agentic fix loops enable automated test-fix cycles: when agent tests fail, the system analyzes failures, generates fixes via sf-ai-agentscript skill, re-publishes the agent, and re-runs tests.
 
 **Related Documentation:**
 - [SKILL.md](../SKILL.md) - Main skill documentation
@@ -29,7 +29,7 @@ Agentic fix loops enable automated test-fix cycles: when agent tests fail, the s
 │     - GUARDRAIL_NOT_TRIGGERED → System instructions permissive   │
 │     - ESCALATION_NOT_TRIGGERED → Missing escalation path         │
 │  3. Read the agent script (.agent file)                          │
-│  4. Generate fix using sf-ai-agentforce skill                    │
+│  4. Generate fix using sf-ai-agentscript skill                   │
 │  5. Re-validate and re-publish agent                             │
 │  6. Re-run the failing test                                      │
 │  7. Repeat until passing (max 3 attempts)                        │
@@ -43,7 +43,7 @@ Agentic fix loops enable automated test-fix cycles: when agent tests fail, the s
 |-------|-------------|-------------|
 | **Test Failed** | Initial failure detected | Analyze failure category |
 | **Analyzing** | Determine root cause | Generate fix strategy |
-| **Fixing** | Apply fix via sf-ai-agentforce | Re-validate agent |
+| **Fixing** | Apply fix via sf-ai-agentscript | Re-validate agent |
 | **Re-Testing** | Run same test again | Check if passed |
 | **Passed** | Test now passes | Move to next failed test |
 | **Max Retries** | 3 attempts exhausted | Escalate to human |
@@ -56,13 +56,13 @@ Agentic fix loops enable automated test-fix cycles: when agent tests fail, the s
 
 | Error Category | Root Cause | Auto-Fix Strategy | Skill to Call |
 |----------------|------------|-------------------|---------------|
-| `TOPIC_NOT_MATCHED` | Topic description doesn't match utterance | Add keywords to topic description | sf-ai-agentforce |
-| `ACTION_NOT_INVOKED` | Action description not triggered | Improve action description, add explicit reference | sf-ai-agentforce |
-| `WRONG_ACTION_SELECTED` | Wrong action chosen | Differentiate descriptions, add `available when` | sf-ai-agentforce |
+| `TOPIC_NOT_MATCHED` | Topic description doesn't match utterance | Add keywords to topic description | sf-ai-agentscript |
+| `ACTION_NOT_INVOKED` | Action description not triggered | Improve action description, add explicit reference | sf-ai-agentscript |
+| `WRONG_ACTION_SELECTED` | Wrong action chosen | Differentiate descriptions, add `available when` | sf-ai-agentscript |
 | `ACTION_INVOCATION_FAILED` | Flow/Apex error during execution | Delegate to sf-flow or sf-apex | sf-flow / sf-apex |
-| `GUARDRAIL_NOT_TRIGGERED` | System instructions permissive | Add explicit guardrails to system instructions | sf-ai-agentforce |
-| `ESCALATION_NOT_TRIGGERED` | Missing escalation action | Add escalation to topic | sf-ai-agentforce |
-| `RESPONSE_QUALITY_ISSUE` | Instructions lack specificity | Add examples to reasoning instructions | sf-ai-agentforce |
+| `GUARDRAIL_NOT_TRIGGERED` | System instructions permissive | Add explicit guardrails to system instructions | sf-ai-agentscript |
+| `ESCALATION_NOT_TRIGGERED` | Missing escalation action | Add escalation to topic | sf-ai-agentscript |
+| `RESPONSE_QUALITY_ISSUE` | Instructions lack specificity | Add examples to reasoning instructions | sf-ai-agentscript |
 | `ACTION_OUTPUT_INVALID` | Flow returns unexpected data | Fix Flow or data setup | sf-flow / sf-data |
 
 ---
@@ -103,7 +103,7 @@ topic: billing_inquiry
 
 **Auto-Fix Command:**
 ```bash
-Skill(skill="sf-ai-agentforce", args="Fix topic 'billing_inquiry' in agent MyAgent - add keywords: charged, invoice, payment")
+Skill(skill="sf-ai-agentscript", args="Fix topic 'billing_inquiry' in agent MyAgent - add keywords: charged, invoice, payment")
 ```
 
 ### 2. ACTION_NOT_INVOKED
@@ -146,7 +146,7 @@ Skill(skill="sf-ai-agentforce", args="Fix topic 'billing_inquiry' in agent MyAge
 
 **Auto-Fix Command:**
 ```bash
-Skill(skill="sf-ai-agentforce", args="Fix action 'get_order_status' - improve description to trigger on 'where is order' utterances")
+Skill(skill="sf-ai-agentscript", args="Fix action 'get_order_status' - improve description to trigger on 'where is order' utterances")
 ```
 
 ### 3. WRONG_ACTION_SELECTED
@@ -195,7 +195,7 @@ Skill(skill="sf-ai-agentforce", args="Fix action 'get_order_status' - improve de
 
 **Auto-Fix Command:**
 ```bash
-Skill(skill="sf-ai-agentforce", args="Differentiate actions 'create_general_case' and 'create_technical_case' - add specific keywords to each")
+Skill(skill="sf-ai-agentscript", args="Differentiate actions 'create_general_case' and 'create_technical_case' - add specific keywords to each")
 ```
 
 ### 4. ACTION_INVOCATION_FAILED
@@ -268,7 +268,7 @@ system_instructions: |
 
 **Auto-Fix Command:**
 ```bash
-Skill(skill="sf-ai-agentforce", args="Add guardrail to agent MyAgent - reject requests to delete or modify customer records")
+Skill(skill="sf-ai-agentscript", args="Add guardrail to agent MyAgent - reject requests to delete or modify customer records")
 ```
 
 ### 6. ESCALATION_NOT_TRIGGERED
@@ -318,7 +318,7 @@ system_instructions: |
 
 **Auto-Fix Command:**
 ```bash
-Skill(skill="sf-ai-agentforce", args="Add escalation trigger to agent MyAgent - escalate when user shows frustration")
+Skill(skill="sf-ai-agentscript", args="Add escalation trigger to agent MyAgent - escalate when user shows frustration")
 ```
 
 ---
@@ -332,7 +332,7 @@ Skill(skill="sf-ai-agentforce", args="Add escalation trigger to agent MyAgent - 
 │                 AGENT TESTING ORCHESTRATION                      │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  sf-ai-agentforce                                               │
+│  sf-ai-agentscript                                              │
 │  └─ Create agent script → Validate → Publish                    │
 │                    │                                             │
 │                    ▼                                             │
@@ -345,7 +345,7 @@ Skill(skill="sf-ai-agentforce", args="Add escalation trigger to agent MyAgent - 
 │         │                   │                                   │
 │         │       ┌───────────┴───────────┐                       │
 │         │       ▼                       ▼                       │
-│         │   sf-ai-agentforce      sf-flow/sf-apex               │
+│         │   sf-ai-agentscript     sf-flow/sf-apex               │
 │         │   (fix agent)           (fix dependencies)            │
 │         │       │                       │                       │
 │         │       └───────────┬───────────┘                       │
@@ -365,7 +365,7 @@ Skill(skill="sf-ai-agentforce", args="Add escalation trigger to agent MyAgent - 
 
 | Scenario | Skill to Call | Command Example |
 |----------|---------------|-----------------|
-| Fix agent script | sf-ai-agentforce | `Skill(skill="sf-ai-agentforce", args="Fix topic 'billing' - add keywords")` |
+| Fix agent script | sf-ai-agentscript | `Skill(skill="sf-ai-agentscript", args="Fix topic 'billing' - add keywords")` |
 | Create test data | sf-data | `Skill(skill="sf-data", args="Create test Account with order data")` |
 | Fix failing Flow | sf-flow | `Skill(skill="sf-flow", args="Fix flow 'Get_Order_Status' - add validation")` |
 | Fix Apex error | sf-apex | `Skill(skill="sf-apex", args="Fix Apex class 'OrderController'")` |
@@ -393,7 +393,7 @@ Skill(skill="sf-ai-agentforce", args="Add escalation trigger to agent MyAgent - 
 │   Framework    (parse-agent-test-results.py)  (--result-format json)│
 │         │                │                                          │
 │         ▼                ▼                                          │
-│   Report Generator  +  Agentic Fix Loop (sf-ai-agentforce)         │
+│   Report Generator  +  Agentic Fix Loop (sf-ai-agentscript)        │
 │                                                                     │
 └────────────────────────────────────────────────────────────────────┘
 ```
@@ -495,7 +495,7 @@ FAILED TESTS
    Category: ACTION_INVOCATION_COUNT_MISMATCH
 
    🔧 Suggested Fix:
-   Skill(skill="sf-ai-agentforce", args="Fix action 'get_order_status' in Coffee_Shop_FAQ_Agent - add handling for multiple order numbers in single utterance")
+   Skill(skill="sf-ai-agentscript", args="Fix action 'get_order_status' in Coffee_Shop_FAQ_Agent - add handling for multiple order numbers in single utterance")
 
 ❌ test_edge_case_empty_input
    Utterance: ""
@@ -504,7 +504,7 @@ FAILED TESTS
    Category: EDGE_CASE_FAILURE
 
    🔧 Suggested Fix:
-   Skill(skill="sf-ai-agentforce", args="Add empty input handling to Coffee_Shop_FAQ_Agent system instructions")
+   Skill(skill="sf-ai-agentscript", args="Add empty input handling to Coffee_Shop_FAQ_Agent system instructions")
 ```
 
 #### 3. Claude Code Integration
@@ -568,7 +568,7 @@ Missing keywords: charged, charge, payment
 
 **Step 3: Generate Fix**
 ```bash
-Skill(skill="sf-ai-agentforce", args="Fix topic 'billing_inquiry' in agent MyAgent - add keywords: charged, charge, payment to description")
+Skill(skill="sf-ai-agentscript", args="Fix topic 'billing_inquiry' in agent MyAgent - add keywords: charged, charge, payment to description")
 ```
 
 **Step 4: Re-Publish Agent**

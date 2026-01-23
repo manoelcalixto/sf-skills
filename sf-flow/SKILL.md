@@ -367,7 +367,7 @@ screens → start → status → subflows → textTemplates → variables → wa
 
 | From Skill | To sf-flow | When |
 |------------|------------|------|
-| sf-ai-agentforce | → sf-flow | "Create Autolaunched Flow for agent action" |
+| sf-ai-agentscript | → sf-flow | "Create Autolaunched Flow for agent action" |
 | sf-apex | → sf-flow | "Create Flow wrapper for Apex logic" |
 | sf-integration | → sf-flow | "Create HTTP Callout Flow" |
 
@@ -454,13 +454,13 @@ Call Apex `@InvocableMethod` classes from Flow for complex business logic.
 | Apex @InvocableMethod Guide | [sf-apex/docs/flow-integration.md](../sf-apex/docs/flow-integration.md) |
 | Triangle Architecture | [docs/triangle-pattern.md](docs/triangle-pattern.md) |
 
-### ⚠️ Flows for sf-ai-agentforce
+### ⚠️ Flows for sf-ai-agentscript
 
-**When sf-ai-agentforce requests a Flow:**
-- sf-ai-agentforce will invoke sf-flow (this skill) to create Flows
+**When sf-ai-agentscript requests a Flow:**
+- sf-ai-agentscript will invoke sf-flow (this skill) to create Flows
 - sf-flow creates the validated Flow XML
 - sf-deploy handles deployment to org
-- Only THEN can sf-ai-agentforce use `flow://FlowName` targets
+- Only THEN can sf-ai-agentscript use `flow://FlowName` targets
 
 **Variable Name Matching**: When creating Flows for Agentforce agents:
 - Agent Script input/output names MUST match Flow variable API names exactly
@@ -472,7 +472,7 @@ Call Apex `@InvocableMethod` classes from Flow for complex business logic.
 | sf-flow → sf-metadata | "Describe Invoice__c" (verify fields before flow) |
 | sf-flow → sf-deploy | Deploy with validation |
 | sf-flow → sf-data | "Create 200 test Accounts" (test data after deploy) |
-| sf-ai-agentforce → sf-flow | "Create Autolaunched Flow for agent action" - **sf-flow is MANDATORY** |
+| sf-ai-agentscript → sf-flow | "Create Autolaunched Flow for agent action" - **sf-flow is MANDATORY** |
 
 ## Notes
 

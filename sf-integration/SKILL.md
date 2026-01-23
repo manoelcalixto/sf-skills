@@ -389,12 +389,12 @@ Score: XX/120 Rating
 | sf-apex | Custom callout service beyond templates |
 | sf-metadata | Query existing Named Credentials |
 | sf-deploy | Deploy to org |
-| sf-ai-agentforce | Agent action using External Service |
+| sf-ai-agentscript | Agent action using External Service |
 | sf-flow | HTTP Callout Flow for agent |
 
 ### Agentforce Integration Flow
 
-`sf-integration` → Named Credential + External Service → `sf-flow` → HTTP Callout wrapper → `sf-ai-agentforce` → Agent with `flow://` target → `sf-deploy` → Deploy all
+`sf-integration` → Named Credential + External Service → `sf-flow` → HTTP Callout wrapper → `sf-ai-agentscript` → Agent with `flow://` target → `sf-deploy` → Deploy all
 
 ---
 

@@ -322,7 +322,7 @@ See `docs/erd-conventions.md` for complete documentation of:
 |-------|-------------|---------|
 | sf-metadata | Get real object/field definitions for ERD | `Skill(skill="sf-metadata")` → "Describe Lead object" |
 | sf-connected-apps | Link OAuth flow to Connected App setup | "Generate JWT Bearer diagram for this Connected App" |
-| sf-ai-agentforce | Visualize Agentforce agent architecture | "Create flow diagram for FAQ Agent" |
+| sf-ai-agentscript | Visualize Agentforce agent architecture | "Create flow diagram for FAQ Agent" |
 | sf-flow | Document Flow logic as flowchart | "Diagram the approval process flow" |
 
 ## Dependencies

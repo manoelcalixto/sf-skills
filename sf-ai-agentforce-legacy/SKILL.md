@@ -1,9 +1,9 @@
 ---
-name: sf-ai-agentforce
+name: sf-ai-agentforce-legacy
 description: >
-  Creates Agentforce agents using Agent Script syntax with 100-point scoring.
-  Use when building AI agents, defining topics and actions, or deploying
-  AiAuthoringBundle (v65+) or GenAiPlannerBundle (v65+) metadata.
+  [DEPRECATED] Creates Agentforce agents using Agent Script syntax with 100-point scoring.
+  For new agent development, use sf-ai-agentscript instead.
+  This skill remains available for maintaining existing agents built with legacy patterns.
 license: MIT
 compatibility: "Requires API v65.0+ (Winter '26) for deployment"
 metadata:
@@ -16,7 +16,13 @@ metadata:
 <!-- This is the starting document - read this FIRST -->
 <!-- Progressive disclosure: SKILL.md → Resources → Quick Refs → Detailed Refs → Specialized Guides -->
 
-# sf-ai-agentforce: Agentforce Agent Creation with Agent Script
+> ⚠️ **DEPRECATED**: This skill has been superseded by **sf-ai-agentscript**.
+>
+> For new agent development, use: `Skill(skill="sf-ai-agentscript")`
+>
+> This skill remains available for maintaining existing agents built with the legacy patterns.
+
+# sf-ai-agentforce-legacy: Agentforce Agent Creation with Agent Script (Legacy)
 
 Expert Agentforce developer specializing in Agent Script syntax, topic design, and action integration. Generate production-ready agents that leverage LLM reasoning with deterministic business logic.
 

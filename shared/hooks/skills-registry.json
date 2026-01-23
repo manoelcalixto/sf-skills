@@ -46,7 +46,7 @@
       "contentTriggers": {
         "actionCalls.*apex": { "suggests": "sf-apex", "message": "Create @InvocableMethod Apex for complex logic" },
         "ComponentInstance|screens": { "suggests": "sf-lwc", "message": "Create LWC screen component for custom UI" },
-        "autolaunched|AutoLaunchedFlow": { "suggests": "sf-ai-agentforce", "message": "Use this Flow as an Agentforce action" }
+        "autolaunched|AutoLaunchedFlow": { "suggests": "sf-ai-agentscript", "message": "Use this Flow as an Agentforce action" }
       },
       "priority": "high",
       "description": "Flow Builder automation with validation",
@@ -62,7 +62,7 @@
         "commonly_with": [
           { "skill": "sf-apex", "trigger": "actionCalls.*apex", "message": "Create @InvocableMethod Apex for complex logic", "confidence": 2 },
           { "skill": "sf-lwc", "trigger": "ComponentInstance|screens", "message": "Create LWC screen component for custom UI", "confidence": 2 },
-          { "skill": "sf-ai-agentforce", "trigger": "autolaunched|AutoLaunchedFlow", "message": "Use this Flow as an Agentforce action", "confidence": 1 }
+          { "skill": "sf-ai-agentscript", "trigger": "autolaunched|AutoLaunchedFlow", "message": "Use this Flow as an Agentforce action", "confidence": 1 }
         ]
       }
     },
@@ -97,20 +97,18 @@
       }
     },
 
-    "sf-ai-agentforce": {
-      "keywords": ["agent", "agentforce", "copilot", "einstein copilot", "topic", "action", "agent script", "genai", "ai agent", "conversational", "bot", "agent definition", "agent channel"],
+    "sf-ai-agentforce-legacy": {
+      "keywords": ["legacy agent", "legacy agentforce", "maintain agent", "existing agent"],
       "intentPatterns": [
-        "create.*agent", "build.*agentforce", "configure.*copilot",
-        "agent.*topic", "add.*action", "einstein.*agent",
-        "conversational.*ai", "setup.*agent", "deploy.*agent"
+        "maintain.*agent", "update.*existing.*agent", "fix.*legacy.*agent"
       ],
       "filePatterns": ["\\.agent$", "\\.agentDefinition-meta\\.xml$", "GenAi.*\\.xml$"],
       "contentTriggers": {
         "flow://": { "suggests": "sf-flow", "message": "Create Flow for this action target" },
         "apex://": { "suggests": "sf-apex", "message": "Create Apex (wrapped in Flow) for this action" }
       },
-      "priority": "high",
-      "description": "Agentforce agent development with Agent Script DSL",
+      "priority": "low",
+      "description": "[DEPRECATED] Legacy Agentforce skill - use sf-ai-agentscript for new agents",
       "orchestration": {
         "prerequisites": [
           { "skill": "sf-flow", "condition": "always", "message": "Create and deploy Flows before agent uses flow:// targets", "confidence": 3 },
@@ -396,22 +394,22 @@
       ],
       "filePatterns": [".*-test-spec\\.yaml$", ".*-test-spec\\.yml$"],
       "contentTriggers": {
-        "subjectType: AGENT": { "suggests": "sf-ai-agentforce", "message": "Review agent definition for test alignment" },
-        "utterance:": { "suggests": "sf-ai-agentforce", "message": "Verify topic handles this utterance" }
+        "subjectType: AGENT": { "suggests": "sf-ai-agentscript", "message": "Review agent definition for test alignment" },
+        "utterance:": { "suggests": "sf-ai-agentscript", "message": "Verify topic handles this utterance" }
       },
       "priority": "low",
       "description": "Agentforce agent test automation",
       "orchestration": {
         "prerequisites": [
-          { "skill": "sf-ai-agentforce", "condition": "always", "message": "Agent must exist before testing", "confidence": 3 },
+          { "skill": "sf-ai-agentscript", "condition": "always", "message": "Agent must exist before testing", "confidence": 3 },
           { "skill": "sf-flow", "condition": "action_test", "message": "Flow actions must be deployed before testing", "confidence": 2 },
           { "skill": "sf-deploy", "condition": "always", "message": "Agent must be published before testing", "confidence": 3 }
         ],
         "next_steps": [
-          { "skill": "sf-ai-agentforce", "condition": "failure", "message": "Fix agent topic routing or action issues", "confidence": 3 }
+          { "skill": "sf-ai-agentscript", "condition": "failure", "message": "Fix agent topic routing or action issues", "confidence": 3 }
         ],
         "commonly_with": [
-          { "skill": "sf-ai-agentforce", "trigger": "always", "message": "Iterate on agent based on test results", "confidence": 3 },
+          { "skill": "sf-ai-agentscript", "trigger": "always", "message": "Iterate on agent based on test results", "confidence": 3 },
           { "skill": "sf-debug", "trigger": "failure", "message": "Analyze agent execution logs", "confidence": 2 }
         ]
       }
@@ -451,7 +449,7 @@
     "agentforce": {
       "description": "Agentforce agent development - prerequisites to testing",
       "trigger_phrases": ["build agent", "create agentforce", "agentforce agent", "copilot"],
-      "order": ["sf-metadata", "sf-apex", "sf-flow", "sf-deploy", "sf-ai-agentforce", "sf-deploy", "sf-ai-agentforce-testing"]
+      "order": ["sf-metadata", "sf-apex", "sf-flow", "sf-deploy", "sf-ai-agentscript", "sf-deploy", "sf-ai-agentforce-testing"]
     },
     "triangle": {
       "description": "Flow-LWC-Apex integration - the classic triangle pattern",

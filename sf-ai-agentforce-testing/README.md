@@ -92,7 +92,8 @@ sf agent preview --api-name AgentName --use-live-actions --client-app AppName --
 
 | Related Skill | When to Use |
 |---------------|-------------|
-| sf-ai-agentforce | Create/fix agent scripts |
+| sf-ai-agentscript | Create/fix agent scripts (recommended) |
+| sf-ai-agentforce-legacy | Maintain existing legacy agents |
 | sf-connected-apps | OAuth setup for live preview |
 | sf-data | Generate test data for actions |
 | sf-flow | Fix failing Flow actions |
@@ -103,7 +104,7 @@ sf agent preview --api-name AgentName --use-live-actions --client-app AppName --
 When enabled, the skill will:
 1. Run agent tests and capture failures
 2. Analyze failure types (topic routing, action invocation, guardrails)
-3. Call sf-ai-agentforce to generate fixes
+3. Call sf-ai-agentscript to generate fixes
 4. Re-validate and re-publish agent
 5. Re-run tests (max 3 iterations)
 6. Report final status

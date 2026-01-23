@@ -89,7 +89,7 @@ When deploying agents with external API integrations:
 │  5. sf-deploy         ◀── FIRST DEPLOYMENT                                 │
 │     └── Deploy: Objects, Fields, Permission Sets, Apex, Flows              │
 │                                                                             │
-│  6. sf-ai-agentforce  → Create agent with flow:// target                   │
+│  6. sf-ai-agentscript → Create agent with flow:// target                   │
 │                                                                             │
 │  7. sf-deploy         ◀── SECOND DEPLOYMENT (Agent Publish)                │
 │     └── sf agent publish --api-name [AgentName]                            │
@@ -140,7 +140,7 @@ Before deploying, verify these prerequisites:
 
 ---
 
-## sf-ai-agentforce Integration
+## sf-ai-agentscript Integration
 
 For agent deployments, use the specialized commands:
 
@@ -167,7 +167,7 @@ sf agent activate --api-name AgentName --target-org alias
 | sf-metadata | → sf-deploy | "Deploy objects to [org]" |
 | sf-flow | → sf-deploy | "Deploy flow with --dry-run" |
 | sf-apex | → sf-deploy | "Deploy classes with RunLocalTests" |
-| sf-ai-agentforce | → sf-deploy | "Deploy and publish agent" |
+| sf-ai-agentscript | → sf-deploy | "Deploy and publish agent" |
 
 ---
 

@@ -310,7 +310,7 @@ See [examples/deployment-workflows.md](examples/deployment-workflows.md) for scr
 | `SObject type 'Object__c' not supported` | Custom Object | Deploy object via sf-metadata first |
 | `Queue 'QueueName' not found` | Queue Metadata | Deploy queue via sf-metadata first |
 
-### sf-ai-agentforce Integration (Agent DevOps)
+### sf-ai-agentscript Integration (Agent DevOps)
 
 **Complete DevOps guide**: See `docs/agent-deployment-guide.md` for comprehensive agent deployment documentation.
 

@@ -11,7 +11,8 @@ This guide covers the complete deployment lifecycle for Agentforce agents, inclu
 - Full deployment workflows
 
 **Related Skills:**
-- `sf-ai-agentforce` - Agent Script authoring and publishing
+- `sf-ai-agentscript` - Agent Script authoring and publishing (recommended for new agents)
+- `sf-ai-agentforce-legacy` - Legacy agent patterns (deprecated)
 - `sf-deploy` - This skill - deployment orchestration
 
 ---
@@ -210,7 +211,7 @@ sf agent preview --api-name Customer_Support_Agent --use-live-actions --client-a
 sf agent preview --api-name Customer_Support_Agent --output-dir ./preview-logs --apex-debug --target-org myorg
 ```
 
-**See `sf-ai-agentforce/docs/agent-preview-guide.md`** for connected app setup.
+**See `sf-ai-agentscript/docs/agent-preview-guide.md`** for connected app setup (or `sf-ai-agentforce-legacy` for existing agents).
 
 ---
 
@@ -348,7 +349,7 @@ Usage:
    ↓
 4. Named Credentials (sf-integration, if external APIs)
    ↓
-5. Agent Metadata (sf-ai-agentforce publish)
+5. Agent Metadata (sf-ai-agentscript publish)
    ↓
 6. Agent Activation
 ```
@@ -428,7 +429,7 @@ sf agent activate --api-name My_Agent --target-org myorg
 
 | From Skill | To Skill | Purpose |
 |------------|----------|---------|
-| sf-ai-agentforce | sf-deploy | Publish and activate agents |
+| sf-ai-agentscript | sf-deploy | Publish and activate agents |
 | sf-apex | sf-deploy | Deploy Apex before agent |
 | sf-flow | sf-deploy | Deploy Flows before agent |
 | sf-integration | sf-deploy | Deploy Named Credentials for external APIs |
@@ -438,7 +439,7 @@ sf agent activate --api-name My_Agent --target-org myorg
 ```bash
 # 1. sf-apex creates InvocableMethod class
 # 2. sf-flow creates wrapper Flow
-# 3. sf-ai-agentforce creates agent with flow:// action
+# 3. sf-ai-agentscript creates agent with flow:// action
 # 4. sf-deploy orchestrates deployment in correct order
 ```
 
@@ -479,6 +480,6 @@ sf agent activate --api-name My_Agent --target-org myorg
 
 ## Related Documentation
 
-- [Agent CLI Reference](../../sf-ai-agentforce/docs/agent-cli-reference.md)
-- [Agent Preview Guide](../../sf-ai-agentforce/docs/agent-preview-guide.md)
-- [Agent Script Syntax](../../sf-ai-agentforce/docs/agent-script-syntax.md)
+- [Agent CLI Reference](../../sf-ai-agentforce-legacy/docs/agent-cli-reference.md)
+- [Agent Preview Guide](../../sf-ai-agentforce-legacy/docs/agent-preview-guide.md)
+- [Agent Script Syntax](../../sf-ai-agentforce-legacy/docs/agent-script-syntax.md)

@@ -18,7 +18,7 @@ metadata:
 
 # sf-ai-agentforce-testing: Agentforce Test Execution & Coverage Analysis
 
-Expert testing engineer specializing in Agentforce agent testing, topic/action coverage analysis, and agentic fix loops. Execute agent tests, analyze failures, and automatically fix issues via sf-ai-agentforce.
+Expert testing engineer specializing in Agentforce agent testing, topic/action coverage analysis, and agentic fix loops. Execute agent tests, analyze failures, and automatically fix issues via sf-ai-agentscript (or sf-ai-agentforce-legacy for existing agents).
 
 ## Core Responsibilities
 
@@ -51,7 +51,7 @@ Expert testing engineer specializing in Agentforce agent testing, topic/action c
 
 ## ⚠️ CRITICAL: Orchestration Order
 
-**sf-metadata → sf-apex → sf-flow → sf-deploy → sf-ai-agentforce → sf-deploy → sf-ai-agentforce-testing** (you are here)
+**sf-metadata → sf-apex → sf-flow → sf-deploy → sf-ai-agentscript → sf-deploy → sf-ai-agentforce-testing** (you are here)
 
 **Why testing is LAST:**
 1. Agent must be **published** before running automated tests
@@ -60,7 +60,7 @@ Expert testing engineer specializing in Agentforce agent testing, topic/action c
 4. Test data (via sf-data) should exist before testing actions
 
 **⚠️ MANDATORY Delegation:**
-- **Fixes**: ALWAYS use `Skill(skill="sf-ai-agentforce")` for agent script fixes
+- **Fixes**: ALWAYS use `Skill(skill="sf-ai-agentscript")` for agent script fixes (or `sf-ai-agentforce-legacy` for existing legacy agents)
 - **Test Data**: Use `Skill(skill="sf-data")` for action test data
 - **OAuth Setup**: Use `Skill(skill="sf-connected-apps")` for live preview
 
@@ -216,7 +216,7 @@ Guardrails Tested:   3/3 (100%) ✅
 
 ### Phase 5: Agentic Fix Loop
 
-**When tests fail, automatically fix via sf-ai-agentforce:**
+**When tests fail, automatically fix via sf-ai-agentscript:**
 
 | Error Category | Root Cause | Auto-Fix Strategy |
 |----------------|------------|-------------------|
@@ -228,7 +228,7 @@ Guardrails Tested:   3/3 (100%) ✅
 
 **Auto-Fix Command Example**:
 ```bash
-Skill(skill="sf-ai-agentforce", args="Fix agent [AgentName] - Error: [category] - [details]")
+Skill(skill="sf-ai-agentscript", args="Fix agent [AgentName] - Error: [category] - [details]")
 ```
 
 **See [Agentic Fix Loops Guide](resources/agentic-fix-loops.md) for:**
@@ -362,7 +362,7 @@ testCases:
 
 | Scenario | Skill to Call | Command |
 |----------|---------------|---------|
-| Fix agent script | sf-ai-agentforce | `Skill(skill="sf-ai-agentforce", args="Fix...")` |
+| Fix agent script | sf-ai-agentscript | `Skill(skill="sf-ai-agentscript", args="Fix...")` |
 | Create test data | sf-data | `Skill(skill="sf-data", args="Create...")` |
 | Fix failing Flow | sf-flow | `Skill(skill="sf-flow", args="Fix...")` |
 | Setup OAuth | sf-connected-apps | `Skill(skill="sf-connected-apps", args="Create...")` |
@@ -506,7 +506,7 @@ CLAUDE CODE:
 1. bash hooks/scripts/test-fix-loop.sh Test_Agentforce_v1 AgentforceTesting
 2. If exit code 1 (FIX_NEEDED):
    - Parse failure details from output
-   - Invoke: Skill(skill="sf-ai-agentforce", args="Fix topic X: add keyword Y")
+   - Invoke: Skill(skill="sf-ai-agentscript", args="Fix topic X: add keyword Y")
    - Re-run: CURRENT_ATTEMPT=2 bash hooks/scripts/test-fix-loop.sh ...
 3. Repeat until exit code 0 (success) or 2 (max retries)
 ```
@@ -522,7 +522,7 @@ For fully automated loops without user intervention:
 
 Claude Code will autonomously:
 - Execute test-fix cycles
-- Apply fixes via sf-ai-agentforce skill
+- Apply fixes via sf-ai-agentscript skill
 - Track attempts and escalate when needed
 - Report final status
 

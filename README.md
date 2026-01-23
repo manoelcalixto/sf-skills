@@ -266,7 +266,7 @@ python tools/installer.py --cli agentforce-vibes --all
 | 🔐 | **[sf-permissions](sf-permissions/)** | Permission Set analysis, hierarchy viewer, "Who has X?" | 📦 Foundation | — | 🔬 Alpha |
 | 🔐 | **[sf-connected-apps](sf-connected-apps/)** | OAuth apps & ECAs | 🔌 Integration | 120 | 🔬 Alpha |
 | 🔗 | **[sf-integration](sf-integration/)** | Callouts, Events, CDC | 🔌 Integration | 120 | 🔬 Alpha |
-| 🤖 | **[sf-ai-agentforce](sf-ai-agentforce/)** | Agent Script, Topics, Actions, TDD validation (API v65+) | 🤖 AI & Automation | 150 | 🔬 Alpha |
+| ⚠️ | **[sf-ai-agentforce-legacy](sf-ai-agentforce-legacy/)** | Legacy agent patterns (use sf-ai-agentscript) | 🤖 AI & Automation | 150 | ⚠️ Deprecated |
 | 🧪 | **[sf-ai-agentforce-testing](sf-ai-agentforce-testing/)** | Agent test specs, agentic fix loops | 🤖 AI & Automation | 100 | 🔬 Alpha |
 | 📝 | **[sf-ai-agentscript](sf-ai-agentscript/)** | Agent Script DSL, FSM patterns, 100-pt scoring (API v65+) | 🤖 AI & Automation | 100 | 🔬 Alpha |
 | 🚀 | **[sf-deploy](sf-deploy/)** | CI/CD automation (sf CLI v2) | 🚀 DevOps | — | 🔬 Alpha |
@@ -701,7 +701,7 @@ sf-industry-{name}        # Industries (healthcare, finserv)
 ### 🤖 AI & Automation
 | | Skill | Description | Status |
 |--|-------|-------------|--------|
-| 🤖 | `sf-ai-agentforce` | Agent Script, Topics, Actions (API v65+) | ✅ Live |
+| ⚠️ | `sf-ai-agentforce-legacy` | Legacy agent patterns (deprecated) | ⚠️ Deprecated |
 | 🧪 | `sf-ai-agentforce-testing` | Agent test specs, agentic fix loops | ✅ Live |
 | 📝 | `sf-ai-agentscript` | Agent Script DSL, FSM patterns, 100-pt scoring | ✅ Live |
 | 🧠 | `sf-ai-copilot` | Einstein Copilot, Prompts | 📋 Planned |

@@ -54,7 +54,7 @@ User Edits File → Post-Tool Hook → Claude sees suggestions → Claude decide
 
 3. **Chain Detection** - Recognizes workflow patterns:
    - `full_feature`: sf-metadata → sf-apex → sf-flow → sf-lwc → sf-deploy → sf-testing
-   - `agentforce`: sf-metadata → sf-apex → sf-flow → sf-deploy → sf-ai-agentforce
+   - `agentforce`: sf-metadata → sf-apex → sf-flow → sf-deploy → sf-ai-agentscript
    - `integration`: sf-connected-apps → sf-integration → sf-flow → sf-deploy
    - `troubleshooting`: sf-testing → sf-debug → sf-apex → sf-deploy → sf-testing
 
@@ -90,7 +90,7 @@ Wired globally in `.claude/hooks.json`:
 
 📋 DETECTED WORKFLOW: agentforce
    Agentforce agent development - prerequisites to testing
-   Order: sf-metadata → sf-apex → sf-flow → sf-deploy → sf-ai-agentforce
+   Order: sf-metadata → sf-apex → sf-flow → sf-deploy → sf-ai-agentscript
    ⭐ START WITH: /sf-metadata
 
 ⭐⭐⭐ /sf-apex - REQUIRED

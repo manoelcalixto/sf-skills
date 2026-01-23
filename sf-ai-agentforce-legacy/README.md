@@ -1,6 +1,12 @@
-# sf-ai-agentforce
+# sf-ai-agentforce-legacy
 
-🤖 **Agentforce Agent Creation Skill for Claude Code**
+> ⚠️ **DEPRECATED**: This skill has been superseded by **sf-ai-agentscript**.
+>
+> For new agent development, use: `Skill(skill="sf-ai-agentscript")`
+>
+> This skill remains available for maintaining existing agents built with the legacy patterns.
+
+🤖 **Agentforce Agent Creation Skill for Claude Code (Legacy)**
 
 Create Agentforce agents using Agent Script syntax with 100-point validation scoring.
 

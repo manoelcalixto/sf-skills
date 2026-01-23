@@ -120,7 +120,7 @@ sequenceDiagram
 |-------|-------------|
 | sf-metadata | Auto-discover objects/fields for ERD |
 | sf-connected-apps | Link OAuth flows to app setup |
-| sf-ai-agentforce | Visualize agent architecture |
+| sf-ai-agentscript | Visualize agent architecture |
 
 ## Documentation
 

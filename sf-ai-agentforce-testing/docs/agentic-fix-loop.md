@@ -9,7 +9,7 @@ Automated workflow for detecting, diagnosing, and fixing agent test failures.
 The agentic fix loop automatically:
 1. Detects test failures
 2. Categorizes the root cause
-3. Generates fixes via sf-ai-agentforce
+3. Generates fixes via sf-ai-agentscript (or sf-ai-agentforce-legacy for existing agents)
 4. Re-tests until passing (max 3 iterations)
 
 ```
@@ -28,7 +28,7 @@ The agentic fix loop automatically:
 │       │          CATEGORIZE FAILURES                             │
 │       │                   │                                      │
 │       │                   ▼                                      │
-│       │          GENERATE FIX (sf-ai-agentforce)                 │
+│       │          GENERATE FIX (sf-ai-agentscript)                 │
 │       │                   │                                      │
 │       │                   ▼                                      │
 │       │          APPLY FIX → VALIDATE → PUBLISH                  │
@@ -69,7 +69,7 @@ The agentic fix loop automatically:
 
 **Auto-Fix Strategy:**
 ```
-Skill(skill="sf-ai-agentforce", args="Fix topic order_lookup - add keywords: track, package, shipment, delivery to description")
+Skill(skill="sf-ai-agentscript", args="Fix topic order_lookup - add keywords: track, package, shipment, delivery to description")
 ```
 
 **Manual Fix:**
@@ -104,7 +104,7 @@ topic order_lookup:
 
 **Auto-Fix Strategy:**
 ```
-Skill(skill="sf-ai-agentforce", args="Fix action create_support_case - improve description to trigger on: broken, problem, issue, help with product")
+Skill(skill="sf-ai-agentscript", args="Fix action create_support_case - improve description to trigger on: broken, problem, issue, help with product")
 ```
 
 **Manual Fix:**
@@ -139,7 +139,7 @@ actions:
 
 **Auto-Fix Strategy:**
 ```
-Skill(skill="sf-ai-agentforce", args="Differentiate actions - get_order_status for status/tracking queries, create_support_case for problems/issues only")
+Skill(skill="sf-ai-agentscript", args="Differentiate actions - get_order_status for status/tracking queries, create_support_case for problems/issues only")
 ```
 
 **Manual Fix:**
@@ -219,7 +219,7 @@ actions:
 
 **Auto-Fix Strategy:**
 ```
-Skill(skill="sf-ai-agentforce", args="Add guardrail in system: instructions - explicitly block: hacking, fraud, illegal activities, security bypass")
+Skill(skill="sf-ai-agentscript", args="Add guardrail in system: instructions - explicitly block: hacking, fraud, illegal activities, security bypass")
 ```
 
 **Manual Fix:**
@@ -257,7 +257,7 @@ start_agent:
 
 **Auto-Fix Strategy:**
 ```
-Skill(skill="sf-ai-agentforce", args="Add escalation action to topic support_case - trigger on: manager, supervisor, human, escalate")
+Skill(skill="sf-ai-agentscript", args="Add escalation action to topic support_case - trigger on: manager, supervisor, human, escalate")
 ```
 
 **Manual Fix:**
@@ -297,7 +297,7 @@ topic support_case:
 
 **Auto-Fix Strategy:**
 ```
-Skill(skill="sf-ai-agentforce", args="Improve reasoning instructions - when providing order status, ALWAYS include: order number, current status, expected delivery date")
+Skill(skill="sf-ai-agentscript", args="Improve reasoning instructions - when providing order status, ALWAYS include: order number, current status, expected delivery date")
 ```
 
 **Manual Fix:**
@@ -347,7 +347,7 @@ Map failure to category:
 ### Step 4: Generate Fix
 
 ```
-Skill(skill="sf-ai-agentforce", args="Fix agent [AgentName] - Category: [CATEGORY] - Details: [failure details]")
+Skill(skill="sf-ai-agentscript", args="Fix agent [AgentName] - Category: [CATEGORY] - Details: [failure details]")
 ```
 
 ### Step 5: Validate and Publish
@@ -425,7 +425,7 @@ If still failing after 3 attempts, escalate to human review.
 
 | Failure Type | Delegate To |
 |--------------|-------------|
-| Agent script issues | sf-ai-agentforce |
+| Agent script issues | sf-ai-agentscript (or sf-ai-agentforce-legacy for existing agents) |
 | Flow execution errors | sf-flow |
 | Apex exceptions | sf-apex |
 | Debug log analysis | sf-debug |
@@ -454,7 +454,7 @@ FIX STRATEGY:
 Add 'track', 'package', 'shipment' to order_lookup description
 
 EXECUTING FIX:
-> Skill(skill="sf-ai-agentforce", args="Fix topic order_lookup...")
+> Skill(skill="sf-ai-agentscript", args="Fix topic order_lookup...")
 > sf agent validate authoring-bundle --api-name Customer_Support_Agent
 > sf agent publish authoring-bundle --api-name Customer_Support_Agent
 

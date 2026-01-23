@@ -35,7 +35,7 @@ sf agent
 ├── preview         Interactive agent testing (works without Agent Testing Center)
 ├── generate
 │   └── test-spec   Generate test specification YAML (interactive only - no --api-name flag)
-└── (other agent commands in sf-ai-agentforce)
+└── (other agent commands in sf-ai-agentscript)
 ```
 
 **Note:** `sf agent preview` works WITHOUT Agent Testing Center - useful for manual testing when automated tests are unavailable.
@@ -572,7 +572,7 @@ sf data query --query "SELECT Name FROM Account LIMIT 5" --target-org dev
 
 | Command | Skill | Purpose |
 |---------|-------|---------|
-| `sf agent publish authoring-bundle` | sf-ai-agentforce | Publish agent before testing |
-| `sf agent validate authoring-bundle` | sf-ai-agentforce | Validate agent syntax |
-| `sf agent activate` | sf-ai-agentforce | Activate for preview |
+| `sf agent publish authoring-bundle` | sf-ai-agentscript | Publish agent before testing |
+| `sf agent validate authoring-bundle` | sf-ai-agentscript | Validate agent syntax |
+| `sf agent activate` | sf-ai-agentscript | Activate for preview |
 | `sf org login web` | - | OAuth for live preview |

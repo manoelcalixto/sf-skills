@@ -284,6 +284,51 @@ Add the marketplace to Claude Code:
 /plugin marketplace add Jaganpro/sf-skills
 ```
 
+#### Enable Hooks (Recommended)
+
+For full functionality including automatic validation, guardrails, and smart suggestions, install the hooks:
+
+```bash
+# Navigate to your sf-skills installation
+cd ~/.claude/plugins/marketplaces/sf-skills
+
+# Install hooks (adds to ~/.claude/settings.json)
+python3 scripts/install-hooks.py
+
+# Verify installation
+python3 scripts/install-hooks.py --status
+
+# Restart Claude Code to activate hooks
+```
+
+**What hooks provide:**
+
+| Hook | Function |
+|------|----------|
+| **PreToolUse** | Guardrails - blocks dangerous DML, auto-fixes unbounded SOQL |
+| **PostToolUse** | Validates Apex/Flow/LWC on save, suggests related skills |
+| **UserPromptSubmit** | Auto-suggests skills based on your prompt |
+| **PermissionRequest** | Auto-approves safe operations (read queries, scratch deploys) |
+| **SubagentStop** | Tracks workflow chains, suggests next steps |
+
+<details>
+<summary>Hook Installation Options</summary>
+
+```bash
+# Preview changes without applying
+python3 scripts/install-hooks.py --dry-run
+
+# Remove hooks
+python3 scripts/install-hooks.py --uninstall
+
+# Shell wrapper alternative
+./scripts/install-hooks.sh          # Install
+./scripts/install-hooks.sh status   # Check status
+./scripts/install-hooks.sh uninstall # Remove
+```
+
+</details>
+
 ### Other CLIs (OpenCode, Codex, Gemini, Droid, Cursor, Agentforce Vibes)
 
 Use the installer script to transform and install skills for other agentic CLIs:

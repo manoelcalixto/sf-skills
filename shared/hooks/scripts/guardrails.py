@@ -186,6 +186,24 @@ def load_registry() -> dict:
     return {}
 
 
+def is_output_only_command(command: str) -> bool:
+    """
+    Check if command is just outputting/printing text (not executing DML).
+
+    These commands should NOT be blocked even if they contain DML-like patterns,
+    because they're just displaying text, not actually executing operations.
+    """
+    # Commands that just output text
+    output_patterns = [
+        r'^\s*echo\s+',           # echo "DELETE FROM..."
+        r'^\s*printf\s+',         # printf "DELETE FROM..."
+        r'^\s*cat\s*<<',          # cat <<EOF / heredoc
+        r'^\s*print\s+',          # print (some shells)
+        r"^\s*cat\s+['\"]",       # cat "file" (reading, not executing)
+    ]
+    return any(re.search(p, command, re.IGNORECASE) for p in output_patterns)
+
+
 def is_sf_context(command: str) -> bool:
     """Check if command is Salesforce-related."""
     sf_indicators = [
@@ -332,6 +350,12 @@ def main():
 
     # Check if this is SF-related (skip guardrails for non-SF commands)
     if not is_sf_context(command):
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
+        sys.exit(0)
+
+    # Skip guardrails for output-only commands (echo, printf, etc.)
+    # These just print text, they don't actually execute DML
+    if is_output_only_command(command):
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
         sys.exit(0)
 

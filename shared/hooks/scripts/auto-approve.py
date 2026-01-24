@@ -159,7 +159,9 @@ DANGEROUS_OPERATIONS = [
     (r"sf\s+project\s+deploy.*--(?:purge-on-delete|destructive)", "Destructive deployment"),
 
     # Production deploys without safety flags
-    (r"sf\s+project\s+deploy\s+start(?!.*--(?:dry-run|check-only))", "Production deploy without validation"),
+    # NOTE: Only matches if --target-org contains prod/production AND no dry-run
+    # Scratch/sandbox/dev orgs are handled separately and auto-approved
+    (r"sf\s+project\s+deploy\s+start(?=.*--target-org\s+(?:prod|production))(?!.*--(?:dry-run|check-only))", "Production deploy without validation"),
 
     # Agent publish (production)
     (r"sf\s+agent\s+publish", "Publishing agent to production"),

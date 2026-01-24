@@ -53,8 +53,46 @@ FILE_PATTERN_SCORE = 2  # Score for file pattern match
 SCRIPT_DIR = Path(__file__).parent
 REGISTRY_FILE = SCRIPT_DIR / "skills-registry.json"
 
+# FIX 3: State file for tracking active skill
+ACTIVE_SKILL_FILE = Path("/tmp/sf-skills-active-skill.json")
+
 # Cache for registry
 _registry_cache: Optional[dict] = None
+
+
+def save_active_skill(skill_name: str):
+    """Save the currently active skill to state file (FIX 3)."""
+    try:
+        from datetime import datetime
+        state = {
+            "active_skill": skill_name,
+            "timestamp": datetime.now().isoformat()
+        }
+        with open(ACTIVE_SKILL_FILE, 'w') as f:
+            json.dump(state, f, indent=2)
+    except IOError:
+        pass  # Silently fail - state tracking is optional
+
+
+def detect_skill_invocation(prompt: str, registry: dict) -> Optional[str]:
+    """Detect if the prompt is a direct skill invocation (/skill-name)."""
+    prompt = prompt.strip()
+
+    # Match /skill-name pattern
+    match = re.match(r'^/([a-z][a-z0-9-]*)', prompt, re.IGNORECASE)
+    if match:
+        skill_name = match.group(1).lower()
+
+        # Check if it's a valid skill in our registry
+        skills = registry.get("skills", {})
+        if skill_name in skills:
+            return skill_name
+
+        # Also check for sf- prefix variants
+        if skill_name.startswith("sf-") and skill_name in skills:
+            return skill_name
+
+    return None
 
 
 def load_registry() -> dict:
@@ -267,13 +305,17 @@ def main():
     if len(prompt.strip()) < 5:
         sys.exit(0)
 
-    # Skip if this looks like a slash command already
-    if prompt.strip().startswith("/"):
-        sys.exit(0)
-
     # Load skills registry
     registry = load_registry()
     if not registry.get("skills"):
+        sys.exit(0)
+
+    # FIX 3: Track skill invocation if this is a slash command
+    if prompt.strip().startswith("/"):
+        invoked_skill = detect_skill_invocation(prompt, registry)
+        if invoked_skill:
+            save_active_skill(invoked_skill)
+        # Exit - don't suggest skills when user already invoked one
         sys.exit(0)
 
     # Detect if prompt matches a workflow chain

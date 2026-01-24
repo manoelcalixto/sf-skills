@@ -38,9 +38,23 @@ SCRIPT_DIR = Path(__file__).parent.parent
 REGISTRY_FILE = SCRIPT_DIR / "skills-registry.json"
 CONTEXT_FILE = Path("/tmp/sf-skills-context.json")
 CHAIN_STATE_FILE = Path("/tmp/sf-skills-chain-state.json")
+# FIX 3: Active skill state file (written by skill-activation-prompt.py)
+ACTIVE_SKILL_FILE = Path("/tmp/sf-skills-active-skill.json")
 
 # Cache
 _registry_cache: Optional[dict] = None
+
+
+def load_active_skill() -> Optional[str]:
+    """Load the currently active skill from state file (FIX 3)."""
+    try:
+        if ACTIVE_SKILL_FILE.exists():
+            with open(ACTIVE_SKILL_FILE, 'r') as f:
+                state = json.load(f)
+                return state.get("active_skill")
+    except (json.JSONDecodeError, IOError):
+        pass
+    return None
 
 
 def load_registry() -> dict:
@@ -261,9 +275,18 @@ def main():
     chain_state = load_chain_state()
     context = load_context()
 
-    # If no skill provided, try to detect from context
+    # If no skill provided, try to detect from state files (FIX 3)
     if not current_skill:
+        # Priority 1: Active skill file (written by skill-activation-prompt.py)
+        current_skill = load_active_skill()
+
+    if not current_skill:
+        # Priority 2: Context file (written by suggest-related-skills.py)
         current_skill = context.get("last_skill")
+
+    if not current_skill:
+        # Priority 3: Chain state file (from previous chain-validator run)
+        current_skill = chain_state.get("last_skill")
 
     if not current_skill:
         # Can't validate without knowing the skill

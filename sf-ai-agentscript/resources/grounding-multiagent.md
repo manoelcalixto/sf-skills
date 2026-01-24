@@ -88,7 +88,7 @@ Agent Script uses a safe subset of Python for expressions:
 **Allowed Operations:**
 | Category | Operators |
 |----------|-----------|
-| **Comparison** | `==`, `!=`, `>`, `<`, `>=`, `<=` |
+| **Comparison** | `==`, `<>` (not-equal), `>`, `<`, `>=`, `<=` |
 | **Logical** | `and`, `or`, `not` |
 | **String** | `contains`, `startswith`, `endswith` |
 

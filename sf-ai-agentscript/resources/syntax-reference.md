@@ -232,7 +232,7 @@ reasoning:
 | Else clause | `else:` | Alternative path |
 | Inline action | `run @actions.x` | Execute action during resolution |
 | Set variable | `set @var = @outputs.y` | Capture action output |
-| Template injection | `{!@variables.x}` | Insert variable value into text |
+| Template injection | Curly-bang syntax: {!@variables.x} | Insert variable value into text |
 | Deterministic transition | `transition to @topic.x` | Change topic without LLM |
 
 ---

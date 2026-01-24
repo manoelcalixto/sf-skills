@@ -27,7 +27,7 @@ done
 |------------|---------------|------------------|
 | `Val_Minimal_Syntax` | Basic config, system, start_agent, topic blocks | Core Syntax |
 | `Val_Arithmetic_Ops` | Addition (+) and subtraction (-) operators | Expression Operators |
-| `Val_Comparison_Ops` | >, <, >=, <=, ==, != comparisons | Expression Operators |
+| `Val_Comparison_Ops` | Comparison operators (>, <, >=, <=, ==, not-equal) | Expression Operators |
 | `Val_Variable_Scopes` | @state.*, @context.*, @variables.* | Variable Namespaces |
 | `Val_Topic_Transitions` | @utils.transition (permanent handoff) | Topic Transitions |
 | `Val_Latch_Pattern` | Boolean flag for topic re-entry | Production Gotchas |

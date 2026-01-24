@@ -39,7 +39,7 @@ Each validation agent tests specific patterns documented in SKILL.md:
    - Note: `*`, `/`, `%` are NOT supported
 
 3. **Val_Comparison_Ops** → Expression Operators
-   - Equality: `==`, `!=`
+   - Equality: `==`, not-equal (`<>` or not-equal-operator)
    - Comparisons: `<`, `<=`, `>`, `>=`
    - Logical: `and`, `or`, `not`
 

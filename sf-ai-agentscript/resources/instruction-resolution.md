@@ -26,7 +26,7 @@ Agent Script instructions resolve in a predictable order. Understanding this flo
 |------|-------------|
 | **Conditions evaluate** | `if/else` logic evaluates and prunes paths |
 | **Actions execute** | `run @actions.X` executes immediately |
-| **Templates resolve** | `{!@variables.x}` resolves to actual values |
+| **Templates resolve** | Template syntax resolves to actual values |
 | **Transitions short-circuit** | `transition to` can exit the topic immediately |
 
 ### Example
@@ -282,7 +282,7 @@ actions:
 | `if @variables.x:` | Conditional - resolves BEFORE LLM |
 | `run @actions.x` | Execute action during resolution |
 | `set @var = @outputs.y` | Capture action output |
-| `{!@variables.x}` | Template injection into LLM text |
+| Curly-bang: {!@variables.x} | Template injection into LLM text |
 | `available when` | Control action visibility to LLM |
 | `transition to @topic.x` | Deterministic topic change |
 

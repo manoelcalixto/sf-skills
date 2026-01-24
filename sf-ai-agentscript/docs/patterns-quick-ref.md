@@ -279,7 +279,7 @@ is_verified: mutable boolean = True   # CORRECT
 | `if @variables.x:` | Conditional (pre-LLM) |
 | `run @actions.x` | Execute during resolution |
 | `set @var = @outputs.y` | Capture action output |
-| `{!@variables.x}` | Template injection |
+| Curly-bang: {!@variables.x} | Template injection |
 | `available when` | Control action visibility |
 | `transition to @topic.x` | Deterministic topic change |
 | `@utils.transition to` | LLM-chosen topic change |
@@ -296,4 +296,4 @@ is_verified: mutable boolean = True   # CORRECT
 | 3 | Variable Checks | `if @variables.churn_risk >= 80:` |
 | 4 | Inline Actions | `run @actions.load_customer` |
 | 5 | Utility Actions | `@utils.transition`, `@utils.escalate` |
-| 6 | Variable Injection | `{!@variables.customer_name}` |
+| 6 | Variable Injection | Curly-bang: {!@variables.customer_name} |

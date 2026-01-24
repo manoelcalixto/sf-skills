@@ -535,7 +535,7 @@ topic:         # 8. Required: Conversation topics (one or more)
 |---------|---------|---------|
 | `instructions: \|` | Literal multi-line (no expressions) | `instructions: \| Help the user.` |
 | `instructions: ->` | Procedural (enables expressions) | `instructions: -> if @variables.x:` |
-| `\| text` | Literal text for LLM prompt | `\| Hello {!@variables.name}!` |
+| `\| text` | Literal text for LLM prompt | `\| Hello` + variable injection |
 | `if @variables.x:` | Conditional (resolves before LLM) | `if @variables.verified == True:` |
 | `run @actions.x` | Execute action during resolution | `run @actions.load_customer` |
 | `set @var = @outputs.y` | Capture action output | `set @variables.risk = @outputs.score` |
@@ -566,7 +566,7 @@ checkout: @utils.transition to @topic.checkout
 ### Expression Operators (Safe Subset)
 | Category | Operators | NOT Supported |
 |----------|-----------|---------------|
-| Comparison | `==`, `!=`, `<`, `<=`, `>`, `>=`, `is`, `is not` | |
+| Comparison | `==`, `<>` (not-equal), `<`, `<=`, `>`, `>=`, `is`, `is not` | |
 | Logical | `and`, `or`, `not` | |
 | Arithmetic | `+`, `-` | ❌ `*`, `/`, `%` |
 | Access | `.` (property), `[]` (index) | |
@@ -728,7 +728,7 @@ sf agent validate authoring-bundle --source-dir ./force-app/main/default/aiAutho
 1. **Create bundle directory**: `force-app/main/default/aiAuthoringBundles/AgentName/`
 2. **Add files**:
    - `AgentName.agent` - Your Agent Script
-   - `AgentName.bundle-meta.xml` - Metadata XML (NOT `.aiAuthoringBundle-meta.xml`!)
+   - `AgentName.bundle-meta.xml` - Metadata XML (NOT `.aiAuthoringBundle-meta.xml`)
 3. **Publish**: `sf agent publish authoring-bundle --source-dir ./force-app/main/default/aiAuthoringBundles/AgentName`
 4. **Monitor** - Use trace debugging for production issues
 

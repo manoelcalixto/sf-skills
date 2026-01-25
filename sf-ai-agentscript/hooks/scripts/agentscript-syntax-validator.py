@@ -245,11 +245,16 @@ class AgentScriptValidator:
 
 def format_output(result: dict) -> str:
     """Format validation results for Claude."""
-    if result["success"] and not result["warnings"]:
-        return ""  # No output = success
-
     lines = []
     file_name = Path(result["file_path"]).name
+
+    if result["success"] and not result["warnings"]:
+        # Show success message
+        lines.append(f"✅ Agent Script LSP Validation Passed: {file_name}")
+        lines.append("   • Syntax check: OK")
+        lines.append("   • Required blocks: OK")
+        lines.append("   • Topic references: OK")
+        return "\n".join(lines)
 
     if result["errors"]:
         lines.append(f"❌ Agent Script validation errors in {file_name}:")

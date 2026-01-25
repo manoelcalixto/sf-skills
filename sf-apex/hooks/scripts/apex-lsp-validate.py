@@ -128,9 +128,15 @@ def format_apex_diagnostics(
     diagnostics = result.get("diagnostics", [])
     success = result.get("success", False)
 
-    # No issues found
+    # No issues found - show success message
     if success and not diagnostics:
-        return ""  # Empty output = success (hook convention)
+        file_name = Path(file_path).name
+        lines = []
+        lines.append(f"✅ Apex LSP Validation Passed: {file_name}")
+        lines.append("   • Syntax check: OK")
+        lines.append("   • Type resolution: OK")
+        lines.append("   • Symbol references: OK")
+        return "\n".join(lines)
 
     # Count errors and warnings
     error_count = sum(1 for d in diagnostics if d.get("severity", 1) == SEVERITY_ERROR)

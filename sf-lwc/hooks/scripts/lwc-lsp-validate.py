@@ -127,9 +127,15 @@ def format_lwc_diagnostics(
     diagnostics = result.get("diagnostics", [])
     success = result.get("success", False)
 
-    # No issues found
+    # No issues found - show success message
     if success and not diagnostics:
-        return ""  # Empty output = success (hook convention)
+        file_name = Path(file_path).name
+        lines = []
+        lines.append(f"✅ LWC LSP Validation Passed: {file_name}")
+        lines.append("   • JavaScript syntax: OK")
+        lines.append("   • LWC decorators: OK")
+        lines.append("   • Import resolution: OK")
+        return "\n".join(lines)
 
     # Count errors and warnings
     error_count = sum(1 for d in diagnostics if d.get("severity", 1) == SEVERITY_ERROR)

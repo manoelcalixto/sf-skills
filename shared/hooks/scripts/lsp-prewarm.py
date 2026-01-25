@@ -36,12 +36,14 @@ import signal
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 
 # Configuration
 PID_FILE = Path("/tmp/sf-skills-lsp-pids.json")
+STATE_FILE = Path.home() / ".claude" / ".lsp-prewarm-state.json"
 PREWARM_TIMEOUT = 10  # Max seconds to wait for each server init
 MODULE_DIR = Path(__file__).parent.parent / "lsp-engine"
 
@@ -172,6 +174,35 @@ def save_pids(pids: Dict[str, int]):
         pass
 
 
+def save_lsp_state(results: Dict[str, Tuple[bool, str, Optional[int]]]):
+    """Save LSP prewarm results for status visibility.
+
+    Writes state to ~/.claude/.lsp-prewarm-state.json so the status line
+    can display LSP server status without this hook producing stdout.
+    """
+    try:
+        servers = {}
+        for server_id, (success, message, pid) in results.items():
+            servers[server_id] = {
+                "success": success,
+                "message": message,
+                "pid": pid,
+                "name": LSP_SERVERS.get(server_id, {}).get("name", server_id)
+            }
+
+        state = {
+            "servers": servers,
+            "total": len(results),
+            "ready": sum(1 for s, _, _ in results.values() if s),
+            "timestamp": datetime.now().isoformat()
+        }
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(STATE_FILE, 'w') as f:
+            json.dump(state, f, indent=2)
+    except Exception:
+        pass  # Silent failure - don't break startup
+
+
 def cleanup_old_servers():
     """Kill any old prewarm'd servers from previous sessions."""
     try:
@@ -232,6 +263,8 @@ def main():
     This hook is now SILENT - it prewarms LSP servers in the background
     without any stdout output. This avoids JSON validation errors from
     Claude Code's hook system. Graceful degradation if servers fail to start.
+
+    Results are written to STATE_FILE for status line visibility.
     """
     # Read input from stdin (SessionStart event)
     try:
@@ -244,19 +277,24 @@ def main():
 
     # Prewarm each server (best effort - failures are silent)
     pids = {}
+    results = {}
 
     for server_id, config in LSP_SERVERS.items():
         try:
             success, message, pid = spawn_lsp_server(server_id, config)
+            results[server_id] = (success, message, pid)
             if success and pid:
                 pids[server_id] = pid
-        except Exception:
-            # Silent failure - don't break startup
-            pass
+        except Exception as e:
+            # Track failure but don't break startup
+            results[server_id] = (False, str(e), None)
 
     # Save PIDs for cleanup
     if pids:
         save_pids(pids)
+
+    # Save state for status line visibility
+    save_lsp_state(results)
 
     # SILENT: No output regardless of success/failure
     # Graceful degradation - validation will work without prewarm (just slower)

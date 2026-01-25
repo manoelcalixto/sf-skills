@@ -47,6 +47,17 @@ SF_SKILLS_HOOKS: Dict[str, Any] = {
                 }
             ],
             "_sf_skills": True  # Marker for identification
+        },
+        {
+            "matcher": "Write|Edit",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": f"python3 {PLUGIN_ROOT}/shared/hooks/scripts/skill-enforcement.py",
+                    "timeout": 5000
+                }
+            ],
+            "_sf_skills": True
         }
     ],
     "PostToolUse": [
@@ -69,9 +80,13 @@ SF_SKILLS_HOOKS: Dict[str, Any] = {
     ],
     "UserPromptSubmit": [
         {
-            "type": "command",
-            "command": f"python3 {PLUGIN_ROOT}/shared/hooks/skill-activation-prompt.py",
-            "timeout": 5000,
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": f"python3 {PLUGIN_ROOT}/shared/hooks/skill-activation-prompt.py",
+                    "timeout": 5000
+                }
+            ],
             "_sf_skills": True
         }
     ],
@@ -90,9 +105,13 @@ SF_SKILLS_HOOKS: Dict[str, Any] = {
     ],
     "SubagentStop": [
         {
-            "type": "command",
-            "command": f"python3 {PLUGIN_ROOT}/shared/hooks/scripts/chain-validator.py",
-            "timeout": 5000,
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": f"python3 {PLUGIN_ROOT}/shared/hooks/scripts/chain-validator.py",
+                    "timeout": 5000
+                }
+            ],
             "_sf_skills": True
         }
     ]
@@ -202,18 +221,24 @@ def merge_hooks(existing: Dict[str, Any], new_hooks: Dict[str, Any], verbose: bo
 
         for new_hook in event_hooks:
             # Check if similar hook already exists
+            # Must compare matchers when both are sf-skills hooks
             duplicate = False
             for existing_hook in existing_hooks:
-                if is_sf_skills_hook(existing_hook):
-                    duplicate = True
-                    if verbose:
-                        print_info(f"Skipping duplicate: {event_name}")
-                    break
+                if is_sf_skills_hook(existing_hook) and is_sf_skills_hook(new_hook):
+                    # Both are sf-skills hooks - compare matchers to detect true duplicate
+                    existing_matcher = existing_hook.get("matcher", "")
+                    new_matcher = new_hook.get("matcher", "")
+                    if existing_matcher == new_matcher:
+                        duplicate = True
+                        if verbose:
+                            print_info(f"Skipping duplicate: {event_name} (matcher: {new_matcher})")
+                        break
 
             if not duplicate:
                 existing_hooks.append(new_hook)
                 if verbose:
-                    print_success(f"Added hook: {event_name}")
+                    matcher_info = new_hook.get("matcher", "all")
+                    print_success(f"Added hook: {event_name} (matcher: {matcher_info})")
 
     return result
 
@@ -254,6 +279,7 @@ def verify_scripts_exist() -> bool:
         PLUGIN_ROOT / "shared/hooks/scripts/validator-dispatcher.py",
         PLUGIN_ROOT / "shared/hooks/scripts/auto-approve.py",
         PLUGIN_ROOT / "shared/hooks/scripts/chain-validator.py",
+        PLUGIN_ROOT / "shared/hooks/scripts/skill-enforcement.py",
         PLUGIN_ROOT / "shared/hooks/suggest-related-skills.py",
         PLUGIN_ROOT / "shared/hooks/skill-activation-prompt.py",
     ]

@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""
+Skill Enforcement Hook (PreToolUse)
+===================================
+
+Advisory guardrail that warns when editing Salesforce files without
+first activating a skill. This encourages using sf-skills for:
+- Real-time validation hooks
+- Best practice scoring (150-point, 120-point, etc.)
+- Context-specific guidance
+
+BEHAVIOR:
+- WARN (not block) when SF file edit detected without active skill
+- Allow silently if skill was invoked within 5 minutes
+- Allow silently for non-SF files
+
+This is advisory-only to maintain user trust while encouraging best practices.
+
+Input: JSON via stdin with tool_name, tool_input (file_path for Write/Edit)
+Output: JSON with decision (allow/warn) and optional message
+
+Installation:
+  Add to PreToolUse hooks in install-hooks.py
+"""
+
+import json
+import re
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional, Tuple
+
+# Configuration
+SKILL_TIMEOUT_MINUTES = 5  # Grace period after skill invocation
+STATE_FILE = Path("/tmp/sf-skills-active-skill.json")
+
+# Salesforce file patterns (from validator-dispatcher.py)
+SF_FILE_PATTERNS = [
+    (r"\.cls$", "sf-apex", "Apex class"),
+    (r"\.trigger$", "sf-apex", "Apex trigger"),
+    (r"\.flow-meta\.xml$", "sf-flow", "Flow"),
+    (r"\.object-meta\.xml$", "sf-metadata", "Custom Object"),
+    (r"\.field-meta\.xml$", "sf-metadata", "Custom Field"),
+    (r"\.permissionset-meta\.xml$", "sf-metadata", "Permission Set"),
+    (r"/lwc/[^/]+/[^/]+\.js$", "sf-lwc", "LWC JavaScript"),
+    (r"/lwc/[^/]+/[^/]+\.html$", "sf-lwc", "LWC Template"),
+    (r"\.agent$", "sf-ai-agentscript", "Agent Script"),
+    (r"\.soql$", "sf-soql", "SOQL Query"),
+    (r"\.(namedCredential|externalServiceRegistration)-meta\.xml$", "sf-integration", "Integration"),
+]
+
+
+def get_active_skill() -> Optional[Tuple[str, datetime]]:
+    """
+    Read the active skill and timestamp from state file.
+    Returns (skill_name, timestamp) or None if no active skill.
+    """
+    try:
+        if STATE_FILE.exists():
+            with open(STATE_FILE, 'r') as f:
+                state = json.load(f)
+                skill = state.get("active_skill")
+                timestamp_str = state.get("timestamp")
+                if skill and timestamp_str:
+                    timestamp = datetime.fromisoformat(timestamp_str)
+                    return (skill, timestamp)
+    except (json.JSONDecodeError, IOError, ValueError):
+        pass
+    return None
+
+
+def is_skill_active() -> Tuple[bool, Optional[str]]:
+    """
+    Check if a skill was invoked within the timeout period.
+    Returns (is_active, skill_name).
+    """
+    result = get_active_skill()
+    if result is None:
+        return (False, None)
+
+    skill_name, timestamp = result
+    cutoff = datetime.now() - timedelta(minutes=SKILL_TIMEOUT_MINUTES)
+
+    # Ensure both datetimes are naive for comparison (strip timezone if present)
+    if timestamp.tzinfo is not None:
+        timestamp = timestamp.replace(tzinfo=None)
+
+    if timestamp >= cutoff:
+        return (True, skill_name)
+    return (False, None)
+
+
+def match_sf_file(file_path: str) -> Optional[Tuple[str, str, str]]:
+    """
+    Check if file matches any Salesforce file pattern.
+    Returns (pattern, suggested_skill, description) or None.
+    """
+    for pattern, skill, description in SF_FILE_PATTERNS:
+        if re.search(pattern, file_path, re.IGNORECASE):
+            return (pattern, skill, description)
+    return None
+
+
+def format_warning(file_path: str, suggested_skill: str, file_type: str) -> str:
+    """Format the advisory warning message."""
+    filename = Path(file_path).name
+
+    return f"""
+╔════════════════════════════════════════════════════════════╗
+║ ⚠️  SF-SKILLS ADVISORY                                      ║
+╠════════════════════════════════════════════════════════════╣
+║ You're editing a Salesforce file without activating a skill║
+║                                                            ║
+║ 📄 File: {filename:<49}║
+║ 🏷️  Type: {file_type:<48}║
+║ 💡 Suggested: /{suggested_skill:<42}║
+║                                                            ║
+║ Skills provide:                                            ║
+║   • Real-time validation hooks                             ║
+║   • 150-point code scoring                                 ║
+║   • Best practice enforcement                              ║
+║                                                            ║
+║ Invoke /{suggested_skill} to enable validation              ║
+╚════════════════════════════════════════════════════════════╝
+"""
+
+
+def main():
+    """Main entry point for the PreToolUse hook."""
+    try:
+        hook_input = json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError):
+        # No input - allow silently
+        print(json.dumps({"decision": "allow"}))
+        sys.exit(0)
+
+    # Get tool information
+    tool_name = hook_input.get("tool_name", "")
+    tool_input = hook_input.get("tool_input", {})
+
+    # Only check for Write and Edit tools
+    if tool_name not in ("Write", "Edit"):
+        print(json.dumps({"decision": "allow"}))
+        sys.exit(0)
+
+    # Get file path
+    file_path = tool_input.get("file_path", "")
+    if not file_path:
+        print(json.dumps({"decision": "allow"}))
+        sys.exit(0)
+
+    # Check if this is a Salesforce file
+    sf_match = match_sf_file(file_path)
+    if sf_match is None:
+        # Not a Salesforce file - allow silently
+        print(json.dumps({"decision": "allow"}))
+        sys.exit(0)
+
+    pattern, suggested_skill, file_type = sf_match
+
+    # Check if a skill is currently active
+    is_active, active_skill = is_skill_active()
+
+    if is_active:
+        # Skill was invoked recently - allow silently
+        print(json.dumps({"decision": "allow"}))
+        sys.exit(0)
+
+    # No active skill - show warning (advisory only, don't block)
+    warning_message = format_warning(file_path, suggested_skill, file_type)
+
+    output = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow",  # Advisory only - never block
+            "permissionDecisionReason": f"Consider invoking /{suggested_skill} first",
+            "additionalContext": warning_message
+        }
+    }
+
+    print(json.dumps(output))
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

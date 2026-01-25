@@ -45,7 +45,7 @@ from typing import Dict, List, Optional, Tuple
 PID_FILE = Path("/tmp/sf-skills-lsp-pids.json")
 STATE_FILE = Path.home() / ".claude" / ".lsp-prewarm-state.json"
 PREWARM_TIMEOUT = 10  # Max seconds to wait for each server init
-MODULE_DIR = Path(__file__).parent.parent / "lsp-engine"
+MODULE_DIR = Path(__file__).parent.parent.parent / "lsp-engine"
 
 
 # LSP Server configurations
@@ -79,11 +79,33 @@ def find_wrapper(wrapper_name: str) -> Optional[Path]:
     return None
 
 
+def find_java_binary() -> Optional[str]:
+    """Find Java binary, checking Homebrew paths first (same logic as apex_wrapper.sh)."""
+    # Prioritize Homebrew OpenJDK over /usr/local/bin/java which may be a stub
+    candidates = [
+        "/opt/homebrew/opt/openjdk@21/bin/java",
+        "/opt/homebrew/opt/openjdk@17/bin/java",
+        "/opt/homebrew/opt/openjdk@11/bin/java",
+        "/opt/homebrew/opt/openjdk/bin/java",
+        str(Path.home() / ".sdkman/candidates/java/current/bin/java"),
+        "/usr/bin/java",
+        "/usr/local/bin/java",  # Last - may be Salesforce stub
+    ]
+    for candidate in candidates:
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
 def check_java_available() -> bool:
     """Check if Java 11+ is available."""
+    java_bin = find_java_binary()
+    if not java_bin:
+        return False
+
     try:
         result = subprocess.run(
-            ["java", "-version"],
+            [java_bin, "-version"],
             capture_output=True,
             text=True,
             timeout=5

@@ -226,7 +226,13 @@ def format_prewarm_output(results: Dict[str, Tuple[bool, str, Optional[int]]]) -
 
 
 def main():
-    """Main entry point for the hook."""
+    """
+    Main entry point for the hook.
+
+    This hook is now SILENT - it prewarms LSP servers in the background
+    without any stdout output. This avoids JSON validation errors from
+    Claude Code's hook system. Graceful degradation if servers fail to start.
+    """
     # Read input from stdin (SessionStart event)
     try:
         input_data = json.load(sys.stdin)
@@ -236,31 +242,25 @@ def main():
     # Cleanup any old servers first
     cleanup_old_servers()
 
-    # Prewarm each server
-    results = {}
+    # Prewarm each server (best effort - failures are silent)
     pids = {}
 
     for server_id, config in LSP_SERVERS.items():
-        success, message, pid = spawn_lsp_server(server_id, config)
-        results[server_id] = (success, message, pid)
-        if success and pid:
-            pids[server_id] = pid
+        try:
+            success, message, pid = spawn_lsp_server(server_id, config)
+            if success and pid:
+                pids[server_id] = pid
+        except Exception:
+            # Silent failure - don't break startup
+            pass
 
     # Save PIDs for cleanup
     if pids:
         save_pids(pids)
 
-    # Format output
-    output_message = format_prewarm_output(results)
-
-    # Return hook output
-    output = {
-        "hookSpecificOutput": {
-            "message": output_message
-        }
-    }
-
-    print(json.dumps(output, ensure_ascii=True))
+    # SILENT: No output regardless of success/failure
+    # Graceful degradation - validation will work without prewarm (just slower)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

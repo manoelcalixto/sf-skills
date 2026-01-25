@@ -29,7 +29,12 @@ import json
 import subprocess
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Optional, Tuple
+
+
+# State file for status line to read
+STATE_FILE = Path.home() / ".claude" / ".sf-org-state.json"
 
 
 def run_sf_command(args: list) -> Tuple[bool, str, str]:
@@ -133,6 +138,31 @@ def get_org_type_label(org_info: Dict) -> str:
         return "Production"
 
 
+def save_org_state(org_info: Dict):
+    """
+    Save org info to state file for status line to read.
+
+    This allows the status line to display SF org info without the hook
+    needing to output anything to stdout (which would require valid JSON).
+    """
+    try:
+        state = {
+            "alias": org_info.get("alias", ""),
+            "username": org_info.get("username", ""),
+            "api_version": org_info.get("api_version", ""),
+            "instance_url": org_info.get("instance_url", ""),
+            "org_type": get_org_type_label(org_info),
+            "is_valid": "error" not in org_info,
+            "error": org_info.get("error"),
+            "timestamp": datetime.now().isoformat()
+        }
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(STATE_FILE, 'w') as f:
+            json.dump(state, f)
+    except Exception:
+        pass  # Silent failure - status line will just not show SF info
+
+
 def format_preflight_output(org_info: Dict) -> str:
     """
     Format the preflight check output for display.
@@ -219,7 +249,13 @@ def format_preflight_output(org_info: Dict) -> str:
 
 
 def main():
-    """Main entry point for the hook."""
+    """
+    Main entry point for the hook.
+
+    This hook is now SILENT - it saves state to a file instead of outputting
+    JSON to stdout. The status line reads the state file to display SF org info.
+    This avoids JSON validation errors from Claude Code's hook system.
+    """
     # Read input from stdin (SessionStart event)
     try:
         input_data = json.load(sys.stdin)
@@ -229,18 +265,12 @@ def main():
     # Perform preflight check
     org_info = get_org_display()
 
-    # Format output
-    output_message = format_preflight_output(org_info)
+    # Save state for status line to read (the key change!)
+    save_org_state(org_info)
 
-    # Return hook output
-    # SessionStart hooks return a message to display
-    output = {
-        "hookSpecificOutput": {
-            "message": output_message
-        }
-    }
-
-    print(json.dumps(output, ensure_ascii=True))
+    # SILENT: No output to stdout
+    # The status line will display the org info from the state file
+    sys.exit(0)
 
 
 if __name__ == "__main__":

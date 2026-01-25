@@ -292,15 +292,27 @@ def print_score_report(filename: str) -> None:
 
 
 def main():
-    if len(sys.argv) < 2:
+    import json
+
+    file_path = None
+
+    # Mode 1: Hook mode - read from stdin JSON (PostToolUse hooks)
+    if not sys.stdin.isatty():
+        try:
+            hook_input = json.load(sys.stdin)
+            tool_input = hook_input.get("tool_input", {})
+            file_path = tool_input.get("file_path", "")
+        except (json.JSONDecodeError, EOFError):
+            pass
+
+    # Mode 2: CLI mode - read from command-line argument
+    if not file_path and len(sys.argv) >= 2:
+        file_path = sys.argv[1]
+
+    # Skip if no file path
+    if not file_path:
         print('Usage: validate_integration.py <file_path>')
         sys.exit(1)
-
-    file_path = sys.argv[1]
-
-    # Skip non-integration files
-    if not file_path:
-        sys.exit(0)
 
     filename = os.path.basename(file_path)
 

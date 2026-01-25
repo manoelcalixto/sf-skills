@@ -58,18 +58,39 @@ VALIDATOR_REGISTRY: List[tuple] = [
         "sf-ai-agentscript/hooks/scripts/agentscript-syntax-validator.py"
     ),
 
-    # Apex class files (.cls)
+    # Apex class files (.cls) - LSP syntax validation
     (
         r"\.cls$",
         "sf-apex",
         "sf-apex/hooks/scripts/apex-lsp-validate.py"
     ),
 
-    # Apex trigger files (.trigger)
+    # Apex class files (.cls) - 150-point scoring + Code Analyzer
+    (
+        r"\.cls$",
+        "sf-apex",
+        "sf-apex/hooks/scripts/post-tool-validate.py"
+    ),
+
+    # Apex trigger files (.trigger) - LSP syntax validation
     (
         r"\.trigger$",
         "sf-apex",
         "sf-apex/hooks/scripts/apex-lsp-validate.py"
+    ),
+
+    # Apex trigger files (.trigger) - 150-point scoring + Code Analyzer
+    (
+        r"\.trigger$",
+        "sf-apex",
+        "sf-apex/hooks/scripts/post-tool-validate.py"
+    ),
+
+    # SOQL query files (.soql) - 100-point scoring + Live Query Plan
+    (
+        r"\.soql$",
+        "sf-soql",
+        "sf-soql/hooks/scripts/post-tool-validate.py"
     ),
 
     # Flow metadata files (.flow-meta.xml)

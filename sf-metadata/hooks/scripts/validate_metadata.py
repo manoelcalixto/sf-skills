@@ -434,12 +434,38 @@ class MetadataValidator:
 
 
 def main():
-    """CLI entry point."""
-    if len(sys.argv) < 2:
+    """CLI entry point with dual-mode input support."""
+    import json
+
+    file_path = None
+
+    # Mode 1: Hook mode - read from stdin JSON (PostToolUse hooks)
+    if not sys.stdin.isatty():
+        try:
+            hook_input = json.load(sys.stdin)
+            tool_input = hook_input.get("tool_input", {})
+            file_path = tool_input.get("file_path", "")
+        except (json.JSONDecodeError, EOFError):
+            pass
+
+    # Mode 2: CLI mode - read from command-line argument
+    if not file_path and len(sys.argv) >= 2:
+        file_path = sys.argv[1]
+
+    # Validate we have a file path
+    if not file_path:
         print("Usage: python validate_metadata.py <metadata-file.xml>")
         sys.exit(1)
 
-    file_path = sys.argv[1]
+    # Only validate metadata files
+    valid_extensions = [
+        '.object-meta.xml', '.field-meta.xml', '.permissionset-meta.xml',
+        '.profile-meta.xml', '.validationRule-meta.xml', '.recordType-meta.xml',
+        '.layout-meta.xml'
+    ]
+    if not any(file_path.endswith(ext) for ext in valid_extensions):
+        sys.exit(0)  # Silently skip non-metadata files
+
     validator = MetadataValidator(file_path)
     results = validator.validate()
 

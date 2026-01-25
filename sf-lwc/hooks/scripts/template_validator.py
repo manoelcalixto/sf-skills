@@ -291,11 +291,30 @@ if __name__ == "__main__":
     import sys
     import json
 
-    if len(sys.argv) < 2:
-        print("Usage: python template_validator.py <component.html>")
-        sys.exit(1)
+    file_path = None
 
-    file_path = sys.argv[1]
+    # Mode 1: Hook mode - read from stdin JSON
+    if not sys.stdin.isatty():
+        try:
+            hook_input = json.load(sys.stdin)
+            tool_input = hook_input.get("tool_input", {})
+            file_path = tool_input.get("file_path", "")
+        except (json.JSONDecodeError, EOFError):
+            pass
+
+    # Mode 2: CLI mode - read from command-line argument
+    if not file_path and len(sys.argv) >= 2:
+        file_path = sys.argv[1]
+
+    # No file path from either mode
+    if not file_path:
+        print("Usage: python template_validator.py <component.html>")
+        print("   Or: echo '{\"tool_input\": {\"file_path\": \"...\"}}' | python template_validator.py")
+        sys.exit(0)
+
+    # Only validate .html files in lwc folders
+    if not file_path.endswith('.html') or '/lwc/' not in file_path:
+        sys.exit(0)
 
     if not os.path.exists(file_path):
         print(f"Error: File not found: {file_path}")

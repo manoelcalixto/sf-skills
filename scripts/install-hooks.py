@@ -170,6 +170,34 @@ SF_SKILLS_HOOKS: Dict[str, Any] = {
     ]
 }
 
+# Human-readable descriptions for --status output
+# Script filename → (short_description, emoji)
+# Note: Descriptions should be ≤35 chars to fit in status table
+HOOK_DESCRIPTIONS = {
+    "guardrails.py": ("Block dangerous DML, fix SOQL", "🛡️"),
+    "api-version-check.py": ("Validate API version on deploy", "📋"),
+    "skill-enforcement.py": ("Require skill for SF file edits", "🔐"),
+    "validator-dispatcher.py": ("Route to skill validators", "📨"),
+    "suggest-related-skills.py": ("Suggest next workflow steps", "💡"),
+    "skill-activation-prompt.py": ("Suggest skills from keywords", "🔍"),
+    "auto-approve.py": ("Auto-approve safe, confirm risky", "✅"),
+    "chain-validator.py": ("Validate chains, track progress", "🔗"),
+    "session-init.py": ("Create PID-keyed session dir", "📁"),
+    "org-preflight.py": ("Validate SF org connectivity", "☁️"),
+    "lsp-prewarm.py": ("Pre-warm LSP (Apex, LWC)", "⚡"),
+}
+
+# Event type → (description, emoji)
+EVENT_DESCRIPTIONS = {
+    "PreToolUse": ("Runs BEFORE tool executes", "🔒"),
+    "PostToolUse": ("Runs AFTER tool completes", "📤"),
+    "UserPromptSubmit": ("Runs when user sends message", "💬"),
+    "PermissionRequest": ("Runs when permission needed", "🔐"),
+    "SubagentStop": ("Runs when subagent completes", "🔗"),
+    "SessionStart": ("Runs when Claude Code starts", "🚀"),
+    "Stop": ("Runs when session ends", "🛑"),
+}
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -179,7 +207,7 @@ def print_banner():
     print("""
 ╔═══════════════════════════════════════════════════════════════╗
 ║           sf-skills Hook Installation Script                  ║
-║                      Version 4.2.0                            ║
+║                      Version 4.3.0                            ║
 ╚═══════════════════════════════════════════════════════════════╝
 """)
 
@@ -198,6 +226,53 @@ def print_warning(msg: str):
 
 def print_error(msg: str):
     print(f"  ❌ {msg}")
+
+
+def extract_script_name(command: str) -> str:
+    """Extract script filename from command path.
+
+    Examples:
+        "python3 /path/to/guardrails.py" → "guardrails.py"
+        "python3 /path/to/skill-activation-prompt.py" → "skill-activation-prompt.py"
+    """
+    import re
+    match = re.search(r'([^/]+\.py)$', command)
+    return match.group(1) if match else command.split()[-1] if command else "unknown"
+
+
+def get_hook_details(hook_config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Extract details from a hook configuration for display.
+
+    Args:
+        hook_config: A single hook matcher config (e.g., {"matcher": "Bash", "hooks": [...]})
+
+    Returns:
+        List of dicts with keys: matcher, script, description, emoji, is_async, timeout
+    """
+    details = []
+    matcher = hook_config.get("matcher", "(all)")
+
+    for hook in hook_config.get("hooks", []):
+        command = hook.get("command", "")
+        script = extract_script_name(command)
+        is_async = hook.get("async", False)
+        timeout = hook.get("timeout", 5000)
+
+        desc_info = HOOK_DESCRIPTIONS.get(script, ("", ""))
+        description = desc_info[0] if desc_info[0] else "Custom hook"
+        emoji = desc_info[1] if len(desc_info) > 1 and desc_info[1] else "⚙️"
+
+        details.append({
+            "matcher": matcher,
+            "script": script,
+            "description": description,
+            "emoji": emoji,
+            "is_async": is_async,
+            "timeout": timeout,
+            "command": command  # Full command for verbose mode
+        })
+
+    return details
 
 
 def load_settings() -> Dict[str, Any]:
@@ -537,34 +612,115 @@ def uninstall_hooks(dry_run: bool = False, verbose: bool = False):
         print()
 
 
-def show_status():
-    """Show current hook installation status."""
-    print("\n📊 sf-skills Hook Status\n")
-    print("─" * 50)
+def show_status(verbose: bool = False):
+    """Show current hook installation status with detailed hook information.
+
+    Args:
+        verbose: If True, show full command paths and timeouts
+    """
+    print("\n📊 sf-skills Hook Status")
+    print("═" * 80)
 
     settings = load_settings()
 
     if not settings or "hooks" not in settings:
-        print("   No hooks configured")
-        print("─" * 50)
+        print("\n   No hooks configured\n")
+        print("═" * 80)
+        print("\nStatus: ❌ sf-skills hooks NOT installed")
+        print("═" * 80 + "\n")
         return
 
     sf_skills_found = False
-    for event_name, event_hooks in settings["hooks"].items():
-        sf_skills_hooks = [h for h in event_hooks if is_sf_skills_hook(h)]
-        if sf_skills_hooks:
-            sf_skills_found = True
-            print(f"   ✅ {event_name}: {len(sf_skills_hooks)} sf-skills hook(s)")
-        else:
-            print(f"   ⬜ {event_name}: no sf-skills hooks")
 
-    print("─" * 50)
+    # Define event order by session lifecycle (start → prompt → tools → end)
+    event_order = [
+        "SessionStart",       # 1. Session begins
+        "UserPromptSubmit",   # 2. User sends message
+        "PreToolUse",         # 3. Before tool runs
+        "PostToolUse",        # 4. After tool completes
+        "PermissionRequest",  # 5. Permission needed
+        "SubagentStop",       # 6. Subagent finishes
+        "Stop",               # 7. Session ends
+    ]
+
+    # Add any events not in our predefined order
+    all_events = set(settings["hooks"].keys())
+    for event in all_events:
+        if event not in event_order:
+            event_order.append(event)
+
+    for event_name in event_order:
+        if event_name not in settings["hooks"]:
+            continue
+
+        event_hooks = settings["hooks"][event_name]
+        sf_skills_hooks = [h for h in event_hooks if is_sf_skills_hook(h)]
+
+        if not sf_skills_hooks:
+            continue  # Skip events with no sf-skills hooks
+
+        sf_skills_found = True
+
+        # Get event description and emoji
+        event_desc, event_emoji = EVENT_DESCRIPTIONS.get(event_name, ("", "⚙️"))
+        hook_count = len(sf_skills_hooks)
+
+        # Print event header
+        print(f"\n{event_emoji} {event_name} ({hook_count} hook{'s' if hook_count > 1 else ''}) — {event_desc}")
+
+        # Collect all hook details for this event
+        all_details = []
+        for hook_config in sf_skills_hooks:
+            details = get_hook_details(hook_config)
+            all_details.extend(details)
+
+        # SessionStart has special formatting (sync/async mode column)
+        is_session_start = event_name == "SessionStart"
+
+        if is_session_start:
+            # SessionStart format with Mode column
+            # Column widths: Mode=7, Script=26, Description=40
+            print("┌─────────┬────────────────────────────┬──────────────────────────────────────────┐")
+            print("│ Mode    │ Script                     │ Description                              │")
+            print("├─────────┼────────────────────────────┼──────────────────────────────────────────┤")
+            for detail in all_details:
+                mode = ("async" if detail["is_async"] else "sync").ljust(7)
+                script = detail["script"][:26].ljust(26)
+                desc = detail["description"][:40].ljust(40)
+                print(f"│ {mode} │ {script} │ {desc} │")
+                if verbose:
+                    timeout_sec = detail["timeout"] / 1000
+                    print(f"│         │   └─ timeout: {timeout_sec}s".ljust(79) + "│")
+                    cmd_display = detail['command'][:55]
+                    print(f"│         │   └─ {cmd_display}".ljust(79) + "│")
+            print("└─────────┴────────────────────────────┴──────────────────────────────────────────┘")
+        else:
+            # Standard format with Matcher column
+            # Column widths: Matcher=13, Script=26, Description=35
+            print("┌───────────────┬────────────────────────────┬─────────────────────────────────────┐")
+            print("│ Matcher       │ Script                     │ Description                         │")
+            print("├───────────────┼────────────────────────────┼─────────────────────────────────────┤")
+            for detail in all_details:
+                matcher = detail["matcher"][:13].ljust(13)
+                script = detail["script"][:26].ljust(26)
+                desc = detail["description"][:35].ljust(35)
+                print(f"│ {matcher} │ {script} │ {desc} │")
+                if verbose:
+                    timeout_sec = detail["timeout"] / 1000
+                    async_marker = " [async]" if detail["is_async"] else ""
+                    print(f"│               │   └─ timeout: {timeout_sec}s{async_marker}".ljust(79) + "│")
+                    cmd_display = detail['command'][:55]
+                    print(f"│               │   └─ {cmd_display}".ljust(79) + "│")
+            print("└───────────────┴────────────────────────────┴─────────────────────────────────────┘")
+
+    print("\n" + "═" * 80)
 
     if sf_skills_found:
-        print("\n   Status: ✅ sf-skills hooks INSTALLED")
+        print("Status: ✅ sf-skills hooks INSTALLED")
     else:
-        print("\n   Status: ❌ sf-skills hooks NOT installed")
-    print()
+        print("Status: ❌ sf-skills hooks NOT installed")
+
+    print("═" * 80 + "\n")
 
 
 # ============================================================================
@@ -593,7 +749,7 @@ Examples:
     print_banner()
 
     if args.status:
-        show_status()
+        show_status(verbose=args.verbose)
     elif args.uninstall:
         uninstall_hooks(dry_run=args.dry_run, verbose=args.verbose)
     else:

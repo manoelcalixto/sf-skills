@@ -20,7 +20,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Tuple
 from datetime import datetime
 import shutil
 import argparse
@@ -166,7 +166,7 @@ def print_banner():
     print("""
 ╔═══════════════════════════════════════════════════════════════╗
 ║           sf-skills Hook Installation Script                  ║
-║                      Version 4.0.0                            ║
+║                      Version 4.1.0                            ║
 ╚═══════════════════════════════════════════════════════════════╝
 """)
 
@@ -242,6 +242,84 @@ def is_sf_skills_hook(hook: Dict[str, Any]) -> bool:
             return True
 
     return False
+
+
+def hooks_equal(hooks1: List[Dict], hooks2: List[Dict]) -> bool:
+    """
+    Compare two hook lists for equality (ignoring order).
+
+    Compares the full hook configuration including nested hooks, timeouts,
+    async flags, etc. The _sf_skills marker is ignored in comparison since
+    it's just for identification.
+    """
+    def normalize_hook(hook: Dict) -> str:
+        """Normalize a hook to a comparable string (remove _sf_skills marker)."""
+        cleaned = {k: v for k, v in hook.items() if k != "_sf_skills"}
+        return json.dumps(cleaned, sort_keys=True)
+
+    def normalize_list(hooks: List[Dict]) -> str:
+        """Normalize a list of hooks to a comparable string."""
+        normalized = sorted([normalize_hook(h) for h in hooks])
+        return json.dumps(normalized)
+
+    return normalize_list(hooks1) == normalize_list(hooks2)
+
+
+def upsert_hooks(existing: Dict[str, Any], new_hooks: Dict[str, Any], verbose: bool = False) -> Tuple[Dict[str, Any], Dict[str, str]]:
+    """
+    Upsert (update or insert) hooks into existing configuration.
+
+    This replaces the old merge_hooks() function with smarter behavior:
+    - If event doesn't exist: add it (status: "added")
+    - If sf-skills hooks exist but differ: replace them (status: "updated")
+    - If sf-skills hooks exist and match: skip (status: "unchanged")
+    - Non-sf-skills hooks are always preserved
+
+    Returns:
+        Tuple of:
+        - Updated settings dict
+        - Status dict mapping event_name -> "added" | "updated" | "unchanged"
+    """
+    result = existing.copy()
+    status = {}
+
+    if "hooks" not in result:
+        result["hooks"] = {}
+
+    for event_name, new_event_hooks in new_hooks.items():
+        if event_name not in result["hooks"]:
+            # Fresh add - no existing hooks for this event
+            result["hooks"][event_name] = new_event_hooks
+            status[event_name] = "added"
+            if verbose:
+                print_info(f"Adding new hook event: {event_name}")
+        else:
+            # Event exists - check if update needed
+            existing_event_hooks = result["hooks"][event_name]
+
+            # Separate sf-skills hooks from user's custom hooks
+            non_sf_hooks = [h for h in existing_event_hooks if not is_sf_skills_hook(h)]
+            old_sf_hooks = [h for h in existing_event_hooks if is_sf_skills_hook(h)]
+
+            if not old_sf_hooks:
+                # No sf-skills hooks existed, this is an add
+                result["hooks"][event_name] = non_sf_hooks + new_event_hooks
+                status[event_name] = "added"
+                if verbose:
+                    print_info(f"Adding sf-skills hooks to: {event_name}")
+            elif hooks_equal(old_sf_hooks, new_event_hooks):
+                # Configs match exactly - no change needed
+                status[event_name] = "unchanged"
+                if verbose:
+                    print_info(f"Already up to date: {event_name}")
+            else:
+                # Configs differ - replace old sf-skills hooks with new
+                result["hooks"][event_name] = non_sf_hooks + new_event_hooks
+                status[event_name] = "updated"
+                if verbose:
+                    print_info(f"Updating sf-skills hooks: {event_name}")
+
+    return result, status
 
 
 def merge_hooks(existing: Dict[str, Any], new_hooks: Dict[str, Any], verbose: bool = False) -> Dict[str, Any]:
@@ -360,42 +438,61 @@ def install_hooks(dry_run: bool = False, verbose: bool = False):
     if not verify_scripts_exist():
         print_error("Some hook scripts are missing. Please check your installation.")
         sys.exit(1)
-    print_success("All hook scripts verified")
+    print_success("All hook scripts verified\n")
 
     # Load existing settings
     settings = load_settings()
     if verbose:
-        print_info(f"Loaded settings from: {SETTINGS_FILE}")
+        print_info(f"Loaded settings from: {SETTINGS_FILE}\n")
 
-    # Check if already installed
-    if "hooks" in settings:
-        for event_hooks in settings["hooks"].values():
-            for hook in event_hooks:
-                if is_sf_skills_hook(hook):
-                    print_warning("sf-skills hooks already installed!")
-                    print_info("Use --uninstall first, or hooks will be merged")
-                    break
+    # Upsert hooks (update or insert)
+    new_settings, status = upsert_hooks(settings, SF_SKILLS_HOOKS, verbose)
 
-    # Merge hooks
-    new_settings = merge_hooks(settings, SF_SKILLS_HOOKS, verbose)
+    # Count changes
+    added = sum(1 for s in status.values() if s == "added")
+    updated = sum(1 for s in status.values() if s == "updated")
+    unchanged = sum(1 for s in status.values() if s == "unchanged")
 
-    # Show what will be configured
-    print("\n📋 Hook configuration:")
-    print("─" * 50)
-    for event_name in SF_SKILLS_HOOKS.keys():
-        print(f"   • {event_name}")
-    print("─" * 50)
+    # Count total hooks per event for display
+    def count_hooks(event_name: str) -> int:
+        return len(SF_SKILLS_HOOKS.get(event_name, []))
 
-    # Save
+    # Print status table
+    print("  Hook Event         │ Status")
+    print("  ───────────────────┼─────────────────")
+    for event_name, event_status in status.items():
+        hook_count = count_hooks(event_name)
+        hook_label = f"{hook_count} hook{'s' if hook_count > 1 else ''}"
+        if event_status == "added":
+            print(f"  {event_name:18} │ ✅ Added ({hook_label})")
+        elif event_status == "updated":
+            print(f"  {event_name:18} │ 🔄 Updated ({hook_label})")
+        else:
+            print(f"  {event_name:18} │ ⚪ Up to date")
+
+    # Check if any changes
+    if added == 0 and updated == 0:
+        print("\n" + "═" * 55)
+        print("✅ sf-skills hooks already installed and up to date!")
+        print("═" * 55 + "\n")
+        return
+
+    # Save changes (only if there are changes)
+    print()  # Blank line before backup/save messages
     save_settings(new_settings, dry_run)
 
+    # Summary
+    changes = []
+    if added > 0:
+        changes.append(f"{added} added")
+    if updated > 0:
+        changes.append(f"{updated} updated")
+
     if not dry_run:
-        print("\n" + "═" * 50)
-        print("✅ Installation complete!")
-        print("═" * 50)
-        print("\n⚠️  IMPORTANT: Restart Claude Code to activate hooks")
-        print("   Run: claude (in a new terminal)")
-        print()
+        print("\n" + "═" * 55)
+        print(f"✅ Installation complete! ({', '.join(changes)})")
+        print("═" * 55)
+        print("\n⚠️  Restart Claude Code to activate hooks\n")
 
 
 def uninstall_hooks(dry_run: bool = False, verbose: bool = False):

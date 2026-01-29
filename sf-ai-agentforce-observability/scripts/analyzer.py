@@ -137,32 +137,33 @@ class STDMAnalyzer:
         # Calculate turns per session
         turns_per_session = (
             interactions
-            .filter(pl.col("ssot__InteractionType__c") == "TURN")
-            .group_by("ssot__aiAgentSessionId__c")
+            .filter(pl.col("ssot__AiAgentInteractionType__c") == "TURN")
+            .group_by("ssot__AiAgentSessionId__c")
             .agg(pl.count().alias("turn_count"))
         )
 
-        # Join with sessions and aggregate by agent
+        # Join with sessions and aggregate by channel type (since agent name is in Moments)
+        # Note: Agent API name is in AIAgentMoment, not AIAgentSession
         summary = (
             sessions
             .join(
                 turns_per_session,
                 left_on="ssot__Id__c",
-                right_on="ssot__aiAgentSessionId__c",
+                right_on="ssot__AiAgentSessionId__c",
                 how="left"
             )
-            .group_by("ssot__AIAgentApiName__c")
+            .group_by("ssot__AiAgentChannelType__c")
             .agg([
                 pl.count().alias("session_count"),
                 pl.col("turn_count").mean().alias("avg_turns"),
-                pl.col("ssot__AIAgentSessionEndType__c").filter(
-                    pl.col("ssot__AIAgentSessionEndType__c") == "Completed"
+                pl.col("ssot__AiAgentSessionEndType__c").filter(
+                    pl.col("ssot__AiAgentSessionEndType__c") == "Completed"
                 ).count().alias("completed_count"),
-                pl.col("ssot__AIAgentSessionEndType__c").filter(
-                    pl.col("ssot__AIAgentSessionEndType__c") == "Escalated"
+                pl.col("ssot__AiAgentSessionEndType__c").filter(
+                    pl.col("ssot__AiAgentSessionEndType__c") == "Escalated"
                 ).count().alias("escalated_count"),
-                pl.col("ssot__AIAgentSessionEndType__c").filter(
-                    pl.col("ssot__AIAgentSessionEndType__c") == "Abandoned"
+                pl.col("ssot__AiAgentSessionEndType__c").filter(
+                    pl.col("ssot__AiAgentSessionEndType__c") == "Abandoned"
                 ).count().alias("abandoned_count"),
             ])
             .with_columns([
@@ -192,30 +193,15 @@ class STDMAnalyzer:
         interactions = self.load_interactions()
 
         if agent_name:
-            sessions = self.load_sessions()
-            session_ids = (
-                sessions
-                .filter(pl.col("ssot__AIAgentApiName__c") == agent_name)
-                .select("ssot__Id__c")
-            )
-            interactions = interactions.join(
-                session_ids,
-                left_on="ssot__aiAgentSessionId__c",
-                right_on="ssot__Id__c",
-                how="inner"
-            )
-            interaction_ids = interactions.select("ssot__Id__c")
-            steps = steps.join(
-                interaction_ids,
-                left_on="ssot__AIAgentInteractionId__c",
-                right_on="ssot__Id__c",
-                how="inner"
-            )
+            # Agent name is in AIAgentMoment, not AIAgentSession
+            # To filter by agent, we'd need to load moments and join
+            # For now, log a warning and skip the filter
+            console.print(f"[yellow]Warning: Agent filter '{agent_name}' ignored - agent name is in AIAgentMoment[/yellow]")
 
         # Step type distribution
         step_types = (
             steps
-            .group_by("ssot__AIAgentInteractionStepType__c")
+            .group_by("ssot__AiAgentInteractionStepType__c")
             .agg(pl.count().alias("count"))
             .sort("count", descending=True)
         )
@@ -236,34 +222,12 @@ class STDMAnalyzer:
 
         # Filter to action steps only
         action_steps = steps.filter(
-            pl.col("ssot__AIAgentInteractionStepType__c") == "ACTION_STEP"
+            pl.col("ssot__AiAgentInteractionStepType__c") == "ACTION_STEP"
         )
 
         if agent_name:
-            sessions = self.load_sessions()
-            interactions = self.load_interactions()
-
-            session_ids = (
-                sessions
-                .filter(pl.col("ssot__AIAgentApiName__c") == agent_name)
-                .select("ssot__Id__c")
-            )
-            interaction_ids = (
-                interactions
-                .join(
-                    session_ids,
-                    left_on="ssot__aiAgentSessionId__c",
-                    right_on="ssot__Id__c",
-                    how="inner"
-                )
-                .select(pl.col("ssot__Id__c").alias("interaction_id"))
-            )
-            action_steps = action_steps.join(
-                interaction_ids,
-                left_on="ssot__AIAgentInteractionId__c",
-                right_on="interaction_id",
-                how="inner"
-            )
+            # Agent name is in AIAgentMoment, not AIAgentSession
+            console.print(f"[yellow]Warning: Agent filter '{agent_name}' ignored - agent name is in AIAgentMoment[/yellow]")
 
         # Group by action name
         actions = (
@@ -291,7 +255,7 @@ class STDMAnalyzer:
 
         # Filter to TURN interactions (not SESSION_END)
         turns = interactions.filter(
-            pl.col("ssot__InteractionType__c") == "TURN"
+            pl.col("ssot__AiAgentInteractionType__c") == "TURN"
         )
 
         # Topic frequency
@@ -300,7 +264,7 @@ class STDMAnalyzer:
             .group_by("ssot__TopicApiName__c")
             .agg([
                 pl.count().alias("turn_count"),
-                pl.col("ssot__aiAgentSessionId__c").n_unique().alias("session_count"),
+                pl.col("ssot__AiAgentSessionId__c").n_unique().alias("session_count"),
             ])
             .with_columns([
                 (pl.col("turn_count") / pl.col("session_count")).round(2).alias("avg_turns_per_session"),
@@ -341,54 +305,46 @@ class STDMAnalyzer:
         # Get interactions for this session
         session_interactions = (
             interactions
-            .filter(pl.col("ssot__aiAgentSessionId__c") == session_id)
+            .filter(pl.col("ssot__AiAgentSessionId__c") == session_id)
             .select("ssot__Id__c")
         )
 
-        # Get messages
-        session_messages = (
+        # Get moments (AIAgentMoment links to sessions, not interactions)
+        # Schema: AiAgentSessionId, RequestSummaryText, ResponseSummaryText, StartTimestamp
+        session_moments = (
             messages
-            .join(
-                session_interactions,
-                left_on="ssot__AIAgentInteractionId__c",
-                right_on="ssot__Id__c",
-                how="inner"
-            )
+            .filter(pl.col("ssot__AiAgentSessionId__c") == session_id)
             .select([
-                "ssot__MessageSentTimestamp__c",
-                "ssot__AIAgentInteractionMessageType__c",
-                "ssot__ContentText__c",
-                "ssot__AIAgentInteractionId__c",
-            ])
-            .with_columns([
-                pl.lit("MESSAGE").alias("event_type"),
+                pl.col("ssot__StartTimestamp__c").alias("timestamp"),
+                pl.lit("MOMENT").alias("event_type"),
+                pl.col("ssot__RequestSummaryText__c").alias("request"),
+                pl.col("ssot__ResponseSummaryText__c").alias("response"),
+                pl.col("ssot__AiAgentApiName__c").alias("agent"),
             ])
         )
 
-        # Get steps
+        # Get steps for this session's interactions
         session_steps = (
             steps
             .join(
                 session_interactions,
-                left_on="ssot__AIAgentInteractionId__c",
+                left_on="ssot__AiAgentInteractionId__c",
                 right_on="ssot__Id__c",
                 how="inner"
             )
             .select([
-                pl.lit(None).cast(pl.Utf8).alias("ssot__MessageSentTimestamp__c"),
-                pl.col("ssot__AIAgentInteractionStepType__c").alias("ssot__AIAgentInteractionMessageType__c"),
-                pl.col("ssot__Name__c").alias("ssot__ContentText__c"),
-                "ssot__AIAgentInteractionId__c",
-            ])
-            .with_columns([
-                pl.lit("STEP").alias("event_type"),
+                pl.col("ssot__StartTimestamp__c").alias("timestamp"),
+                pl.col("ssot__AiAgentInteractionStepType__c").alias("event_type"),
+                pl.col("ssot__Name__c").alias("request"),
+                pl.col("ssot__OutputValueText__c").alias("response"),
+                pl.lit(None).cast(pl.Utf8).alias("agent"),
             ])
         )
 
-        # Combine and sort
+        # Combine and sort by timestamp
         timeline = (
-            pl.concat([session_messages, session_steps])
-            .sort("ssot__MessageSentTimestamp__c")
+            pl.concat([session_moments, session_steps])
+            .sort("timestamp")
         )
 
         return timeline.collect()
@@ -404,7 +360,7 @@ class STDMAnalyzer:
 
         distribution = (
             sessions
-            .group_by("ssot__AIAgentSessionEndType__c")
+            .group_by("ssot__AiAgentSessionEndType__c")
             .agg(pl.count().alias("count"))
             .with_columns([
                 (pl.col("count") / pl.col("count").sum() * 100).round(1).alias("percentage"),
@@ -447,7 +403,7 @@ class STDMAnalyzer:
         failed = (
             sessions
             .filter(
-                pl.col("ssot__AIAgentSessionEndType__c").is_in(["Escalated", "Abandoned", "Failed"])
+                pl.col("ssot__AiAgentSessionEndType__c").is_in(["Escalated", "Abandoned", "Failed"])
             )
             .sort("ssot__StartTimestamp__c", descending=True)
         )
@@ -459,23 +415,23 @@ class STDMAnalyzer:
         console.print("\n[bold cyan]📊 SESSION TRACING SUMMARY[/bold cyan]")
         console.print("═" * 60)
 
-        # Session summary
+        # Session summary (grouped by channel since agent name is in Moments)
         try:
             summary = self.session_summary()
-            console.print("\n[bold]Sessions by Agent[/bold]")
+            console.print("\n[bold]Sessions by Channel[/bold]")
 
             table = Table()
-            table.add_column("Agent", style="cyan")
+            table.add_column("Channel", style="cyan")
             table.add_column("Sessions", justify="right")
             table.add_column("Avg Turns", justify="right")
             table.add_column("Completion %", justify="right")
 
             for row in summary.iter_rows(named=True):
                 table.add_row(
-                    str(row.get("ssot__AIAgentApiName__c", "Unknown")),
+                    str(row.get("ssot__AiAgentChannelType__c", "Unknown")),
                     str(row.get("session_count", 0)),
-                    f"{row.get('avg_turns', 0):.1f}",
-                    f"{row.get('completion_rate', 0):.1f}%",
+                    f"{row.get('avg_turns', 0) or 0:.1f}",
+                    f"{row.get('completion_rate', 0) or 0:.1f}%",
                 )
 
             console.print(table)
@@ -488,7 +444,7 @@ class STDMAnalyzer:
             console.print("\n[bold]End Type Distribution[/bold]")
 
             for row in end_types.iter_rows(named=True):
-                end_type = row.get("ssot__AIAgentSessionEndType__c", "Unknown")
+                end_type = row.get("ssot__AiAgentSessionEndType__c", "Unknown")
                 count = row.get("count", 0)
                 pct = row.get("percentage", 0)
 
@@ -528,10 +484,10 @@ class STDMAnalyzer:
                 return
 
             row = session.row(0, named=True)
-            console.print(f"\nAgent: [cyan]{row.get('ssot__AIAgentApiName__c', 'Unknown')}[/cyan]")
+            console.print(f"\nChannel: [cyan]{row.get('ssot__AiAgentChannelType__c', 'Unknown')}[/cyan]")
             console.print(f"Started: {row.get('ssot__StartTimestamp__c', 'N/A')}")
             console.print(f"Ended: {row.get('ssot__EndTimestamp__c', 'N/A')}")
-            console.print(f"End Type: {row.get('ssot__AIAgentSessionEndType__c', 'N/A')}")
+            console.print(f"End Type: {row.get('ssot__AiAgentSessionEndType__c', 'N/A')}")
 
             # Get timeline
             timeline = self.message_timeline(session_id)
@@ -540,26 +496,26 @@ class STDMAnalyzer:
             console.print("─" * 60)
 
             for event in timeline.iter_rows(named=True):
-                timestamp = event.get("ssot__MessageSentTimestamp__c", "")
+                timestamp = event.get("timestamp", "")
                 event_type = event.get("event_type", "")
-                msg_type = event.get("ssot__AIAgentInteractionMessageType__c", "")
-                content = event.get("ssot__ContentText__c", "")
-
-                if event_type == "MESSAGE":
-                    icon = "→" if msg_type == "INPUT" else "←"
-                    style = "green" if msg_type == "INPUT" else "blue"
-                    label = "[INPUT]" if msg_type == "INPUT" else "[OUTPUT]"
-                else:
-                    icon = "⚡"
-                    style = "yellow"
-                    label = f"[{msg_type}]"
-
-                # Truncate long content
-                if content and len(content) > 80:
-                    content = content[:77] + "..."
+                request = event.get("request", "")
+                response = event.get("response", "")
 
                 time_str = timestamp[:19] if timestamp else "        "
-                console.print(f"{time_str} │ [{style}]{label}[/{style}] {content}")
+
+                if event_type == "MOMENT":
+                    # Show request and response from moment
+                    if request:
+                        content = request[:77] + "..." if len(request or "") > 80 else request
+                        console.print(f"{time_str} │ [green][REQUEST][/green] {content}")
+                    if response:
+                        content = response[:77] + "..." if len(response or "") > 80 else response
+                        console.print(f"           │ [blue][RESPONSE][/blue] {content}")
+                else:
+                    # Show step (LLM_STEP or ACTION_STEP)
+                    icon = "⚡" if event_type == "ACTION_STEP" else "🤖"
+                    content = request[:77] + "..." if len(request or "") > 80 else request or ""
+                    console.print(f"{time_str} │ [yellow][{event_type}][/yellow] {content}")
 
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")

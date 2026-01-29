@@ -111,44 +111,59 @@ See [docs/auth-setup.md](docs/auth-setup.md) for detailed instructions.
 
 ## Session Tracing Data Model (STDM)
 
-The STDM consists of 4 Data Model Objects (DMOs) in a hierarchical structure:
+The STDM consists of 4 Data Model Objects (DMOs). **Important**: Field names use `AiAgent` (lowercase 'i'), not `AIAgent`.
 
 ```
 ssot__AIAgentSession__dlm (SESSION)
-├── ssot__Id__c                          # Session ID
-├── ssot__AIAgentApiName__c              # Agent API name
-├── ssot__StartTimestamp__c              # Session start
-├── ssot__EndTimestamp__c                # Session end
-├── ssot__AIAgentSessionEndType__c       # End type (Completed, Abandoned, etc.)
+├── ssot__Id__c                          # Session ID (UUID)
+├── ssot__StartTimestamp__c              # Session start (TimestampTZ)
+├── ssot__EndTimestamp__c                # Session end (TimestampTZ)
+├── ssot__AiAgentSessionEndType__c       # End type (Completed, Abandoned, etc.)
+├── ssot__AiAgentChannelType__c          # Channel (PSTN, Messaging, etc.)
 ├── ssot__RelatedMessagingSessionId__c   # Linked messaging session
-└── ssot__OrganizationId__c              # Org ID
+├── ssot__RelatedVoiceCallId__c          # Linked voice call
+├── ssot__SessionOwnerId__c              # Owner ID
+├── ssot__IndividualId__c                # Data Cloud individual
+└── ssot__InternalOrganizationId__c      # Org ID
 
-    └── ssot__AIAgentInteraction__dlm (TURN/SESSION_END)  [1:N]
+    └── ssot__AIAgentInteraction__dlm (TURN)  [1:N]
         ├── ssot__Id__c                          # Interaction ID
-        ├── ssot__aiAgentSessionId__c            # FK to Session
-        ├── ssot__InteractionType__c             # TURN or SESSION_END
+        ├── ssot__AiAgentSessionId__c            # FK to Session
+        ├── ssot__AiAgentInteractionType__c      # TURN or SESSION_END
         ├── ssot__TopicApiName__c                # Topic that handled this turn
         ├── ssot__StartTimestamp__c              # Turn start
-        └── ssot__EndTimestamp__c                # Turn end
+        ├── ssot__EndTimestamp__c                # Turn end
+        ├── ssot__TelemetryTraceId__c            # Trace ID for debugging
+        └── ssot__TelemetryTraceSpanId__c        # Span ID for debugging
 
-            ├── ssot__AIAgentInteractionStep__dlm (STEP)  [1:N]
-            │   ├── ssot__Id__c                          # Step ID
-            │   ├── ssot__AIAgentInteractionId__c        # FK to Interaction
-            │   ├── ssot__AIAgentInteractionStepType__c  # LLM_STEP or ACTION_STEP
-            │   ├── ssot__Name__c                        # Action/step name
-            │   ├── ssot__InputValueText__c              # Input to step
-            │   ├── ssot__OutputValueText__c             # Output from step
-            │   ├── ssot__PreStepVariableText__c         # Variables before
-            │   ├── ssot__PostStepVariableText__c        # Variables after
-            │   └── ssot__GenerationId__c                # LLM generation ID
+            └── ssot__AIAgentInteractionStep__dlm (STEP)  [1:N]
+                ├── ssot__Id__c                          # Step ID
+                ├── ssot__AiAgentInteractionId__c        # FK to Interaction
+                ├── ssot__AiAgentInteractionStepType__c  # LLM_STEP or ACTION_STEP
+                ├── ssot__Name__c                        # Action/step name
+                ├── ssot__InputValueText__c              # Input to step (JSON)
+                ├── ssot__OutputValueText__c             # Output from step (JSON)
+                ├── ssot__ErrorMessageText__c            # Error if step failed
+                ├── ssot__PreStepVariableText__c         # Variables before
+                ├── ssot__PostStepVariableText__c        # Variables after
+                ├── ssot__GenerationId__c                # LLM generation ID
+                └── ssot__GenAiGatewayRequestId__c       # GenAI Gateway request
 
-            └── ssot__AIAgentMoment__dlm (MESSAGE)  [1:N]
-                ├── ssot__Id__c                              # Message ID
-                ├── ssot__AIAgentInteractionId__c            # FK to Interaction
-                ├── ssot__ContentText__c                     # Message content
-                ├── ssot__AIAgentInteractionMessageType__c   # INPUT or OUTPUT
-                └── ssot__MessageSentTimestamp__c            # Timestamp
+ssot__AIAgentMoment__dlm (MOMENT - links to Session, not Interaction)
+├── ssot__Id__c                          # Moment ID
+├── ssot__AiAgentSessionId__c            # FK to Session (NOT interaction!)
+├── ssot__AiAgentApiName__c              # Agent API name (lives here!)
+├── ssot__AiAgentVersionApiName__c       # Agent version
+├── ssot__RequestSummaryText__c          # User request summary
+├── ssot__ResponseSummaryText__c         # Agent response summary
+├── ssot__StartTimestamp__c              # Moment start
+└── ssot__EndTimestamp__c                # Moment end
 ```
+
+**Key Schema Notes:**
+- Agent API name is in `AIAgentMoment`, not `AIAgentSession`
+- Moments link to sessions via `AiAgentSessionId`, not interactions
+- All field names use `AiAgent` prefix (lowercase 'i')
 
 See [resources/data-model-reference.md](resources/data-model-reference.md) for full field documentation.
 

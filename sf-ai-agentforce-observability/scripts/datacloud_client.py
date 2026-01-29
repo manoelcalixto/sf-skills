@@ -287,7 +287,9 @@ class DataCloudClient:
         output_path: Path,
         schema: Optional[pa.Schema] = None,
         partition_cols: Optional[List[str]] = None,
-        show_progress: bool = True
+        show_progress: bool = True,
+        append: bool = False,
+        dedupe_key: Optional[str] = "ssot__Id__c"
     ) -> int:
         """
         Execute query and write results directly to Parquet file.
@@ -300,6 +302,8 @@ class DataCloudClient:
             schema: Optional PyArrow schema (auto-inferred if not provided)
             partition_cols: Optional columns to partition by
             show_progress: Show progress bar
+            append: If True and file exists, merge with existing data
+            dedupe_key: Column to deduplicate on when appending (default: ssot__Id__c)
 
         Returns:
             Total number of records written
@@ -389,6 +393,20 @@ class DataCloudClient:
             # Combine all batches and write
             if batches:
                 combined_table = pa.concat_tables(batches)
+
+                # Handle append mode: read existing, concat, dedupe
+                if append and output_path.exists() and not partition_cols:
+                    existing_table = pq.read_table(str(output_path))
+                    combined_table = pa.concat_tables([existing_table, combined_table])
+
+                    # Deduplicate by key using PyArrow
+                    if dedupe_key and dedupe_key in combined_table.column_names:
+                        import polars as pl
+                        # Use Polars for deduplication (more efficient)
+                        df = pl.from_arrow(combined_table)
+                        df = df.unique(subset=[dedupe_key], keep="last")
+                        combined_table = df.to_arrow()
+                        records_written = len(df)
 
                 if partition_cols:
                     pq.write_to_dataset(

@@ -195,6 +195,7 @@ class STDMExtractor:
         agent_names: Optional[List[str]] = None,
         include_children: bool = True,
         show_progress: bool = True,
+        append: bool = False,
     ) -> ExtractionResult:
         """
         Extract session data with optional child records.
@@ -205,6 +206,7 @@ class STDMExtractor:
             agent_names: Optional list of agent API names to filter
             include_children: Whether to extract interactions, steps, messages
             show_progress: Show progress indicators
+            append: If True, merge with existing data instead of overwriting
 
         Returns:
             ExtractionResult with counts and metadata
@@ -226,7 +228,8 @@ class STDMExtractor:
                 session_query,
                 session_path / "data.parquet",
                 schema=SCHEMAS["sessions"],
-                show_progress=show_progress
+                show_progress=show_progress,
+                append=append
             )
 
             if show_progress:
@@ -255,7 +258,8 @@ class STDMExtractor:
                 interaction_query,
                 interaction_path / "data.parquet",
                 schema=SCHEMAS["interactions"],
-                show_progress=show_progress
+                show_progress=show_progress,
+                append=append
             )
 
             if show_progress:
@@ -284,7 +288,8 @@ class STDMExtractor:
                 step_query,
                 step_path / "data.parquet",
                 schema=SCHEMAS["steps"],
-                show_progress=show_progress
+                show_progress=show_progress,
+                append=append
             )
 
             if show_progress:
@@ -305,7 +310,8 @@ class STDMExtractor:
                 message_query,
                 message_path / "data.parquet",
                 schema=SCHEMAS["messages"],
-                show_progress=show_progress
+                show_progress=show_progress,
+                append=append
             )
 
             if show_progress:
@@ -472,11 +478,12 @@ class STDMExtractor:
                     f"[yellow]No watermark found, extracting from {since.isoformat()}[/yellow]"
                 )
 
-        # Run extraction
+        # Run extraction with append=True to merge with existing data
         result = self.extract_sessions(
             since=since,
             agent_names=agent_names,
-            show_progress=show_progress
+            show_progress=show_progress,
+            append=True
         )
 
         # Update watermark if successful

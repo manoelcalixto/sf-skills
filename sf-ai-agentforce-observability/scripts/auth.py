@@ -92,20 +92,27 @@ class Data360Auth:
     """
 
     org_alias: str
-    consumer_key: str
+    consumer_key: Optional[str] = None
     key_path: Optional[Path] = None
     _token: Optional[str] = field(default=None, repr=False)
     _token_expiry: float = field(default=0, repr=False)
     _org_info: Optional[OrgInfo] = field(default=None, repr=False)
 
     def __post_init__(self):
-        """Initialize key path if not provided.
+        """Initialize key path and consumer key if not provided.
 
         Key path resolution order:
         1. Explicit key_path parameter (already set)
         2. App-specific: ~/.sf/jwt/{org_alias}-agentforce-observability.key
         3. Generic fallback: ~/.sf/jwt/{org_alias}.key
+
+        Consumer key resolution order:
+        1. Explicit consumer_key parameter (already set)
+        2. App-specific file: ~/.sf/jwt/{org_alias}-agentforce-observability.consumer-key
+        3. Generic file: ~/.sf/jwt/{org_alias}.consumer-key
+        4. Environment variable: SF_{ORG_ALIAS}_CONSUMER_KEY or SF_CONSUMER_KEY
         """
+        # Resolve key path
         if self.key_path is None:
             # Try app-specific key first
             app_specific_key = DEFAULT_KEY_DIR / f"{self.org_alias}-agentforce-observability.key"
@@ -114,6 +121,54 @@ class Data360Auth:
             else:
                 # Fall back to generic org key
                 self.key_path = DEFAULT_KEY_DIR / f"{self.org_alias}.key"
+
+        # Resolve consumer key
+        if self.consumer_key is None:
+            self.consumer_key = self._load_consumer_key()
+
+    def _load_consumer_key(self) -> str:
+        """
+        Load consumer key from file or environment.
+
+        Resolution order:
+        1. App-specific file: ~/.sf/jwt/{org_alias}-agentforce-observability.consumer-key
+        2. Generic file: ~/.sf/jwt/{org_alias}.consumer-key
+        3. Environment: SF_{ORG_ALIAS}_CONSUMER_KEY (uppercase, hyphens to underscores)
+        4. Environment: SF_CONSUMER_KEY
+
+        Returns:
+            Consumer key string
+
+        Raises:
+            ValueError: If consumer key not found
+        """
+        import os
+
+        # Try app-specific consumer key file
+        app_specific = DEFAULT_KEY_DIR / f"{self.org_alias}-agentforce-observability.consumer-key"
+        if app_specific.exists():
+            return app_specific.read_text().strip()
+
+        # Try generic consumer key file
+        generic = DEFAULT_KEY_DIR / f"{self.org_alias}.consumer-key"
+        if generic.exists():
+            return generic.read_text().strip()
+
+        # Try org-specific environment variable
+        env_key = f"SF_{self.org_alias.upper().replace('-', '_')}_CONSUMER_KEY"
+        if os.environ.get(env_key):
+            return os.environ[env_key]
+
+        # Try generic environment variable
+        if os.environ.get("SF_CONSUMER_KEY"):
+            return os.environ["SF_CONSUMER_KEY"]
+
+        raise ValueError(
+            f"Consumer key not found for {self.org_alias}. Provide via:\n"
+            f"  1. File: {app_specific}\n"
+            f"  2. Env: {env_key} or SF_CONSUMER_KEY\n"
+            f"  3. Parameter: consumer_key='...'"
+        )
 
     @property
     def org_info(self) -> OrgInfo:

@@ -45,6 +45,12 @@
 - **sf-connected-apps skill**: JWT authentication templates
 - **sf-ai-agentforce-testing skill**: Agentforce integration patterns
 
+## Acknowledgments
+
+| Contributor | Role | Contribution |
+|-------------|------|--------------|
+| **Alejandro Raigon** | Forward Deployed Engineer Director, Anthropic | Domain expertise on Agentforce observability patterns, Session Tracing data model insights, and quality analysis approaches |
+
 ## License
 
 This skill is released under the MIT License.

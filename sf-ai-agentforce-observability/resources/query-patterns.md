@@ -411,12 +411,13 @@ LIMIT 100;
 
 ### Unresolved Tasks Detection
 
-Find sessions where tasks weren't fully resolved:
+Find sessions where user requests weren't fully resolved:
 
 ```sql
 SELECT
     i.ssot__AiAgentSessionId__c AS SessionId,
     i.ssot__TopicApiName__c AS TopicName,
+    g.responseText__c AS ResponseText,
     c.category__c AS ResolutionStatus,
     c.value__c AS ConfidenceScore
 FROM GenAIContentCategory__dlm AS c
@@ -428,9 +429,116 @@ JOIN ssot__AiAgentInteraction__dlm i
     ON st.ssot__AiAgentInteractionId__c = i.ssot__Id__c
 WHERE
     c.detectorType__c = 'TaskResolution'
-    AND c.category__c IN ('NOT_RESOLVED', 'PARTIALLY_RESOLVED')
+    AND c.category__c != 'FULLY_RESOLVED'
 LIMIT 100;
 ```
+
+### Hallucination Detection (UNGROUNDED Responses)
+
+Find responses flagged as ungrounded by the validation prompt:
+
+```sql
+-- Note: Uses JSON parsing functions
+WITH llmResponses AS (
+    SELECT
+        i.ssot__AiAgentSessionId__c AS SessionId,
+        ssot__InputValueText__c::JSON->'messages'->-1->>'content' AS LastMessage,
+        ssot__OutputValueText__c::JSON->>'llmResponse' AS llmResponse,
+        st.ssot__StartTimestamp__c AS InteractionStepStartTime
+    FROM ssot__AiAgentInteractionStep__dlm st
+    JOIN ssot__AiAgentInteraction__dlm i
+        ON st.ssot__AiAgentInteractionId__c = i.ssot__Id__c
+    WHERE
+        st.ssot__AiAgentInteractionStepType__c = 'LLM_STEP'
+        AND st.ssot__Name__c = 'AiCopilot__ReactValidationPrompt'
+        AND st.ssot__OutputValueText__c LIKE '%UNGROUNDED%'
+    LIMIT 100
+)
+SELECT
+    InteractionStepStartTime,
+    SessionId,
+    TRIM('"' FROM SPLIT_PART(SPLIT_PART(LastMessage, '"response": "', 2), '"', 1)) AS AgentResponse,
+    CAST(llmResponse AS JSON)->>'reason' AS UngroundedReason
+FROM llmResponses
+ORDER BY InteractionStepStartTime;
+```
+
+**Key Step Names for Analysis:**
+
+| Step Name | Purpose |
+|-----------|---------|
+| `AiCopilot__ReactTopicPrompt` | Topic routing decision |
+| `AiCopilot__ReactInitialPrompt` | Initial planning/reasoning |
+| `AiCopilot__ReactValidationPrompt` | Response validation (hallucination check) |
+
+---
+
+## Knowledge Retrieval Analysis
+
+### Vector Search for Knowledge Gaps
+
+Query the knowledge search index to understand what chunks were retrieved for a user query:
+
+```sql
+SELECT
+    v.Score__c AS Score,
+    kav.Chat_Answer__c AS KnowledgeAnswer,
+    c.Chunk__c AS ChunkText,
+    c.SourceRecordId__c AS SourceRecordId,
+    c.DataSource__c AS DataSource
+FROM vector_search(
+    TABLE("External_Knowledge_Search_Index_index__dlm"),
+    '{{USER_QUERY}}',
+    '{{FILTER_CLAUSE}}',
+    30
+) v
+INNER JOIN "External_Knowledge_Search_Index_chunk__dlm" c
+    ON c.RecordId__c = v.RecordId__c
+INNER JOIN "{{KNOWLEDGE_ARTICLE_DMO}}" kav
+    ON c.SourceRecordId__c = kav.Id__c
+ORDER BY Score DESC
+LIMIT 10;
+```
+
+**Parameters:**
+- `{{USER_QUERY}}`: The search query text
+- `{{FILTER_CLAUSE}}`: Optional filter like `'Country_Code__c=''US'''`
+- `{{KNOWLEDGE_ARTICLE_DMO}}`: Your org's Knowledge DMO name (e.g., `Knowledge_kav_Prod_00D58000000JmkM__dlm`)
+
+### Improving Knowledge Articles Workflow
+
+1. **Identify low-quality moments**: Agentforce Studio → Observe → Optimization → Insights
+2. **Filter by topic and quality**: Topics includes `General_FAQ...`, Quality Score < Medium
+3. **Get Session ID** from Moments view
+4. **Query STDM** with session ID to inspect ACTION_STEP
+5. **Examine actionName and actionInput** in step output
+6. **Run vector_search** with the user query to see retrieved chunks
+7. **Identify SourceRecordId** to find knowledge articles needing improvement
+
+### Inspecting Action Steps for Knowledge Calls
+
+Find ACTION_STEP details for a session:
+
+```sql
+SELECT
+    st.ssot__Name__c AS ActionName,
+    st.ssot__AiAgentInteractionStepType__c AS StepType,
+    st.ssot__InputValueText__c AS InputValue,
+    st.ssot__OutputValueText__c AS OutputValue,
+    st.ssot__StartTimestamp__c AS StartTime
+FROM ssot__AiAgentInteractionStep__dlm st
+JOIN ssot__AiAgentInteraction__dlm i
+    ON st.ssot__AiAgentInteractionId__c = i.ssot__Id__c
+WHERE
+    i.ssot__AiAgentSessionId__c = '{{SESSION_ID}}'
+    AND st.ssot__AiAgentInteractionStepType__c = 'ACTION_STEP'
+ORDER BY st.ssot__StartTimestamp__c;
+```
+
+**ACTION_STEP Output Contains:**
+- `actionName`: The invoked action (e.g., `General_FAQ0_16jWi00000001...`)
+- `actionInput`: Parameters passed to the action
+- Retrieved knowledge chunks in the response
 
 ---
 

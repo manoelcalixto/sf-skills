@@ -98,27 +98,27 @@ Add the marketplace to Claude Code:
 /plugin marketplace add Jaganpro/sf-skills
 ```
 
-#### Enable Hooks (Recommended)
+#### Enable Hooks with Auto-Updates (Recommended)
 
-For full functionality including automatic validation, guardrails, and smart suggestions, install the hooks:
+For full functionality including automatic validation, guardrails, smart suggestions, **and automatic updates**, run the migration script:
 
 ```bash
 # Navigate to your sf-skills installation
 cd ~/.claude/plugins/marketplaces/sf-skills
 
-# Install hooks (adds to ~/.claude/settings.json)
-python3 scripts/install-hooks.py
-
-# Verify installation
-python3 scripts/install-hooks.py --status
+# Install global hooks with auto-update support
+python3 scripts/migrate-to-global-hooks.py
 
 # Restart Claude Code to activate hooks
 ```
+
+This installs hooks to `~/.claude/sf-skills-hooks/` and configures `~/.claude/hooks.json`. **Updates are automatic** — on each session start, sf-skills checks for new releases and updates silently in the background.
 
 **What hooks provide:**
 
 | Hook | Function |
 |------|----------|
+| **SessionStart** | Auto-updates sf-skills, initializes session, preflights org connection |
 | **PreToolUse** | Guardrails - blocks dangerous DML, auto-fixes unbounded SOQL |
 | **PostToolUse** | Validates Apex/Flow/LWC on save, suggests related skills |
 | **UserPromptSubmit** | Auto-suggests skills based on your prompt |
@@ -129,17 +129,29 @@ python3 scripts/install-hooks.py --status
 <summary>Hook Installation Options</summary>
 
 ```bash
-# Preview changes without applying
-python3 scripts/install-hooks.py --dry-run
+# Preview migration changes without applying
+python3 scripts/migrate-to-global-hooks.py --dry-run
+
+# Alternative: Install to settings.json (legacy method, no auto-updates)
+python3 scripts/install-hooks.py
+
+# Alternative: Install globally without migration
+python3 scripts/install-hooks.py --global
+
+# Check installation status
+python3 scripts/install-hooks.py --status
 
 # Remove hooks
 python3 scripts/install-hooks.py --uninstall
-
-# Shell wrapper alternative
-./scripts/install-hooks.sh          # Install
-./scripts/install-hooks.sh status   # Check status
-./scripts/install-hooks.sh uninstall # Remove
 ```
+
+**Global vs Local Installation:**
+
+| Method | Location | Auto-Updates | Best For |
+|--------|----------|--------------|----------|
+| `migrate-to-global-hooks.py` | `~/.claude/hooks.json` | ✅ Yes | Marketplace users (recommended) |
+| `install-hooks.py --global` | `~/.claude/hooks.json` | ✅ Yes | Manual global install |
+| `install-hooks.py` | `~/.claude/settings.json` | ❌ No | Project-specific or development |
 
 </details>
 
@@ -230,7 +242,7 @@ You can invoke the suggested skill or let Claude help directly
 - **Medium Priority**: sf-metadata, sf-deploy, sf-testing, sf-soql, sf-data, sf-integration
 - **Low Priority**: sf-connected-apps, sf-debug, sf-diagram-mermaid, sf-diagram-nanobananapro, sf-ai-agentforce-testing, skill-builder
 
-**Configuration:** Auto-activation is powered by `shared/hooks/skill-rules.json` and `shared/hooks/skill-activation-prompt.py`.
+**Configuration:** Auto-activation is powered by `shared/hooks/skills-registry.json` and `shared/hooks/skill-activation-prompt.py`.
 
 ---
 

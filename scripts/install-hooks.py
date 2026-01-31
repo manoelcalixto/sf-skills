@@ -9,11 +9,14 @@ without overwriting existing hooks.
 
 Usage:
     python3 scripts/install-hooks.py [--uninstall] [--dry-run] [--verbose]
+    python3 scripts/install-hooks.py --global --to-hooks-json  # For global installation
 
 Options:
-    --uninstall  Remove sf-skills hooks from settings
-    --dry-run    Show what would be changed without making changes
-    --verbose    Show detailed output
+    --uninstall       Remove sf-skills hooks from settings
+    --dry-run         Show what would be changed without making changes
+    --verbose         Show detailed output
+    --global          Install to ~/.claude/sf-skills-hooks/ with absolute paths
+    --to-hooks-json   Write to ~/.claude/hooks.json instead of settings.json
 """
 
 import json
@@ -32,6 +35,8 @@ import argparse
 SCRIPT_DIR = Path(__file__).parent
 PLUGIN_ROOT = SCRIPT_DIR.parent
 SETTINGS_FILE = Path.home() / ".claude" / "settings.json"
+HOOKS_JSON_FILE = Path.home() / ".claude" / "hooks.json"
+GLOBAL_HOOKS_DIR = Path.home() / ".claude" / "sf-skills-hooks"
 BACKUP_DIR = Path.home() / ".claude" / "backups"
 
 # Hook configurations for sf-skills
@@ -174,6 +179,7 @@ SF_SKILLS_HOOKS: Dict[str, Any] = {
 # Script filename → (short_description, emoji)
 # Note: Descriptions should be ≤35 chars to fit in status table
 HOOK_DESCRIPTIONS = {
+    "session-update-check.py": ("Check for sf-skills updates", "🔄"),
     "guardrails.py": ("Block dangerous DML, fix SOQL", "🛡️"),
     "api-version-check.py": ("Validate API version on deploy", "📋"),
     "skill-enforcement.py": ("Require skill for SF file edits", "🔐"),
@@ -197,6 +203,140 @@ EVENT_DESCRIPTIONS = {
     "SessionStart": ("Runs when Claude Code starts", "🚀"),
     "Stop": ("Runs when session ends", "🛑"),
 }
+
+
+def get_global_hooks_config() -> Dict[str, Any]:
+    """
+    Generate hook configuration with absolute paths for global installation.
+
+    Uses ~/.claude/sf-skills-hooks/ as the base path, which is a stable
+    location that auto-updates from the marketplace clone.
+    """
+    hooks_path = str(GLOBAL_HOOKS_DIR)
+
+    return {
+        "SessionStart": [
+            {
+                "hooks": [{
+                    "type": "command",
+                    "command": f"python3 {hooks_path}/scripts/session-update-check.py",
+                    "timeout": 5000
+                }],
+                "_sf_skills": True
+            },
+            {
+                "hooks": [{
+                    "type": "command",
+                    "command": f"python3 {hooks_path}/scripts/session-init.py",
+                    "timeout": 3000
+                }],
+                "_sf_skills": True
+            },
+            {
+                "hooks": [{
+                    "type": "command",
+                    "command": f"python3 {hooks_path}/scripts/org-preflight.py",
+                    "timeout": 30000,
+                    "async": True
+                }],
+                "_sf_skills": True
+            },
+            {
+                "hooks": [{
+                    "type": "command",
+                    "command": f"python3 {hooks_path}/scripts/lsp-prewarm.py",
+                    "timeout": 60000,
+                    "async": True
+                }],
+                "_sf_skills": True
+            }
+        ],
+        "UserPromptSubmit": [
+            {
+                "hooks": [{
+                    "type": "command",
+                    "command": f"python3 {hooks_path}/skill-activation-prompt.py",
+                    "timeout": 5000
+                }],
+                "_sf_skills": True
+            }
+        ],
+        "PreToolUse": [
+            {
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f"python3 {hooks_path}/scripts/guardrails.py",
+                        "timeout": 5000
+                    },
+                    {
+                        "type": "command",
+                        "command": f"python3 {hooks_path}/scripts/api-version-check.py",
+                        "timeout": 10000
+                    }
+                ],
+                "_sf_skills": True
+            },
+            {
+                "matcher": "Write|Edit",
+                "hooks": [{
+                    "type": "command",
+                    "command": f"python3 {hooks_path}/scripts/skill-enforcement.py",
+                    "timeout": 5000
+                }],
+                "_sf_skills": True
+            },
+            {
+                "matcher": "Skill",
+                "hooks": [{
+                    "type": "command",
+                    "command": f"python3 {hooks_path}/scripts/skill-enforcement.py",
+                    "timeout": 5000
+                }],
+                "_sf_skills": True
+            }
+        ],
+        "PostToolUse": [
+            {
+                "matcher": "Write|Edit",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f"python3 {hooks_path}/scripts/validator-dispatcher.py",
+                        "timeout": 10000
+                    },
+                    {
+                        "type": "command",
+                        "command": f"python3 {hooks_path}/suggest-related-skills.py",
+                        "timeout": 5000
+                    }
+                ],
+                "_sf_skills": True
+            }
+        ],
+        "PermissionRequest": [
+            {
+                "matcher": "Bash",
+                "hooks": [{
+                    "type": "command",
+                    "command": f"python3 {hooks_path}/scripts/auto-approve.py",
+                    "timeout": 5000
+                }],
+                "_sf_skills": True
+            }
+        ],
+        "SubagentStop": [
+            {
+                "hooks": [{
+                    "type": "command",
+                    "command": f"python3 {hooks_path}/scripts/chain-validator.py",
+                    "timeout": 5000
+                }],
+                "_sf_skills": True
+            }
+        ]
+    }
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -275,42 +415,54 @@ def get_hook_details(hook_config: Dict[str, Any]) -> List[Dict[str, Any]]:
     return details
 
 
-def load_settings() -> Dict[str, Any]:
-    """Load existing settings.json or return empty dict."""
-    if SETTINGS_FILE.exists():
+def load_settings(target_file: Path = None) -> Dict[str, Any]:
+    """Load existing settings.json or hooks.json, or return empty dict."""
+    if target_file is None:
+        target_file = SETTINGS_FILE
+
+    if target_file.exists():
         try:
-            with open(SETTINGS_FILE, 'r') as f:
+            with open(target_file, 'r') as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
-            print_error(f"Invalid JSON in settings.json: {e}")
+            print_error(f"Invalid JSON in {target_file.name}: {e}")
             sys.exit(1)
     return {}
 
 
-def save_settings(settings: Dict[str, Any], dry_run: bool = False):
-    """Save settings.json with backup."""
+def load_hooks_json() -> Dict[str, Any]:
+    """Load existing hooks.json or return empty dict."""
+    return load_settings(HOOKS_JSON_FILE)
+
+
+def save_settings(settings: Dict[str, Any], dry_run: bool = False, target_file: Path = None):
+    """Save settings.json or hooks.json with backup."""
+    if target_file is None:
+        target_file = SETTINGS_FILE
+
     if dry_run:
         print_info("DRY RUN: Would save settings to:")
-        print(f"         {SETTINGS_FILE}")
+        print(f"         {target_file}")
         return
 
     # Create backup
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_file = BACKUP_DIR / f"settings_{timestamp}.json"
+    backup_name = f"{target_file.stem}_{timestamp}.json"
+    backup_file = BACKUP_DIR / backup_name
 
-    if SETTINGS_FILE.exists():
-        shutil.copy(SETTINGS_FILE, backup_file)
+    if target_file.exists():
+        shutil.copy(target_file, backup_file)
         print_info(f"Backup saved: {backup_file}")
 
     # Ensure .claude directory exists
-    SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    target_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Save new settings
-    with open(SETTINGS_FILE, 'w') as f:
+    with open(target_file, 'w') as f:
         json.dump(settings, f, indent=2)
 
-    print_success(f"Settings saved: {SETTINGS_FILE}")
+    print_success(f"Settings saved: {target_file}")
 
 
 def is_sf_skills_hook(hook: Dict[str, Any]) -> bool:
@@ -493,6 +645,7 @@ def remove_sf_skills_hooks(settings: Dict[str, Any], verbose: bool = False) -> D
 def verify_scripts_exist() -> bool:
     """Verify all hook scripts exist."""
     scripts = [
+        PLUGIN_ROOT / "shared/hooks/scripts/session-update-check.py",
         PLUGIN_ROOT / "shared/hooks/scripts/guardrails.py",
         PLUGIN_ROOT / "shared/hooks/scripts/validator-dispatcher.py",
         PLUGIN_ROOT / "shared/hooks/scripts/auto-approve.py",
@@ -518,6 +671,145 @@ def verify_scripts_exist() -> bool:
 # ============================================================================
 # MAIN FUNCTIONS
 # ============================================================================
+
+def copy_hooks_to_global(dry_run: bool = False, verbose: bool = False) -> bool:
+    """
+    Copy shared/hooks/ → ~/.claude/sf-skills-hooks/
+
+    Returns True on success.
+    """
+    source_dir = PLUGIN_ROOT / "shared" / "hooks"
+
+    if not source_dir.exists():
+        print_error(f"Source hooks directory not found: {source_dir}")
+        return False
+
+    if dry_run:
+        print_info(f"Would copy {source_dir} → {GLOBAL_HOOKS_DIR}")
+        return True
+
+    try:
+        # Remove existing directory if it exists
+        if GLOBAL_HOOKS_DIR.exists():
+            shutil.rmtree(GLOBAL_HOOKS_DIR)
+
+        # Copy the entire hooks directory
+        shutil.copytree(source_dir, GLOBAL_HOOKS_DIR)
+
+        if verbose:
+            # Count files copied
+            file_count = sum(1 for _ in GLOBAL_HOOKS_DIR.rglob("*") if _.is_file())
+            print_info(f"Copied {file_count} files to {GLOBAL_HOOKS_DIR}")
+
+        print_success(f"Hooks installed to: {GLOBAL_HOOKS_DIR}")
+        return True
+
+    except (OSError, shutil.Error) as e:
+        print_error(f"Failed to copy hooks: {e}")
+        return False
+
+
+def write_version_file(version: str, dry_run: bool = False) -> bool:
+    """Write the VERSION file in the global hooks directory."""
+    version_file = GLOBAL_HOOKS_DIR / "VERSION"
+
+    if dry_run:
+        print_info(f"Would write VERSION file: {version}")
+        return True
+
+    try:
+        GLOBAL_HOOKS_DIR.mkdir(parents=True, exist_ok=True)
+        version_file.write_text(f"{version}\n")
+        print_success(f"Version set: {version}")
+        return True
+    except (OSError, IOError) as e:
+        print_error(f"Failed to write VERSION: {e}")
+        return False
+
+
+def get_registry_version() -> str:
+    """Get version from skills-registry.json."""
+    registry_file = PLUGIN_ROOT / "shared" / "hooks" / "skills-registry.json"
+    if registry_file.exists():
+        try:
+            registry = json.loads(registry_file.read_text())
+            return registry.get("version", "1.0.0")
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return "1.0.0"
+
+
+def install_hooks_global(dry_run: bool = False, verbose: bool = False):
+    """
+    Install sf-skills hooks globally to ~/.claude/sf-skills-hooks/ and hooks.json.
+
+    This creates a stable hooks directory and configures hooks.json with absolute paths.
+    """
+    print("\n📦 Installing sf-skills hooks (global mode)...\n")
+
+    # Step 1: Verify source scripts exist
+    if not verify_scripts_exist():
+        print_error("Some hook scripts are missing. Please check your installation.")
+        sys.exit(1)
+    print_success("All hook scripts verified\n")
+
+    # Step 2: Copy hooks to global location
+    print_info("Step 1: Copying hooks to global location...")
+    if not copy_hooks_to_global(dry_run=dry_run, verbose=verbose):
+        if not dry_run:
+            print_error("Failed to copy hooks to global location")
+            sys.exit(1)
+
+    # Step 3: Write VERSION file
+    version = f"v{get_registry_version()}"
+    write_version_file(version, dry_run=dry_run)
+
+    # Step 4: Generate and save hooks.json
+    print_info("\nStep 2: Configuring hooks.json...")
+    global_hooks = get_global_hooks_config()
+
+    # Load existing hooks.json to preserve user hooks
+    existing = load_hooks_json()
+    if verbose:
+        print_info(f"Loaded existing hooks from: {HOOKS_JSON_FILE}")
+
+    # Upsert hooks (update or insert)
+    new_settings, status = upsert_hooks(existing, global_hooks, verbose)
+
+    # Count changes
+    added = sum(1 for s in status.values() if s == "added")
+    updated = sum(1 for s in status.values() if s == "updated")
+
+    # Print status table
+    print("\n  Hook Event         │ Status")
+    print("  ───────────────────┼─────────────────")
+    for event_name, event_status in status.items():
+        hook_count = len(global_hooks.get(event_name, []))
+        hook_label = f"{hook_count} hook{'s' if hook_count > 1 else ''}"
+        if event_status == "added":
+            print(f"  {event_name:18} │ ✅ Added ({hook_label})")
+        elif event_status == "updated":
+            print(f"  {event_name:18} │ 🔄 Updated ({hook_label})")
+        else:
+            print(f"  {event_name:18} │ ⚪ Up to date")
+
+    # Save to hooks.json
+    print()
+    save_settings(new_settings, dry_run=dry_run, target_file=HOOKS_JSON_FILE)
+
+    # Summary
+    if not dry_run:
+        print("\n" + "═" * 60)
+        print("✅ Global installation complete!")
+        print("═" * 60)
+        print(f"""
+  Hooks installed to: {GLOBAL_HOOKS_DIR}
+  Config created at:  {HOOKS_JSON_FILE}
+  Version: {version}
+
+⚠️  Restart Claude Code to activate hooks
+""")
+
 
 def install_hooks(dry_run: bool = False, verbose: bool = False):
     """Install sf-skills hooks into settings.json."""
@@ -733,16 +1025,24 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python3 install-hooks.py              # Install hooks
+  python3 install-hooks.py              # Install hooks to settings.json
   python3 install-hooks.py --dry-run    # Preview changes
   python3 install-hooks.py --uninstall  # Remove hooks
   python3 install-hooks.py --status     # Check status
+
+Global installation (recommended for marketplace users):
+  python3 install-hooks.py --global     # Install to ~/.claude/sf-skills-hooks/
+                                        # and configure ~/.claude/hooks.json
         """
     )
     parser.add_argument("--uninstall", action="store_true", help="Remove sf-skills hooks")
     parser.add_argument("--dry-run", action="store_true", help="Preview changes without applying")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed output")
     parser.add_argument("--status", action="store_true", help="Show current installation status")
+    parser.add_argument("--global", dest="use_global", action="store_true",
+                        help="Install to ~/.claude/sf-skills-hooks/ with absolute paths")
+    parser.add_argument("--to-hooks-json", action="store_true",
+                        help="Write to ~/.claude/hooks.json instead of settings.json (implied by --global)")
 
     args = parser.parse_args()
 
@@ -752,6 +1052,9 @@ Examples:
         show_status(verbose=args.verbose)
     elif args.uninstall:
         uninstall_hooks(dry_run=args.dry_run, verbose=args.verbose)
+    elif args.use_global or args.to_hooks_json:
+        # Global installation mode
+        install_hooks_global(dry_run=args.dry_run, verbose=args.verbose)
     else:
         install_hooks(dry_run=args.dry_run, verbose=args.verbose)
 

@@ -139,11 +139,11 @@ def main():
         hook_input = json.load(sys.stdin)
     except (json.JSONDecodeError, EOFError):
         # No input - allow silently
-        print(json.dumps({"hookSpecificOutput": {"permissionDecision": "allow"}}))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
         sys.exit(0)
     except Exception:
         # Any other error - allow silently
-        print(json.dumps({"hookSpecificOutput": {"permissionDecision": "allow"}}))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
         sys.exit(0)
 
     # Get tool information
@@ -163,7 +163,7 @@ def main():
         _process_hook(tool_name, tool_input)
     except Exception:
         # Catch-all: always output valid JSON
-        print(json.dumps({"hookSpecificOutput": {"permissionDecision": "allow"}}))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
         sys.exit(0)
 
 
@@ -176,26 +176,26 @@ def _process_hook(tool_name: str, tool_input: dict) -> None:
         if skill_name.startswith("sf-"):
             save_active_skill(skill_name)
         # Always allow Skill tool
-        output = {"hookSpecificOutput": {"permissionDecision": "allow"}}
+        output = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
         print(json.dumps(output))
         sys.exit(0)
 
     # Only check for Write and Edit tools
     if tool_name not in ("Write", "Edit"):
-        print(json.dumps({"hookSpecificOutput": {"permissionDecision": "allow"}}))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
         sys.exit(0)
 
     # Get file path
     file_path = tool_input.get("file_path", "")
     if not file_path:
-        print(json.dumps({"hookSpecificOutput": {"permissionDecision": "allow"}}))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
         sys.exit(0)
 
     # Check if this is a Salesforce file
     sf_match = match_sf_file(file_path)
     if sf_match is None:
         # Not a Salesforce file - allow silently
-        print(json.dumps({"hookSpecificOutput": {"permissionDecision": "allow"}}))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
         sys.exit(0)
 
     pattern, suggested_skill, file_type = sf_match
@@ -205,7 +205,7 @@ def _process_hook(tool_name: str, tool_input: dict) -> None:
 
     if is_active:
         # Skill was invoked recently - allow silently
-        print(json.dumps({"hookSpecificOutput": {"permissionDecision": "allow"}}))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}))
         sys.exit(0)
 
     # No active skill - DENY and require skill invocation first
@@ -213,6 +213,7 @@ def _process_hook(tool_name: str, tool_input: dict) -> None:
 
     output = {
         "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
             "permissionDecisionReason": block_message
         }

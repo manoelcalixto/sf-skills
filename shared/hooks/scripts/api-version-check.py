@@ -243,6 +243,7 @@ def format_output(check_result: Dict, operation: str, source_version: str, org_i
         # Allow but show warning
         output = {
             "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
                 "permissionDecision": "allow",
                 "message": f"\n[!] API VERSION WARNING ({operation})\n"
                            f"    {check_result.get('message', '')}\n"
@@ -253,8 +254,9 @@ def format_output(check_result: Dict, operation: str, source_version: str, org_i
         # Block the operation
         output = {
             "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
-                "message": f"\n[X] API VERSION BLOCKED ({operation})\n"
+                "permissionDecisionReason": f"\n[X] API VERSION BLOCKED ({operation})\n"
                            f"    {check_result.get('message', '')}\n"
                            f"    {check_result.get('fix', '')}\n"
             }
@@ -265,13 +267,15 @@ def format_output(check_result: Dict, operation: str, source_version: str, org_i
         if note:
             output = {
                 "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
                     "permissionDecision": "allow",
-                    "message": f"API check: {note}"
+                    "additionalContext": f"API check: {note}"
                 }
             }
         else:
             output = {
                 "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
                     "permissionDecision": "allow"
                 }
             }
@@ -286,7 +290,7 @@ def _process_hook(input_data: Dict) -> Dict:
 
     # Only process Bash tool
     if tool_name != "Bash":
-        return {"hookSpecificOutput": {"permissionDecision": "allow"}}
+        return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
 
     # Get command
     command = ""
@@ -296,24 +300,24 @@ def _process_hook(input_data: Dict) -> Dict:
         command = tool_input
 
     if not command:
-        return {"hookSpecificOutput": {"permissionDecision": "allow"}}
+        return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
 
     # Check if it's a deploy/retrieve command
     is_match, operation = is_deploy_retrieve_command(command)
     if not is_match:
-        return {"hookSpecificOutput": {"permissionDecision": "allow"}}
+        return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
 
     # Get source API version
     source_version = get_source_api_version()
     if not source_version:
         # No sourceApiVersion in project - allow but could warn
-        return {"hookSpecificOutput": {"permissionDecision": "allow"}}
+        return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
 
     # Get target org API version
     org_info = get_target_org_version(command)
     if not org_info:
         # Couldn't get org version - allow operation
-        return {"hookSpecificOutput": {"permissionDecision": "allow"}}
+        return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
 
     # Check compatibility
     check_result = check_version_compatibility(
@@ -339,6 +343,7 @@ def main():
         # On any error, allow the operation
         output = {
             "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
                 "permissionDecision": "allow"
             }
         }

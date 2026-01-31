@@ -27,10 +27,38 @@ Installation:
 
 import json
 import os
+import select
 import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
+
+
+def read_stdin_safe(timeout_seconds: float = 0.1) -> dict:
+    """
+    Safely read JSON from stdin with timeout.
+
+    Returns empty dict if:
+    - stdin is a TTY (interactive terminal)
+    - No data available within timeout
+    - JSON parsing fails
+
+    This prevents blocking when Claude Code doesn't pipe data.
+    """
+    # Skip if running interactively
+    if sys.stdin.isatty():
+        return {}
+
+    try:
+        # Use select to check if stdin has data (Unix only)
+        readable, _, _ = select.select([sys.stdin], [], [], timeout_seconds)
+        if not readable:
+            return {}
+
+        # Read and parse
+        return json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError, OSError, ValueError):
+        return {}
 
 
 # Session directory base
@@ -139,11 +167,8 @@ def main():
     On /clear events, if valid session state exists, we skip re-initialization
     to prevent status bar flicker (org/LSP state files remain valid).
     """
-    # Read input from stdin (SessionStart event data)
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        input_data = {}
+    # Read input from stdin (SessionStart event data) - with timeout to prevent blocking
+    input_data = read_stdin_safe(timeout_seconds=0.1)
 
     # Get Claude Code's PID (our parent process)
     # Note: This hook runs as a child of Claude Code, so getppid() gives us

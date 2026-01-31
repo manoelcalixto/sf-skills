@@ -33,6 +33,7 @@ Installation:
 
 import json
 import os
+import select
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,33 @@ from pathlib import Path
 from typing import Optional, Tuple
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
+
+
+def read_stdin_safe(timeout_seconds: float = 0.1) -> dict:
+    """
+    Safely read JSON from stdin with timeout.
+
+    Returns empty dict if:
+    - stdin is a TTY (interactive terminal)
+    - No data available within timeout
+    - JSON parsing fails
+
+    This prevents blocking when Claude Code doesn't pipe data.
+    """
+    # Skip if running interactively
+    if sys.stdin.isatty():
+        return {}
+
+    try:
+        # Use select to check if stdin has data (Unix only)
+        readable, _, _ = select.select([sys.stdin], [], [], timeout_seconds)
+        if not readable:
+            return {}
+
+        # Read and parse
+        return json.load(sys.stdin)
+    except (json.JSONDecodeError, EOFError, OSError, ValueError):
+        return {}
 
 # ============================================================================
 # CONFIGURATION
@@ -461,11 +489,8 @@ def main():
     """
     start_time = time.time()
 
-    # Read input from stdin (SessionStart event data)
-    try:
-        input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        input_data = {}
+    # Read input from stdin (SessionStart event data) - with timeout to prevent blocking
+    input_data = read_stdin_safe(timeout_seconds=0.1)
 
     # Check 1: Is cache fresh? If so, exit immediately (most common path)
     if is_cache_fresh():

@@ -24,7 +24,7 @@ SELECT
     ssot__StartTimestamp__c AS StartTime,
     ssot__EndTimestamp__c AS EndTime,
     ssot__RelatedMessagingSessionId__c AS MessagingSessionID,
-    ssot__AIAgentSessionEndType__c AS EndType
+    ssot__AiAgentSessionEndType__c AS EndType
 FROM ssot__AIAgentSession__dlm
 ORDER BY ssot__StartTimestamp__c DESC
 LIMIT 100
@@ -43,7 +43,7 @@ LIMIT 100
 SELECT
     ssot__Id__c AS InteractionID,
     ssot__aiAgentSessionId__c AS SessionID,
-    ssot__InteractionType__c AS InteractionType,
+    ssot__AiAgentInteractionType__c AS InteractionType,
     ssot__TopicApiName__c AS Topic,
     ssot__StartTimestamp__c AS StartTime,
     ssot__EndTimestamp__c AS EndTime
@@ -65,7 +65,7 @@ ORDER BY ssot__StartTimestamp__c
 SELECT
     ssot__Id__c AS StepID,
     ssot__AIAgentInteractionId__c AS InteractionID,
-    ssot__AIAgentInteractionStepType__c AS StepType,
+    ssot__AiAgentInteractionStepType__c AS StepType,
     ssot__Name__c AS ActionName,
     ssot__InputValueText__c AS InputJSON,
     ssot__OutputValueText__c AS OutputJSON
@@ -105,10 +105,10 @@ ORDER BY ssot__MessageSentTimestamp__c
 ```sql
 -- A1: Session Summary by End Type
 SELECT
-    ssot__AIAgentSessionEndType__c AS EndType,
+    ssot__AiAgentSessionEndType__c AS EndType,
     COUNT(*) AS SessionCount
 FROM ssot__AIAgentSession__dlm
-GROUP BY ssot__AIAgentSessionEndType__c
+GROUP BY ssot__AiAgentSessionEndType__c
 ORDER BY SessionCount DESC
 ```
 
@@ -124,7 +124,7 @@ SELECT
     ssot__TopicApiName__c AS Topic,
     COUNT(*) AS TurnCount
 FROM ssot__AIAgentInteraction__dlm
-WHERE ssot__InteractionType__c = 'TURN'
+WHERE ssot__AiAgentInteractionType__c = 'TURN'
 GROUP BY ssot__TopicApiName__c
 ORDER BY TurnCount DESC
 ```
@@ -141,7 +141,7 @@ SELECT
     ssot__Name__c AS ActionName,
     COUNT(*) AS InvocationCount
 FROM ssot__AIAgentInteractionStep__dlm
-WHERE ssot__AIAgentInteractionStepType__c = 'ACTION_STEP'
+WHERE ssot__AiAgentInteractionStepType__c = 'ACTION_STEP'
 GROUP BY ssot__Name__c
 ORDER BY InvocationCount DESC
 ```
@@ -165,10 +165,10 @@ ORDER BY InvocationCount DESC
 | SessionID | `ssot__Id__c` |
 | StartTime | `ssot__StartTimestamp__c` |
 | EndTime | `ssot__EndTimestamp__c` |
-| EndType | `ssot__AIAgentSessionEndType__c` |
+| EndType | `ssot__AiAgentSessionEndType__c` |
 | InteractionID | `ssot__Id__c` |
 | Topic | `ssot__TopicApiName__c` |
-| StepType | `ssot__AIAgentInteractionStepType__c` |
+| StepType | `ssot__AiAgentInteractionStepType__c` |
 | ActionName | `ssot__Name__c` |
 | MessageType | `ssot__AIAgentInteractionMessageType__c` |
 | Content | `ssot__ContentText__c` |

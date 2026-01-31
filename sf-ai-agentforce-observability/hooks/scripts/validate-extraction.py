@@ -67,13 +67,13 @@ def validate_parquet_file(file_path: str) -> Dict[str, Any]:
 
         # Check for expected STDM fields based on file type
         if "sessions" in str(file_path).lower():
-            expected = ["ssot__Id__c", "ssot__AIAgentApiName__c", "ssot__StartTimestamp__c"]
+            expected = ["ssot__Id__c", "ssot__AiAgentApiName__c", "ssot__StartTimestamp__c"]
         elif "interactions" in str(file_path).lower():
-            expected = ["ssot__Id__c", "ssot__aiAgentSessionId__c", "ssot__InteractionType__c"]
+            expected = ["ssot__Id__c", "ssot__aiAgentSessionId__c", "ssot__AiAgentInteractionType__c"]
         elif "steps" in str(file_path).lower():
-            expected = ["ssot__Id__c", "ssot__AIAgentInteractionId__c", "ssot__AIAgentInteractionStepType__c"]
+            expected = ["ssot__Id__c", "ssot__AiAgentInteractionId__c", "ssot__AiAgentInteractionStepType__c"]
         elif "messages" in str(file_path).lower():
-            expected = ["ssot__Id__c", "ssot__AIAgentInteractionId__c", "ssot__ContentText__c"]
+            expected = ["ssot__Id__c", "ssot__AiAgentInteractionId__c", "ssot__ContentText__c"]
         else:
             expected = ["ssot__Id__c"]  # At minimum, expect an ID field
 

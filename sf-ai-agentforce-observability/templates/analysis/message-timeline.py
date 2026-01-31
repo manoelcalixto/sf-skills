@@ -53,10 +53,10 @@ def get_session_info(data: dict, session_id: str) -> dict:
     row = session.row(0, named=True)
     return {
         "id": row.get("ssot__Id__c"),
-        "agent": row.get("ssot__AIAgentApiName__c", "Unknown"),
+        "agent": row.get("ssot__AiAgentApiName__c", "Unknown"),
         "start": row.get("ssot__StartTimestamp__c"),
         "end": row.get("ssot__EndTimestamp__c"),
-        "end_type": row.get("ssot__AIAgentSessionEndType__c"),
+        "end_type": row.get("ssot__AiAgentSessionEndType__c"),
     }
 
 
@@ -104,7 +104,7 @@ def get_timeline(data: dict, session_id: str) -> list:
             "type": "step",
             "timestamp": "",  # Steps don't have timestamps
             "interaction_id": row.get("ssot__AIAgentInteractionId__c"),
-            "step_type": row.get("ssot__AIAgentInteractionStepType__c"),
+            "step_type": row.get("ssot__AiAgentInteractionStepType__c"),
             "name": row.get("ssot__Name__c"),
             "input": row.get("ssot__InputValueText__c"),
             "output": row.get("ssot__OutputValueText__c"),
@@ -116,7 +116,7 @@ def get_timeline(data: dict, session_id: str) -> list:
             "type": "interaction",
             "timestamp": row.get("ssot__StartTimestamp__c", ""),
             "interaction_id": row.get("ssot__Id__c"),
-            "interaction_type": row.get("ssot__InteractionType__c"),
+            "interaction_type": row.get("ssot__AiAgentInteractionType__c"),
             "topic": row.get("ssot__TopicApiName__c"),
         })
 
@@ -202,7 +202,7 @@ def list_failed_sessions(data: dict, limit: int = 10) -> pl.DataFrame:
     result = (
         data["sessions"]
         .filter(
-            pl.col("ssot__AIAgentSessionEndType__c").is_in(["Escalated", "Abandoned", "Failed"])
+            pl.col("ssot__AiAgentSessionEndType__c").is_in(["Escalated", "Abandoned", "Failed"])
         )
         .sort("ssot__StartTimestamp__c", descending=True)
         .head(limit)
@@ -233,8 +233,8 @@ def main():
 
         for row in failed.iter_rows(named=True):
             session_id = row.get("ssot__Id__c")
-            agent = row.get("ssot__AIAgentApiName__c", "Unknown")
-            end_type = row.get("ssot__AIAgentSessionEndType__c")
+            agent = row.get("ssot__AiAgentApiName__c", "Unknown")
+            end_type = row.get("ssot__AiAgentSessionEndType__c")
             start = row.get("ssot__StartTimestamp__c", "")[:19]
 
             icon = "🔄" if end_type == "Escalated" else "❌"

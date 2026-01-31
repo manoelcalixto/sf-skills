@@ -11,8 +11,8 @@
 
 SELECT
     ssot__Id__c,
-    ssot__AIAgentInteractionId__c,
-    ssot__AIAgentInteractionStepType__c,
+    ssot__AiAgentInteractionId__c,
+    ssot__AiAgentInteractionStepType__c,
     ssot__Name__c,
     ssot__InputValueText__c,
     ssot__OutputValueText__c,
@@ -20,7 +20,7 @@ SELECT
     ssot__PostStepVariableText__c,
     ssot__GenerationId__c
 FROM ssot__AIAgentInteractionStep__dlm
-WHERE ssot__AIAgentInteractionId__c IN ({{INTERACTION_IDS}});
+WHERE ssot__AiAgentInteractionId__c IN ({{INTERACTION_IDS}});
 
 
 -- ============================================================================
@@ -29,23 +29,23 @@ WHERE ssot__AIAgentInteractionId__c IN ({{INTERACTION_IDS}});
 
 -- Steps for specific interaction
 -- SELECT * FROM ssot__AIAgentInteractionStep__dlm
--- WHERE ssot__AIAgentInteractionId__c = 'a0y1234567890ABC';
+-- WHERE ssot__AiAgentInteractionId__c = 'a0y1234567890ABC';
 
 -- Action step distribution
 -- SELECT
 --     ssot__Name__c as action_name,
 --     COUNT(*) as count
 -- FROM ssot__AIAgentInteractionStep__dlm
--- WHERE ssot__AIAgentInteractionStepType__c = 'ACTION_STEP'
+-- WHERE ssot__AiAgentInteractionStepType__c = 'ACTION_STEP'
 -- GROUP BY ssot__Name__c
 -- ORDER BY count DESC;
 
 -- LLM vs Action step ratio
 -- SELECT
---     ssot__AIAgentInteractionStepType__c,
+--     ssot__AiAgentInteractionStepType__c,
 --     COUNT(*) as count
 -- FROM ssot__AIAgentInteractionStep__dlm
--- GROUP BY ssot__AIAgentInteractionStepType__c;
+-- GROUP BY ssot__AiAgentInteractionStepType__c;
 
 -- Find steps with large outputs (potential issues)
 -- SELECT
@@ -59,4 +59,4 @@ WHERE ssot__AIAgentInteractionId__c IN ({{INTERACTION_IDS}});
 -- Steps with specific action name
 -- SELECT * FROM ssot__AIAgentInteractionStep__dlm
 -- WHERE ssot__Name__c = 'Get_Order_Status'
---   AND ssot__AIAgentInteractionStepType__c = 'ACTION_STEP';
+--   AND ssot__AiAgentInteractionStepType__c = 'ACTION_STEP';

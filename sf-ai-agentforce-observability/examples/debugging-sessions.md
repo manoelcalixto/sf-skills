@@ -36,11 +36,11 @@ sessions = pl.scan_parquet(Path("./stdm_data/sessions/**/*.parquet"))
 
 # Failed/escalated sessions
 failed = sessions.filter(
-    pl.col("ssot__AIAgentSessionEndType__c").is_in(["Escalated", "Failed", "Abandoned"])
+    pl.col("ssot__AiAgentSessionEndType__c").is_in(["Escalated", "Failed", "Abandoned"])
 ).sort("ssot__StartTimestamp__c", descending=True).head(10).collect()
 
 for row in failed.iter_rows(named=True):
-    print(f"{row['ssot__Id__c']} | {row['ssot__AIAgentApiName__c']} | {row['ssot__AIAgentSessionEndType__c']}")
+    print(f"{row['ssot__Id__c']} | {row['ssot__AiAgentApiName__c']} | {row['ssot__AiAgentSessionEndType__c']}")
 ```
 
 ---
@@ -200,7 +200,7 @@ print(timeline.tail(10))
 steps = pl.read_parquet("./stdm_data/steps/data.parquet")
 
 failed_actions = steps.filter(
-    (pl.col("ssot__AIAgentInteractionStepType__c") == "ACTION_STEP") &
+    (pl.col("ssot__AiAgentInteractionStepType__c") == "ACTION_STEP") &
     (pl.col("ssot__OutputValueText__c").str.contains("error|Error|ERROR"))
 )
 
@@ -215,7 +215,7 @@ Sessions with many turns often indicate problems:
 interactions = pl.read_parquet("./stdm_data/interactions/data.parquet")
 
 long_sessions = interactions.filter(
-    pl.col("ssot__InteractionType__c") == "TURN"
+    pl.col("ssot__AiAgentInteractionType__c") == "TURN"
 ).group_by("ssot__aiAgentSessionId__c").agg(
     pl.count().alias("turns")
 ).filter(pl.col("turns") > 10).collect()
@@ -238,7 +238,7 @@ joined = sessions.join(
     right_on="ssot__aiAgentSessionId__c"
 )
 
-print(joined.group_by("ssot__AIAgentSessionEndType__c").agg([
+print(joined.group_by("ssot__AiAgentSessionEndType__c").agg([
     pl.col("turns").mean().alias("avg_turns"),
     pl.count().alias("sessions")
 ]))

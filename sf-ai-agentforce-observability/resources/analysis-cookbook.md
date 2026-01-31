@@ -25,7 +25,7 @@ messages = pl.scan_parquet(data_dir / "messages" / "**/*.parquet")
 
 ```python
 # Session count by agent
-sessions.group_by("ssot__AIAgentApiName__c").agg(
+sessions.group_by("ssot__AiAgentApiName__c").agg(
     pl.count().alias("session_count")
 ).sort("session_count", descending=True).collect()
 ```
@@ -33,10 +33,10 @@ sessions.group_by("ssot__AIAgentApiName__c").agg(
 ### Completion Rate by Agent
 
 ```python
-sessions.group_by("ssot__AIAgentApiName__c").agg([
+sessions.group_by("ssot__AiAgentApiName__c").agg([
     pl.count().alias("total"),
-    pl.col("ssot__AIAgentSessionEndType__c")
-      .filter(pl.col("ssot__AIAgentSessionEndType__c") == "Completed")
+    pl.col("ssot__AiAgentSessionEndType__c")
+      .filter(pl.col("ssot__AiAgentSessionEndType__c") == "Completed")
       .count().alias("completed")
 ]).with_columns([
     (pl.col("completed") / pl.col("total") * 100).round(1).alias("completion_rate")
@@ -52,7 +52,7 @@ sessions.with_columns([
     pl.col("ssot__EndTimestamp__c").str.to_datetime().alias("end"),
 ]).with_columns([
     (pl.col("end") - pl.col("start")).alias("duration")
-]).group_by("ssot__AIAgentApiName__c").agg([
+]).group_by("ssot__AiAgentApiName__c").agg([
     pl.col("duration").mean().alias("avg_duration"),
     pl.col("duration").max().alias("max_duration"),
 ]).collect()
@@ -67,7 +67,7 @@ sessions.with_columns([
 ```python
 turns_per_session = (
     interactions
-    .filter(pl.col("ssot__InteractionType__c") == "TURN")
+    .filter(pl.col("ssot__AiAgentInteractionType__c") == "TURN")
     .group_by("ssot__aiAgentSessionId__c")
     .agg(pl.count().alias("turn_count"))
 )
@@ -83,7 +83,7 @@ turns_per_session.group_by("turn_count").agg(
 ```python
 # Most common topics
 interactions.filter(
-    pl.col("ssot__InteractionType__c") == "TURN"
+    pl.col("ssot__AiAgentInteractionType__c") == "TURN"
 ).group_by("ssot__TopicApiName__c").agg(
     pl.count().alias("turn_count"),
     pl.col("ssot__aiAgentSessionId__c").n_unique().alias("session_count")
@@ -96,7 +96,7 @@ interactions.filter(
 # Sessions that used multiple topics
 topic_counts = (
     interactions
-    .filter(pl.col("ssot__InteractionType__c") == "TURN")
+    .filter(pl.col("ssot__AiAgentInteractionType__c") == "TURN")
     .group_by("ssot__aiAgentSessionId__c")
     .agg(pl.col("ssot__TopicApiName__c").n_unique().alias("topic_count"))
 )
@@ -112,7 +112,7 @@ topic_counts.filter(pl.col("topic_count") > 1).collect()
 ### LLM vs Action Ratio
 
 ```python
-steps.group_by("ssot__AIAgentInteractionStepType__c").agg(
+steps.group_by("ssot__AiAgentInteractionStepType__c").agg(
     pl.count().alias("count")
 ).with_columns([
     (pl.col("count") / pl.col("count").sum() * 100).round(1).alias("percentage")
@@ -123,7 +123,7 @@ steps.group_by("ssot__AIAgentInteractionStepType__c").agg(
 
 ```python
 steps.filter(
-    pl.col("ssot__AIAgentInteractionStepType__c") == "ACTION_STEP"
+    pl.col("ssot__AiAgentInteractionStepType__c") == "ACTION_STEP"
 ).group_by("ssot__Name__c").agg(
     pl.count().alias("invocations")
 ).sort("invocations", descending=True).head(20).collect()
@@ -148,7 +148,7 @@ steps_per_turn.group_by("step_count").agg(
 ```python
 # Parse JSON in action inputs (example for specific action)
 action_steps = steps.filter(
-    (pl.col("ssot__AIAgentInteractionStepType__c") == "ACTION_STEP") &
+    (pl.col("ssot__AiAgentInteractionStepType__c") == "ACTION_STEP") &
     (pl.col("ssot__Name__c") == "Get_Order_Status")
 ).collect()
 
@@ -239,13 +239,13 @@ sessions.with_columns([
 
 ```python
 failed = sessions.filter(
-    pl.col("ssot__AIAgentSessionEndType__c").is_in(["Escalated", "Abandoned", "Failed"])
+    pl.col("ssot__AiAgentSessionEndType__c").is_in(["Escalated", "Abandoned", "Failed"])
 ).sort("ssot__StartTimestamp__c", descending=True).collect()
 
 for row in failed.head(5).iter_rows(named=True):
     print(f"Session: {row['ssot__Id__c']}")
-    print(f"  Agent: {row['ssot__AIAgentApiName__c']}")
-    print(f"  End: {row['ssot__AIAgentSessionEndType__c']}")
+    print(f"  Agent: {row['ssot__AiAgentApiName__c']}")
+    print(f"  End: {row['ssot__AiAgentSessionEndType__c']}")
     print()
 ```
 
@@ -287,8 +287,8 @@ for row in timeline.iter_rows(named=True):
 # Good: Lazy evaluation, deferred execution
 result = (
     sessions
-    .filter(pl.col("ssot__AIAgentApiName__c") == "My_Agent")
-    .group_by("ssot__AIAgentSessionEndType__c")
+    .filter(pl.col("ssot__AiAgentApiName__c") == "My_Agent")
+    .group_by("ssot__AiAgentSessionEndType__c")
     .agg(pl.count())
     .collect()  # Execute here
 )
@@ -304,8 +304,8 @@ result = df.filter(...)  # Then filter
 # Good: Select specific columns
 sessions.select([
     "ssot__Id__c",
-    "ssot__AIAgentApiName__c",
-    "ssot__AIAgentSessionEndType__c"
+    "ssot__AiAgentApiName__c",
+    "ssot__AiAgentSessionEndType__c"
 ]).collect()
 
 # Avoid: Select all columns

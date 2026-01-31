@@ -46,8 +46,8 @@ sessions.fetch(5)  # Faster, doesn't scan full file
 ```python
 sessions.select([
     "ssot__Id__c",
-    "ssot__AIAgentApiName__c",
-    "ssot__AIAgentSessionEndType__c"
+    "ssot__AiAgentApiName__c",
+    "ssot__AiAgentSessionEndType__c"
 ]).collect()
 ```
 
@@ -57,21 +57,21 @@ sessions.select([
 
 ### Single Condition
 ```python
-sessions.filter(pl.col("ssot__AIAgentApiName__c") == "My_Agent")
+sessions.filter(pl.col("ssot__AiAgentApiName__c") == "My_Agent")
 ```
 
 ### Multiple Conditions (AND)
 ```python
 sessions.filter(
-    (pl.col("ssot__AIAgentApiName__c") == "My_Agent") &
-    (pl.col("ssot__AIAgentSessionEndType__c") == "Completed")
+    (pl.col("ssot__AiAgentApiName__c") == "My_Agent") &
+    (pl.col("ssot__AiAgentSessionEndType__c") == "Completed")
 )
 ```
 
 ### Multiple Conditions (OR)
 ```python
 sessions.filter(
-    pl.col("ssot__AIAgentSessionEndType__c").is_in(["Escalated", "Failed"])
+    pl.col("ssot__AiAgentSessionEndType__c").is_in(["Escalated", "Failed"])
 )
 ```
 
@@ -92,17 +92,17 @@ messages.filter(pl.col("ssot__ContentText__c").str.contains("order"))
 
 ### Group By with Count
 ```python
-sessions.group_by("ssot__AIAgentApiName__c").agg(
+sessions.group_by("ssot__AiAgentApiName__c").agg(
     pl.count().alias("session_count")
 ).sort("session_count", descending=True).collect()
 ```
 
 ### Multiple Aggregations
 ```python
-sessions.group_by("ssot__AIAgentApiName__c").agg([
+sessions.group_by("ssot__AiAgentApiName__c").agg([
     pl.count().alias("total"),
-    pl.col("ssot__AIAgentSessionEndType__c")
-      .filter(pl.col("ssot__AIAgentSessionEndType__c") == "Completed")
+    pl.col("ssot__AiAgentSessionEndType__c")
+      .filter(pl.col("ssot__AiAgentSessionEndType__c") == "Completed")
       .count().alias("completed")
 ]).collect()
 ```
@@ -185,7 +185,7 @@ messages.with_columns(
 ### Conditional Column
 ```python
 sessions.with_columns(
-    pl.when(pl.col("ssot__AIAgentSessionEndType__c") == "Completed")
+    pl.when(pl.col("ssot__AiAgentSessionEndType__c") == "Completed")
       .then(pl.lit("Success"))
       .otherwise(pl.lit("Failure"))
       .alias("outcome")
@@ -203,7 +203,7 @@ sessions.sort("ssot__StartTimestamp__c", descending=True)
 
 ### Multiple Columns
 ```python
-sessions.sort(["ssot__AIAgentApiName__c", "ssot__StartTimestamp__c"])
+sessions.sort(["ssot__AiAgentApiName__c", "ssot__StartTimestamp__c"])
 ```
 
 ---
@@ -254,7 +254,7 @@ result = df.filter(...)
 ### 2. Select Early
 ```python
 # Good: Only load needed columns
-sessions.select(["ssot__Id__c", "ssot__AIAgentApiName__c"]).filter(...)
+sessions.select(["ssot__Id__c", "ssot__AiAgentApiName__c"]).filter(...)
 
 # Avoid: Load all, filter later
 sessions.filter(...).select(...)
@@ -263,7 +263,7 @@ sessions.filter(...).select(...)
 ### 3. Filter Before Join
 ```python
 # Good: Filter before joining
-filtered_sessions = sessions.filter(pl.col("ssot__AIAgentApiName__c") == "My_Agent")
+filtered_sessions = sessions.filter(pl.col("ssot__AiAgentApiName__c") == "My_Agent")
 filtered_sessions.join(interactions, ...)
 
 # Avoid: Join everything, then filter
@@ -282,13 +282,13 @@ sessions.collect(streaming=True)
 
 ### Session Statistics
 ```python
-sessions.group_by("ssot__AIAgentApiName__c").agg([
+sessions.group_by("ssot__AiAgentApiName__c").agg([
     pl.count().alias("sessions"),
-    pl.col("ssot__AIAgentSessionEndType__c")
-      .filter(pl.col("ssot__AIAgentSessionEndType__c") == "Completed")
+    pl.col("ssot__AiAgentSessionEndType__c")
+      .filter(pl.col("ssot__AiAgentSessionEndType__c") == "Completed")
       .count().alias("completed"),
-    pl.col("ssot__AIAgentSessionEndType__c")
-      .filter(pl.col("ssot__AIAgentSessionEndType__c") == "Escalated")
+    pl.col("ssot__AiAgentSessionEndType__c")
+      .filter(pl.col("ssot__AiAgentSessionEndType__c") == "Escalated")
       .count().alias("escalated"),
 ]).collect()
 ```
@@ -305,7 +305,7 @@ sessions.with_columns(
 ### Top N Actions
 ```python
 steps.filter(
-    pl.col("ssot__AIAgentInteractionStepType__c") == "ACTION_STEP"
+    pl.col("ssot__AiAgentInteractionStepType__c") == "ACTION_STEP"
 ).group_by("ssot__Name__c").agg(
     pl.count().alias("invocations")
 ).sort("invocations", descending=True).head(10).collect()

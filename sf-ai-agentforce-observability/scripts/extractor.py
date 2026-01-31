@@ -198,9 +198,14 @@ class STDMExtractor:
               AND ssot__StartTimestamp__c < '{self._format_timestamp(until)}'
         """.strip()
 
+        # NOTE: Agent name filtering is not directly supported on Session table.
+        # Session table does not have ssot__AIAgentApiName__c - that field is on Moment table.
+        # To filter by agent, query Moments first to get session IDs, then use extract_session_tree.
         if agent_names:
-            names_list = ", ".join(f"'{name}'" for name in agent_names)
-            query += f"\n  AND ssot__AIAgentApiName__c IN ({names_list})"
+            console.print(
+                "[yellow]Warning: Agent name filtering not supported on Session table. "
+                "Use extract_session_tree with session IDs instead.[/yellow]"
+            )
 
         query += "\n  ORDER BY ssot__StartTimestamp__c"
 

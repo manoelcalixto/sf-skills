@@ -42,7 +42,7 @@ def sessions_by_agent(data: dict) -> pl.DataFrame:
     # Count turns per session
     turns = (
         interactions
-        .filter(pl.col("ssot__InteractionType__c") == "TURN")
+        .filter(pl.col("ssot__AiAgentInteractionType__c") == "TURN")
         .group_by("ssot__aiAgentSessionId__c")
         .agg(pl.count().alias("turn_count"))
     )
@@ -56,7 +56,7 @@ def sessions_by_agent(data: dict) -> pl.DataFrame:
             right_on="ssot__aiAgentSessionId__c",
             how="left"
         )
-        .group_by("ssot__AIAgentApiName__c")
+        .group_by("ssot__AiAgentApiName__c")
         .agg([
             pl.count().alias("session_count"),
             pl.col("turn_count").mean().alias("avg_turns"),
@@ -73,7 +73,7 @@ def end_type_distribution(data: dict) -> pl.DataFrame:
     """Calculate session end type distribution."""
     result = (
         data["sessions"]
-        .group_by("ssot__AIAgentSessionEndType__c")
+        .group_by("ssot__AiAgentSessionEndType__c")
         .agg(pl.count().alias("count"))
         .with_columns([
             (pl.col("count") / pl.col("count").sum() * 100)
@@ -124,7 +124,7 @@ def print_summary(data_dir: Path):
 
     total_sessions = 0
     for row in agent_stats.iter_rows(named=True):
-        agent = row.get("ssot__AIAgentApiName__c", "Unknown")
+        agent = row.get("ssot__AiAgentApiName__c", "Unknown")
         sessions = row.get("session_count", 0)
         avg_turns = row.get("avg_turns", 0) or 0
         max_turns = row.get("max_turns", 0) or 0
@@ -147,7 +147,7 @@ def print_summary(data_dir: Path):
     end_types = end_type_distribution(data)
 
     for row in end_types.iter_rows(named=True):
-        end_type = row.get("ssot__AIAgentSessionEndType__c", "Unknown")
+        end_type = row.get("ssot__AiAgentSessionEndType__c", "Unknown")
         count = row.get("count", 0)
         pct = row.get("percentage", 0)
 

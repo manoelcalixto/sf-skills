@@ -47,7 +47,7 @@ def step_type_ratio(data: dict, agent_name: str = None) -> pl.DataFrame:
 
         session_ids = (
             sessions
-            .filter(pl.col("ssot__AIAgentApiName__c") == agent_name)
+            .filter(pl.col("ssot__AiAgentApiName__c") == agent_name)
             .select("ssot__Id__c")
         )
 
@@ -65,7 +65,7 @@ def step_type_ratio(data: dict, agent_name: str = None) -> pl.DataFrame:
 
     result = (
         steps
-        .group_by("ssot__AIAgentInteractionStepType__c")
+        .group_by("ssot__AiAgentInteractionStepType__c")
         .agg(pl.count().alias("count"))
         .with_columns([
             (pl.col("count") / pl.col("count").sum() * 100)
@@ -84,7 +84,7 @@ def action_distribution(data: dict, agent_name: str = None, top_n: int = 20) -> 
 
     # Filter to ACTION_STEP only
     action_steps = steps.filter(
-        pl.col("ssot__AIAgentInteractionStepType__c") == "ACTION_STEP"
+        pl.col("ssot__AiAgentInteractionStepType__c") == "ACTION_STEP"
     )
 
     if agent_name:
@@ -93,7 +93,7 @@ def action_distribution(data: dict, agent_name: str = None, top_n: int = 20) -> 
 
         session_ids = (
             sessions
-            .filter(pl.col("ssot__AIAgentApiName__c") == agent_name)
+            .filter(pl.col("ssot__AiAgentApiName__c") == agent_name)
             .select("ssot__Id__c")
         )
 
@@ -150,7 +150,7 @@ def print_analysis(data_dir: Path, agent_name: str = None):
     ratio = step_type_ratio(data, agent_name)
 
     for row in ratio.iter_rows(named=True):
-        step_type = row.get("ssot__AIAgentInteractionStepType__c", "Unknown")
+        step_type = row.get("ssot__AiAgentInteractionStepType__c", "Unknown")
         count = row.get("count", 0)
         pct = row.get("percentage", 0)
 

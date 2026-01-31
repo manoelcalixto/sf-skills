@@ -93,7 +93,7 @@ messages = pl.scan_parquet(data_dir / "messages" / "**/*.parquet")
 
 **Sessions by End Type:**
 ```python
-sessions.group_by("ssot__AIAgentSessionEndType__c").agg(
+sessions.group_by("ssot__AiAgentSessionEndType__c").agg(
     pl.count().alias("count")
 ).sort("count", descending=True).collect()
 ```
@@ -122,7 +122,7 @@ sessions.with_columns(
 ```python
 turns_per_session = (
     interactions
-    .filter(pl.col("ssot__InteractionType__c") == "TURN")
+    .filter(pl.col("ssot__AiAgentInteractionType__c") == "TURN")
     .group_by("ssot__aiAgentSessionId__c")
     .agg(pl.count().alias("turns"))
 )
@@ -137,7 +137,7 @@ turns_per_session.group_by("turns").agg(
 ```python
 topic_counts = (
     interactions
-    .filter(pl.col("ssot__InteractionType__c") == "TURN")
+    .filter(pl.col("ssot__AiAgentInteractionType__c") == "TURN")
     .group_by("ssot__aiAgentSessionId__c")
     .agg(pl.col("ssot__TopicApiName__c").n_unique().alias("topics"))
 )
@@ -150,7 +150,7 @@ topic_counts.filter(pl.col("topics") > 1).collect()
 
 **LLM vs Action Ratio:**
 ```python
-steps.group_by("ssot__AIAgentInteractionStepType__c").agg(
+steps.group_by("ssot__AiAgentInteractionStepType__c").agg(
     pl.count().alias("count")
 ).with_columns(
     (pl.col("count") / pl.col("count").sum() * 100).round(1).alias("percent")
@@ -160,7 +160,7 @@ steps.group_by("ssot__AIAgentInteractionStepType__c").agg(
 **Most Used Actions:**
 ```python
 steps.filter(
-    pl.col("ssot__AIAgentInteractionStepType__c") == "ACTION_STEP"
+    pl.col("ssot__AiAgentInteractionStepType__c") == "ACTION_STEP"
 ).group_by("ssot__Name__c").agg(
     pl.count().alias("invocations")
 ).sort("invocations", descending=True).head(10).collect()

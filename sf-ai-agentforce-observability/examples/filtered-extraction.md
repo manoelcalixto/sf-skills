@@ -194,7 +194,7 @@ stdm-extract extract --org prod --days 1
 python3 -c "
 import polars as pl
 print(pl.read_parquet('./stdm_data/sessions/data.parquet')
-    .select('ssot__AIAgentApiName__c')
+    .select('ssot__AiAgentApiName__c')
     .unique()
 )
 "

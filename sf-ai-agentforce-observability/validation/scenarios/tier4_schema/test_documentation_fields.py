@@ -69,7 +69,7 @@ class TestSessionFields:
         end_type_fields = [
             "ssot__AiAgentSessionEndType__c",
             "ssot__AiAgentSessionEndTypeId__c",
-            "ssot__AIAgentSessionEndType__c",  # Alternate casing
+            # Note: API uses 'AiAgent' (lowercase 'i'), not 'AIAgent'
         ]
 
         found = any(f in field_names for f in end_type_fields)
@@ -170,7 +170,7 @@ class TestStepFields:
         type_fields = [
             "ssot__AiAgentInteractionStepType__c",
             "ssot__AiAgentInteractionStepTypeId__c",
-            "ssot__AIAgentInteractionStepType__c",
+            # Note: API uses 'AiAgent' (lowercase 'i'), not 'AIAgent'
         ]
 
         found = any(f in field_names for f in type_fields)

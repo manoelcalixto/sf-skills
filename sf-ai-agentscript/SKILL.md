@@ -483,7 +483,7 @@ Failed to retrieve components using source tracking:
 
 # ✅ WORKAROUND - Use CLI directly:
 sf project retrieve start -m AiAuthoringBundle:MyAgent
-sf agent publish authoring-bundle --source-dir ./force-app/main/default/aiAuthoringBundles/MyAgent
+sf agent publish authoring-bundle --api-name MyAgent -o TARGET_ORG
 ```
 
 ### Language Block Quirks
@@ -514,14 +514,35 @@ language:
 
 ### Block Structure (CORRECTED Order per Official Spec)
 ```yaml
-config:        # 1. Required: Agent metadata (agent_name, default_agent_user)
+config:        # 1. Required: Agent metadata (developer_name, agent_type, default_agent_user)
 variables:     # 2. Optional: State management (mutable/linked)
 system:        # 3. Required: Global messages and instructions
-connections:   # 4. Optional: Escalation routing
+connections:   # 4. Optional: Escalation routing (Service Agents ONLY)
 knowledge:     # 5. Optional: Knowledge base config
 language:      # 6. Optional: Locale settings
 start_agent:   # 7. Required: Entry point (exactly one)
 topic:         # 8. Required: Conversation topics (one or more)
+```
+
+### Config Block Field Names (CRITICAL)
+
+> ⚠️ **Common Error**: Using incorrect field names from outdated documentation.
+
+| Documented Field (Wrong) | Actual Field (Correct) | Notes |
+|--------------------------|------------------------|-------|
+| `agent_name` | `developer_name` | Must match folder name (case-sensitive) |
+| `description` | `agent_description` | Agent's purpose description |
+| `agent_label` | *(not used)* | Remove from examples |
+| `default_agent_user` | `default_agent_user` | ✓ Correct |
+| *(missing)* | `agent_type` | **Required**: `AgentforceServiceAgent` or `AgentforceEmployeeAgent` |
+
+```yaml
+# ✅ CORRECT config block:
+config:
+  developer_name: "my_agent"
+  agent_description: "Handles customer support inquiries"
+  agent_type: "AgentforceServiceAgent"
+  default_agent_user: "agent_user@00dxx000001234.ext"
 ```
 
 ### Naming Rules (All Identifiers)
@@ -580,6 +601,30 @@ checkout: @utils.transition to @topic.checkout
 
 > ⚠️ **Linked variables CANNOT use `object` or `list` types**
 
+### Linked Variable Sources by Agent Type
+
+> ⚠️ **CRITICAL**: Not all source bindings work for all agent types.
+
+| Source Pattern | Service Agent | Employee Agent |
+|----------------|---------------|----------------|
+| `@MessagingSession.Id` | ✅ Works | ❌ Not available |
+| `@MessagingSession.RoutableId` | ✅ Works | ❌ Not available |
+| `@Record.Id` | ❓ Untested | ❌ Does not work |
+| `@context.recordId` | ❓ Untested | ❌ Does not work |
+
+**Workaround for Employee Agents**:
+Employee Agents in the Copilot panel don't automatically receive record context. Use a mutable variable and have the Flow action look up the current record.
+
+```yaml
+# ❌ DOESN'T WORK for Employee Agents:
+case_id: linked string
+   source: @Record.Id
+
+# ✅ WORKAROUND - use mutable variable:
+case_id: mutable string = ""
+   description: "Case ID - enter or will be looked up by Flow"
+```
+
 ### Variable vs Action I/O Type Matrix
 > **Critical distinction**: Some types are valid ONLY for action inputs/outputs, NOT for Agent Script variables.
 
@@ -622,7 +667,33 @@ checkout: @utils.transition to @topic.checkout
 
 > **Legend**: ✅ TDD = Validated via deployment testing | 📋 Spec = Documented in AGENT_SCRIPT.md spec (requires specific org setup to test)
 
+### Registering Flow Actions (REQUIRED for `flow://` targets)
+
+> **Note on `flow://` targets**: The Flow must be registered as an **Action Definition** (GenAiFunction) before it can be referenced in Agent Script. Simply creating a Flow is not sufficient.
+
+**Workflow to use a Flow in Agent Script:**
+1. Create Flow with proper output variables (`/sf-flow`)
+2. In Setup > Agentforce > Action Definitions, click "New Action"
+3. Select "Flow" as target type, choose your Flow
+4. Define input/output schemas (map Flow variables to action I/O)
+5. Set planner flags: `is_displayable`, `is_used_by_planner`
+6. Reference in Agent Script via `@actions.YourActionDefinitionName`
+
+```yaml
+# After registering "Get_Case_Details" action definition:
+reasoning:
+   actions:
+      lookup_case: @actions.Get_Case_Details
+         description: "Fetch case information"
+         with case_id = @variables.case_id
+         set @variables.case_subject = @outputs.subject
+```
+
+> ⚠️ **Common Error**: Referencing `flow://MyFlowName` without first creating the Action Definition → results in `ValidationError: Tool target 'MyFlowName' is not an action definition`
+
 ### Connection Block (Full Escalation Pattern)
+
+> ⚠️ **Service Agents Only**: The `connections:` block is only valid for `agent_type: "AgentforceServiceAgent"`. Employee Agents will fail with `Unexpected 'connections' block` error. Employee Agents do not support channel-based escalation routing.
 
 ```yaml
 connections:
@@ -708,7 +779,7 @@ connections:
 #### CLI Validation (Before Deploy)
 ```bash
 # Validate authoring bundle syntax
-sf agent validate authoring-bundle --source-dir ./force-app/main/default/aiAuthoringBundles/MyAgent
+sf agent validate authoring-bundle --api-name MyAgent -o TARGET_ORG
 ```
 
 #### Manual Checks
@@ -729,7 +800,7 @@ sf agent validate authoring-bundle --source-dir ./force-app/main/default/aiAutho
 2. **Add files**:
    - `AgentName.agent` - Your Agent Script
    - `AgentName.bundle-meta.xml` - Metadata XML (NOT `.aiAuthoringBundle-meta.xml`)
-3. **Publish**: `sf agent publish authoring-bundle --source-dir ./force-app/main/default/aiAuthoringBundles/AgentName`
+3. **Publish**: `sf agent publish authoring-bundle --api-name AgentName -o TARGET_ORG`
 4. **Monitor** - Use trace debugging for production issues
 
 ### Phase 6: CLI Operations
@@ -738,10 +809,10 @@ sf agent validate authoring-bundle --source-dir ./force-app/main/default/aiAutho
 sf agent retrieve --name MyAgent --target-org sandbox
 
 # Validate syntax
-sf agent validate authoring-bundle --source-dir ./force-app/main/default/aiAuthoringBundles/MyAgent
+sf agent validate authoring-bundle --api-name MyAgent -o TARGET_ORG
 
 # Publish to org (NOT sf project deploy!)
-sf agent publish authoring-bundle --source-dir ./force-app/main/default/aiAuthoringBundles/MyAgent
+sf agent publish authoring-bundle --api-name MyAgent -o TARGET_ORG
 ```
 
 ### Bundle Structure (CRITICAL)
@@ -1082,9 +1153,9 @@ Present the results to the user and ask them to select which user to use for `de
 
 ```yaml
 config:
-  agent_name: "simple_agent"
-  agent_label: "Simple Agent"
-  description: "A minimal working agent example"
+  developer_name: "simple_agent"
+  agent_description: "A minimal working agent example"
+  agent_type: "AgentforceServiceAgent"  # or "AgentforceEmployeeAgent"
   default_agent_user: "agent_user@yourorg.com"
 
 system:

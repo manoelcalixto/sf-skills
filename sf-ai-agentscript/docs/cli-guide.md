@@ -9,8 +9,8 @@
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `sf agent retrieve` | Pull agent from org | `sf agent retrieve --name MyAgent --target-org sandbox` |
-| `sf agent validate authoring-bundle` | Check syntax before deploy | `sf agent validate authoring-bundle --source-dir ./aiAuthoringBundles/MyAgent` |
-| `sf agent publish authoring-bundle` | Publish agent to org | `sf agent publish authoring-bundle --source-dir ./aiAuthoringBundles/MyAgent` |
+| `sf agent validate authoring-bundle` | Check syntax before deploy | `sf agent validate authoring-bundle --api-name MyAgent -o TARGET_ORG` |
+| `sf agent publish authoring-bundle` | Publish agent to org | `sf agent publish authoring-bundle --api-name MyAgent -o TARGET_ORG` |
 | `sf agent deploy` | Push to target org | `sf agent deploy --source-dir ./my-agent --target-org prod` |
 | `sf agent test run` | Run batch tests | `sf agent test run --name MyAgent --test-suite AllTests` |
 
@@ -52,7 +52,7 @@ force-app/main/default/aiAuthoringBundles/
 
 ```bash
 # ✅ CORRECT: Use sf agent publish authoring-bundle
-sf agent publish authoring-bundle --source-dir ./force-app/main/default/aiAuthoringBundles/ProntoRefund
+sf agent publish authoring-bundle --api-name ProntoRefund -o TARGET_ORG
 
 # ❌ WRONG: Do NOT use sf project deploy start
 # This will fail with "Required fields are missing: [BundleType]"

@@ -92,27 +92,52 @@ sf-apex/
 
 ### Claude Code (Recommended)
 
-Add the marketplace to Claude Code:
+**One-liner install:**
 
 ```bash
-/plugin marketplace add Jaganpro/sf-skills
+curl -sSL https://raw.githubusercontent.com/Jaganpro/sf-skills/main/tools/install.py | python3
 ```
 
-#### Enable Hooks with Auto-Updates (Recommended)
+That's it! The installer will:
+- Download the latest release from GitHub
+- Install 18 skills and 16 hook scripts to `~/.claude/sf-skills/`
+- Configure Claude Code automatically (updates `~/.claude/settings.json`)
+- Clean up any previous installations (marketplace or legacy)
 
-For full functionality including automatic validation, guardrails, smart suggestions, **and automatic updates**, run the migration script:
+**Restart Claude Code** after installation to activate hooks.
+
+#### Managing Your Installation
 
 ```bash
-# Navigate to your sf-skills installation
-cd ~/.claude/plugins/marketplaces/sf-skills
+# Check installation status
+python3 ~/.claude/sf-skills/tools/install.py --status
 
-# Install global hooks with auto-update support
-python3 scripts/migrate-to-global-hooks.py
+# Update to latest version
+python3 ~/.claude/sf-skills/tools/install.py --update
 
-# Restart Claude Code to activate hooks
+# Uninstall completely
+python3 ~/.claude/sf-skills/tools/install.py --uninstall
+
+# Preview changes without applying (dry run)
+python3 ~/.claude/sf-skills/tools/install.py --dry-run
 ```
 
-This installs hooks to `~/.claude/sf-skills-hooks/` and updates `~/.claude/settings.json` with absolute paths. **Updates are automatic** — on each session start, sf-skills checks for new releases and updates silently in the background.
+#### What Gets Installed
+
+```
+~/.claude/sf-skills/
+├── VERSION                    # Current version (e.g., "4.1.0")
+├── skills/                    # 18 Salesforce skills
+│   ├── sf-apex/
+│   ├── sf-flow/
+│   └── ... (16 more)
+├── hooks/                     # 16 hook scripts
+│   ├── scripts/
+│   ├── skill-activation-prompt.py
+│   └── skills-registry.json
+└── tools/                     # Installer for updates
+    └── install.py
+```
 
 **What hooks provide:**
 
@@ -126,32 +151,23 @@ This installs hooks to `~/.claude/sf-skills-hooks/` and updates `~/.claude/setti
 | **SubagentStop** | Tracks workflow chains, suggests next steps |
 
 <details>
-<summary>Hook Installation Options</summary>
+<summary>Legacy Installation (Deprecated)</summary>
+
+The marketplace-based installation is deprecated. If you have an existing marketplace installation, the new installer will automatically migrate it:
 
 ```bash
-# Preview migration changes without applying
-python3 scripts/migrate-to-global-hooks.py --dry-run
+# Old method (deprecated):
+# /plugin marketplace add Jaganpro/sf-skills
+# python3 scripts/migrate-to-global-hooks.py
 
-# Alternative: Install to settings.json (legacy method, no auto-updates)
-python3 scripts/install-hooks.py
-
-# Alternative: Install globally without migration
-python3 scripts/install-hooks.py --global
-
-# Check installation status
-python3 scripts/install-hooks.py --status
-
-# Remove hooks
-python3 scripts/install-hooks.py --uninstall
+# New method (recommended):
+curl -sSL https://raw.githubusercontent.com/Jaganpro/sf-skills/main/tools/install.py | python3
 ```
 
-**Global vs Local Installation:**
-
-| Method | Hooks Location | Scripts Location | Auto-Updates | Best For |
-|--------|---------------|------------------|--------------|----------|
-| `migrate-to-global-hooks.py` | `~/.claude/settings.json` | `~/.claude/sf-skills-hooks/` | ✅ Yes | Marketplace users (recommended) |
-| `install-hooks.py --global` | `~/.claude/settings.json` | `~/.claude/sf-skills-hooks/` | ✅ Yes | Manual global install |
-| `install-hooks.py` | `~/.claude/settings.json` | Project directory | ❌ No | Development |
+The installer detects and cleans up:
+- Marketplace installations (`~/.claude/plugins/marketplaces/sf-skills/`)
+- Legacy hooks (`~/.claude/sf-skills-hooks/`)
+- Old hook configs in `settings.json`
 
 </details>
 

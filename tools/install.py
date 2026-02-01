@@ -627,6 +627,86 @@ def copy_skills(source_dir: Path, target_dir: Path) -> int:
     return count
 
 
+# Commands directory for skill registration
+COMMANDS_DIR = CLAUDE_DIR / "commands"
+
+
+def register_skills_as_commands(skills_dir: Path, dry_run: bool = False) -> int:
+    """
+    Register skills in ~/.claude/commands/ by creating symlinks to SKILL.md files.
+
+    Claude Code discovers custom commands from ~/.claude/commands/*.md files.
+    This function creates symlinks like:
+        ~/.claude/commands/sf-apex.md -> ~/.claude/sf-skills/skills/sf-apex/SKILL.md
+
+    Args:
+        skills_dir: Directory containing skill subdirectories (each with SKILL.md)
+        dry_run: If True, only report what would be done
+
+    Returns:
+        Number of skills registered
+    """
+    if not skills_dir.exists():
+        return 0
+
+    if not dry_run:
+        COMMANDS_DIR.mkdir(parents=True, exist_ok=True)
+
+    count = 0
+    for skill_dir in skills_dir.iterdir():
+        if not skill_dir.is_dir() or not skill_dir.name.startswith("sf-"):
+            continue
+
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists():
+            continue
+
+        # Create symlink: ~/.claude/commands/sf-apex.md -> SKILL.md
+        link_path = COMMANDS_DIR / f"{skill_dir.name}.md"
+
+        if dry_run:
+            print_info(f"Would create: {link_path} -> {skill_md}")
+        else:
+            # Remove existing link or file
+            if link_path.exists() or link_path.is_symlink():
+                link_path.unlink()
+
+            # Create symlink
+            link_path.symlink_to(skill_md)
+
+        count += 1
+
+    return count
+
+
+def unregister_skills_from_commands(dry_run: bool = False) -> int:
+    """
+    Remove sf-skills symlinks from ~/.claude/commands/.
+
+    Args:
+        dry_run: If True, only report what would be done
+
+    Returns:
+        Number of links removed
+    """
+    if not COMMANDS_DIR.exists():
+        return 0
+
+    count = 0
+    for link_path in COMMANDS_DIR.glob("sf-*.md"):
+        if link_path.is_symlink():
+            target = link_path.resolve()
+            # Only remove if it points to our skills directory
+            if "sf-skills" in str(target):
+                if dry_run:
+                    print_info(f"Would remove: {link_path}")
+                else:
+                    link_path.unlink()
+                count += 1
+
+    return count
+
+
 def copy_hooks(source_dir: Path, target_dir: Path) -> int:
     """
     Copy hook scripts.
@@ -943,15 +1023,21 @@ def cmd_install(dry_run: bool = False, force: bool = False, called_from_bash: bo
         print_step(4, 5, "Configuring Claude Code...", "...")
 
         if not dry_run:
+            # Register hooks in settings.json
             status = update_settings_json()
             added = sum(1 for s in status.values() if s == "added")
             updated = sum(1 for s in status.values() if s == "updated")
 
-            print_step(4, 5, "Hooks registered in settings.json", "done")
+            # Register skills as commands (symlinks in ~/.claude/commands/)
+            skills_dir = INSTALL_DIR / "skills"
+            skills_registered = register_skills_as_commands(skills_dir)
+
+            print_step(4, 5, "Claude Code configured", "done")
             if added > 0:
                 print_substep(f"{added} hook events added")
             if updated > 0:
                 print_substep(f"{updated} hook events updated")
+            print_substep(f"{skills_registered} skills registered as commands")
         else:
             print_step(4, 5, "Would configure settings.json", "skip")
 
@@ -1068,6 +1154,7 @@ def cmd_uninstall(dry_run: bool = False, force: bool = False) -> int:
     print_warning("This will remove:")
     print(f"     • {INSTALL_DIR}")
     print(f"     • sf-skills hooks from {SETTINGS_FILE}")
+    print(f"     • sf-skills commands from {COMMANDS_DIR}")
 
     if not force and not dry_run:
         if not confirm("\nProceed with uninstallation?", default=False):
@@ -1080,6 +1167,11 @@ def cmd_uninstall(dry_run: bool = False, force: bool = False) -> int:
     hooks_removed = cleanup_settings_hooks(dry_run)
     if hooks_removed > 0:
         print_success(f"Removed {hooks_removed} hooks from settings.json")
+
+    # Remove skill symlinks from ~/.claude/commands/
+    skills_removed = unregister_skills_from_commands(dry_run)
+    if skills_removed > 0:
+        print_success(f"Removed {skills_removed} skill commands from {COMMANDS_DIR}")
 
     # Remove installation directory
     if INSTALL_DIR.exists():

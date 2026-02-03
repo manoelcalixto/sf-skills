@@ -128,7 +128,7 @@ Phase E: Observability Integration (STDM analysis)
 | Need topic re-matching validation | Phase A |
 | Need context preservation testing | Phase A |
 | Agent Testing Center IS available + single-utterance tests | Phase B |
-| CI/CD pipeline integration | Phase B (or Phase A with scripting) |
+| CI/CD pipeline integration | Phase A (Python scripts) or Phase B (sf CLI) |
 | Quick smoke test | Phase B |
 
 ---
@@ -239,7 +239,7 @@ AskUserQuestion:
 
 **If NO:** Delegate to sf-connected-apps:
 ```
-Skill(skill="sf-connected-apps", args="Create External Client App with Client Credentials flow for Agent Runtime API testing. Scopes: cdp_api, einstein_gpt_api. Name: Agent_API_Testing")
+Skill(skill="sf-connected-apps", args="Create External Client App with Client Credentials flow for Agent Runtime API testing. Scopes: api, chatbot_api, sfap_api, refresh_token, offline_access. Name: Agent_API_Testing")
 ```
 
 **Verify credentials work:**
@@ -309,73 +309,120 @@ Claude uses the agent metadata from A2 to **auto-generate multi-turn scenarios**
 
 ### A4: Multi-Turn Execution
 
-Execute conversations via Agent Runtime API. All commands run inline in bash — no external script dependencies.
+Execute conversations via Agent Runtime API using the **reusable Python scripts** in `hooks/scripts/`.
 
-**Step 1: Authenticate**
+> ⚠️ **Agent API is NOT supported for agents of type "Agentforce (Default)".** Only custom agents created via Agentforce Builder are supported.
+
+**Option 1: Run Test Scenarios from YAML Templates (Recommended)**
+
+Use the multi-turn test runner to execute entire scenario suites:
+
 ```bash
-# Get access token (credentials from conversation context)
-SF_TOKEN=$(curl -s -X POST "https://${SF_MY_DOMAIN}/services/oauth2/token" \
-  -d "grant_type=client_credentials&client_id=${CONSUMER_KEY}&client_secret=${CONSUMER_SECRET}" \
-  | jq -r '.access_token')
+# Run comprehensive test suite against an agent
+python3 hooks/scripts/multi_turn_test_runner.py \
+  --my-domain "${SF_MY_DOMAIN}" \
+  --consumer-key "${CONSUMER_KEY}" \
+  --consumer-secret "${CONSUMER_SECRET}" \
+  --agent-id "${AGENT_ID}" \
+  --scenarios templates/multi-turn-comprehensive.yaml \
+  --verbose
+
+# Run specific scenario within a suite
+python3 hooks/scripts/multi_turn_test_runner.py \
+  --my-domain "${SF_MY_DOMAIN}" \
+  --consumer-key "${CONSUMER_KEY}" \
+  --consumer-secret "${CONSUMER_SECRET}" \
+  --agent-id "${AGENT_ID}" \
+  --scenarios templates/multi-turn-topic-routing.yaml \
+  --scenario-filter topic_switch_natural \
+  --verbose
+
+# With context variables and JSON output for fix loop
+python3 hooks/scripts/multi_turn_test_runner.py \
+  --my-domain "${SF_MY_DOMAIN}" \
+  --consumer-key "${CONSUMER_KEY}" \
+  --consumer-secret "${CONSUMER_SECRET}" \
+  --agent-id "${AGENT_ID}" \
+  --scenarios templates/multi-turn-comprehensive.yaml \
+  --var '$Context.AccountId=001XXXXXXXXXXXX' \
+  --var '$Context.EndUserLanguage=en_US' \
+  --output results.json \
+  --verbose
 ```
 
-**Step 2: Create Session**
+**Exit codes:** `0` = all passed, `1` = some failed (fix loop should process), `2` = execution error
+
+**Option 2: Use Environment Variables (cleaner for repeated runs)**
+
 ```bash
-# Start agent session
-SESSION_ID=$(curl -s -X POST \
-  "https://api.salesforce.com/einstein/ai-agent/v1/agents/${AGENT_ID}/sessions" \
-  -H "Authorization: Bearer ${SF_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "externalSessionKey":"'"$(uuidgen | tr A-Z a-z)"'",
-    "instanceConfig":{"endpoint":"https://'"${SF_MY_DOMAIN}"'"},
-    "streamingCapabilities":{"chunkTypes":["Text"]},
-    "bypassUser":true
-  }' | jq -r '.sessionId')
+export SF_MY_DOMAIN="your-domain.my.salesforce.com"
+export SF_CONSUMER_KEY="your_key"
+export SF_CONSUMER_SECRET="your_secret"
+export SF_AGENT_ID="0XxRM0000004ABC"
+
+# Now run without credential flags
+python3 hooks/scripts/multi_turn_test_runner.py \
+  --scenarios templates/multi-turn-comprehensive.yaml \
+  --verbose
 ```
 
-**Step 3: Send Messages (increment sequenceId per turn)**
-```bash
-# Turn 1
-SEQ=1
-MSG="I need to cancel my appointment"
-R1=$(curl -s -X POST \
-  "https://api.salesforce.com/einstein/ai-agent/v1/sessions/${SESSION_ID}/messages" \
-  -H "Authorization: Bearer ${SF_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"message":{"sequenceId":'"${SEQ}"',"type":"Text","text":"'"${MSG}"'"}}')
+**Option 3: Python API for Ad-Hoc Testing**
 
-# Turn 2
-SEQ=2
-MSG="Actually, reschedule it instead"
-R2=$(curl -s -X POST \
-  "https://api.salesforce.com/einstein/ai-agent/v1/sessions/${SESSION_ID}/messages" \
-  -H "Authorization: Bearer ${SF_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"message":{"sequenceId":'"${SEQ}"',"type":"Text","text":"'"${MSG}"'"}}')
+For custom scenarios or debugging, use the client directly:
 
-# Continue for each turn in the scenario...
+```python
+from hooks.scripts.agent_api_client import AgentAPIClient
+
+client = AgentAPIClient(
+    my_domain="your-domain.my.salesforce.com",
+    consumer_key="...",
+    consumer_secret="..."
+)
+
+# Context manager auto-ends session
+with client.session(agent_id="0XxRM000...") as session:
+    r1 = session.send("I need to cancel my appointment")
+    print(f"Turn 1: {r1.agent_text}")
+
+    r2 = session.send("Actually, reschedule instead")
+    print(f"Turn 2: {r2.agent_text}")
+
+    r3 = session.send("What was my original request?")
+    print(f"Turn 3: {r3.agent_text}")
+    # Check context preservation
+    if "cancel" in r3.agent_text.lower():
+        print("✅ Context preserved")
+
+# With initial variables
+variables = [
+    {"name": "$Context.AccountId", "type": "Id", "value": "001XXXXXXXXXXXX"},
+    {"name": "$Context.EndUserLanguage", "type": "Text", "value": "en_US"},
+]
+with client.session(agent_id="0Xx...", variables=variables) as session:
+    r1 = session.send("What orders do I have?")
 ```
 
-**Step 4: End Session**
+**Connectivity Test:**
 ```bash
-curl -s -X DELETE \
-  "https://api.salesforce.com/einstein/ai-agent/v1/sessions/${SESSION_ID}" \
-  -H "Authorization: Bearer ${SF_TOKEN}"
+# Verify ECA credentials and API connectivity
+python3 hooks/scripts/agent_api_client.py
+# Reads SF_MY_DOMAIN, SF_CONSUMER_KEY, SF_CONSUMER_SECRET from env
 ```
 
 **Per-Turn Analysis Checklist:**
 
-For each turn response, Claude evaluates:
+The test runner automatically evaluates each turn against expectations defined in the YAML template:
 
-| # | Check | How to Evaluate |
-|---|-------|-----------------|
-| 1 | Response non-empty? | `messages[0].message` has content |
-| 2 | Correct topic matched? | Infer from response language and actions |
-| 3 | Expected actions invoked? | Check for `ActionResult` type in response |
-| 4 | Context preserved from prior turns? | Agent references prior information |
-| 5 | Error indicators? | Check for `Escalation`, `Failure` types |
-| 6 | Guardrail respected? | Harmful requests declined |
+| # | Check | YAML Key | How Evaluated |
+|---|-------|----------|---------------|
+| 1 | Response non-empty? | `response_not_empty: true` | `messages[0].message` has content |
+| 2 | Correct topic matched? | `topic_contains: "cancel"` | Heuristic: inferred from response text |
+| 3 | Expected actions invoked? | `action_invoked: true` | Checks for `result` array entries |
+| 4 | Response content? | `response_contains: "reschedule"` | Substring match on response |
+| 5 | Context preserved? | `context_retained: true` | Heuristic: checks for prior-turn references |
+| 6 | Guardrail respected? | `guardrail_triggered: true` | Regex patterns for refusal language |
+| 7 | Escalation triggered? | `escalation_triggered: true` | Checks for `Escalation` message type |
+| 8 | Response excludes? | `response_not_contains: "error"` | Substring exclusion check |
 
 See [Agent API Reference](docs/agent-api-reference.md) for complete response format.
 
@@ -734,12 +781,42 @@ Skill(skill="sf-ai-agentforce-observability", args="Analyze STDM sessions for ag
 
 ## Automated Testing (Python Scripts)
 
-| Script | Purpose |
-|--------|---------|
-| `generate-test-spec.py` | Parse .agent files, generate YAML test specs |
-| `run-automated-tests.py` | Orchestrate full test workflow with fix suggestions |
+| Script | Purpose | Dependencies |
+|--------|---------|-------------|
+| `agent_api_client.py` | Reusable Agent Runtime API v1 client (auth, sessions, messaging, variables) | stdlib only |
+| `multi_turn_test_runner.py` | Multi-turn test orchestrator (reads YAML, executes, evaluates, reports) | pyyaml + agent_api_client |
+| `generate-test-spec.py` | Parse .agent files, generate CLI test YAML specs | stdlib only |
+| `run-automated-tests.py` | Orchestrate full CLI test workflow with fix suggestions | stdlib only |
 
-**Quick Usage:**
+**Multi-Turn Testing (Agent Runtime API):**
+```bash
+# Install test runner dependency
+pip3 install pyyaml
+
+# Run multi-turn test suite against an agent
+python3 hooks/scripts/multi_turn_test_runner.py \
+  --my-domain your-domain.my.salesforce.com \
+  --consumer-key YOUR_KEY \
+  --consumer-secret YOUR_SECRET \
+  --agent-id 0XxRM0000004ABC \
+  --scenarios templates/multi-turn-comprehensive.yaml \
+  --output results.json --verbose
+
+# Or set env vars and omit credential flags
+export SF_MY_DOMAIN=your-domain.my.salesforce.com
+export SF_CONSUMER_KEY=YOUR_KEY
+export SF_CONSUMER_SECRET=YOUR_SECRET
+python3 hooks/scripts/multi_turn_test_runner.py \
+  --agent-id 0XxRM0000004ABC \
+  --scenarios templates/multi-turn-topic-routing.yaml \
+  --var '$Context.AccountId=001XXXXXXXXXXXX' \
+  --verbose
+
+# Connectivity test (verify ECA credentials work)
+python3 hooks/scripts/agent_api_client.py
+```
+
+**CLI Testing (Agent Testing Center):**
 ```bash
 # Generate test spec from agent file
 python3 hooks/scripts/generate-test-spec.py \
@@ -778,10 +855,14 @@ python3 hooks/scripts/run-automated-tests.py \
 USER: Run automated test-fix loop for Coral_Cloud_Agent
 
 CLAUDE CODE:
-1. Phase A: Run multi-turn scenarios via Agent Runtime API
-2. Analyze failures (10 categories)
+1. Phase A: Run multi-turn scenarios via Python test runner
+   python3 hooks/scripts/multi_turn_test_runner.py \
+     --agent-id ${AGENT_ID} \
+     --scenarios templates/multi-turn-comprehensive.yaml \
+     --output results.json --verbose
+2. Analyze failures from results.json (10 categories)
 3. If fixable: Skill(skill="sf-ai-agentscript", args="Fix...")
-4. Re-run failed scenarios
+4. Re-run failed scenarios with --scenario-filter
 5. Phase B (if available): Run CLI tests
 6. Repeat until passing or max retries (3)
 ```
@@ -820,34 +901,34 @@ CLAUDE CODE:
 ## Quick Start Example
 
 ### Multi-Turn API Testing (Recommended)
+
+**Quick Start with Python Scripts:**
 ```bash
 # 1. Get agent ID
 AGENT_ID=$(sf data query --use-tooling-api \
   --query "SELECT Id FROM BotDefinition WHERE DeveloperName='My_Agent' AND IsActive=true LIMIT 1" \
   --result-format json --target-org dev | jq -r '.result.records[0].Id')
 
-# 2. Get access token (ECA credentials from conversation)
-SF_TOKEN=$(curl -s -X POST "https://${SF_MY_DOMAIN}/services/oauth2/token" \
-  -d "grant_type=client_credentials&client_id=${KEY}&client_secret=${SECRET}" \
-  | jq -r '.access_token')
+# 2. Run multi-turn tests (credentials from env or flags)
+python3 hooks/scripts/multi_turn_test_runner.py \
+  --my-domain "${SF_MY_DOMAIN}" \
+  --consumer-key "${CONSUMER_KEY}" \
+  --consumer-secret "${CONSUMER_SECRET}" \
+  --agent-id "${AGENT_ID}" \
+  --scenarios templates/multi-turn-comprehensive.yaml \
+  --output results.json --verbose
+```
 
-# 3. Create session
-SESSION_ID=$(curl -s -X POST \
-  "https://api.salesforce.com/einstein/ai-agent/v1/agents/${AGENT_ID}/sessions" \
-  -H "Authorization: Bearer ${SF_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"externalSessionKey":"'"$(uuidgen | tr A-Z a-z)"'",
-       "instanceConfig":{"endpoint":"https://'"${SF_MY_DOMAIN}"'"},
-       "streamingCapabilities":{"chunkTypes":["Text"]},
-       "bypassUser":true}' | jq -r '.sessionId')
+**Ad-Hoc Python Usage:**
+```python
+from hooks.scripts.agent_api_client import AgentAPIClient
 
-# 4. Send multi-turn messages (increment sequenceId)
-# ... (see Phase A4 above)
-
-# 5. End session
-curl -s -X DELETE \
-  "https://api.salesforce.com/einstein/ai-agent/v1/sessions/${SESSION_ID}" \
-  -H "Authorization: Bearer ${SF_TOKEN}"
+client = AgentAPIClient()  # reads SF_MY_DOMAIN, SF_CONSUMER_KEY, SF_CONSUMER_SECRET from env
+with client.session(agent_id="0XxRM000...") as session:
+    r1 = session.send("I need to cancel my appointment")
+    r2 = session.send("Actually, reschedule it instead")
+    r3 = session.send("What was my original request about?")
+    # Session auto-ends when exiting context manager
 ```
 
 ### CLI Testing (If Agent Testing Center Available)

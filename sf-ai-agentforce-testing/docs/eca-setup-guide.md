@@ -35,7 +35,7 @@ The Agent Runtime API requires **OAuth 2.0 Client Credentials flow**, which is d
 ### Option 1: Use sf-connected-apps Skill (Recommended)
 
 ```
-Skill(skill="sf-connected-apps", args="Create External Client App with Client Credentials flow for Agent Runtime API testing. Scopes: cdp_api, einstein_gpt_api")
+Skill(skill="sf-connected-apps", args="Create External Client App with Client Credentials flow for Agent Runtime API testing. Scopes: api, chatbot_api, sfap_api, refresh_token, offline_access")
 ```
 
 ### Option 2: Manual Setup via UI
@@ -72,22 +72,38 @@ Follow the steps below.
 
 | Scope | Purpose | Required |
 |-------|---------|----------|
-| `cdp_api` | Access to Agent Runtime API | ✅ Yes |
-| `einstein_gpt_api` | Einstein AI agent access | ✅ Yes |
-| `api` | General API access | Recommended |
+| `api` | Manage user data via APIs | ✅ Yes |
+| `chatbot_api` | Access chatbot/agent services | ✅ Yes |
+| `sfap_api` | Access the Salesforce API Platform | ✅ Yes |
+| `refresh_token, offline_access` | Perform requests at any time | Recommended |
 
-> **Minimum Required:** `cdp_api` and `einstein_gpt_api` together enable Agent Runtime API access.
+> **Minimum Required:** `api`, `chatbot_api`, and `sfap_api` together enable Agent Runtime API access.
 
-### Step 5: Execution User
+### Additional OAuth Settings
+
+| Setting | Value |
+|---------|-------|
+| **Enable Client Credentials Flow** | ✅ Checked |
+| **Issue JWT-based access tokens for named users** | ✅ Checked |
+| Require secret for Web Server Flow | ❌ Deselected |
+| Require secret for Refresh Token Flow | ❌ Deselected |
+| Require PKCE for Supported Authorization Flows | ❌ Deselected |
+
+### Step 5: Execution User (Run As)
 
 For Client Credentials flow, you must assign an **execution user**:
 
-1. Under **Client Credentials Flow**:
-   - **Run As**: Select a user with appropriate permissions
-   - This user's permissions determine what the API can access
-2. The execution user should have:
-   - System Administrator profile (or custom profile with Agentforce permissions)
-   - Access to the agents being tested
+1. From your app settings, click the **Policy** tab
+2. Click **Edit**
+3. Under **OAuth Flows and External Client App Enhancements**:
+   - Check **Enable Client Credentials Flow**
+   - Set **Run As (Username)** to a user with at least API Only access
+4. Save the changes
+
+The execution user's permissions determine what the API can access:
+- Must have at least API access
+- Must have access to the agents being tested
+- System Administrator profile works but use least-privilege when possible
 
 ### Step 6: Save and Retrieve Credentials
 
@@ -123,11 +139,15 @@ curl -s -X POST "https://${SF_MY_DOMAIN}/services/oauth2/token" \
 
 ```json
 {
-  "access_token": "00D...",
+  "access_token": "eyJ0bmsiOiJjb3JlL3Byb2QvM...(JWT token)",
+  "signature": "HBb7Zf4aaOUlI1V...",
+  "token_format": "jwt",
+  "scope": "sfap_api chatbot_api api",
   "instance_url": "https://your-domain.my.salesforce.com",
   "id": "https://login.salesforce.com/id/00D.../005...",
   "token_type": "Bearer",
-  "issued_at": "1700000000000"
+  "issued_at": "1700000000000",
+  "api_instance_url": "https://api.salesforce.com"
 }
 ```
 

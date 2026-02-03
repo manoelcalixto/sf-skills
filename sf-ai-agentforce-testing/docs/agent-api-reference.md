@@ -8,6 +8,8 @@ Reference for Salesforce Einstein Agent Runtime API v1 — the REST API used for
 
 The Agent Runtime API provides programmatic access to Agentforce agents via REST endpoints. Unlike the CLI-based Agent Testing Center (single-utterance tests), this API supports **multi-turn conversations** with full session lifecycle management.
 
+> ⚠️ **Agent API is NOT supported for agents of type "Agentforce (Default)".** Only custom agents created via Agentforce Builder are supported.
+
 | Feature | Agent Testing Center (CLI) | Agent Runtime API |
 |---------|---------------------------|-------------------|
 | Multi-turn conversations | ❌ No | ✅ Yes |
@@ -85,15 +87,41 @@ Content-Type: application/json
 | `externalSessionKey` | string | ✅ | Unique identifier for this session (UUID recommended) |
 | `instanceConfig.endpoint` | string | ✅ | Your Salesforce My Domain URL (https://...) |
 | `streamingCapabilities.chunkTypes` | array | ✅ | Response chunk types to receive (`["Text"]`) |
-| `bypassUser` | boolean | ❌ | Skip user context (default: false). Set `true` for testing |
-| `variables` | array | ❌ | Agent input variables (name/value pairs) |
+| `bypassUser` | boolean | ❌ | If `true`, use the agent-assigned user. If `false`, use the token user. Set `true` for Client Credentials testing. |
+| `variables` | array | ❌ | Agent input variables. Each: `{"name": "$Context.X", "type": "Text", "value": "..."}` |
 
 **Response (200 OK):**
 ```json
 {
-  "sessionId": "4a5b6c7d-8e9f-0a1b-2c3d-4e5f6a7b8c9d"
+  "sessionId": "8e715939-a121-40ec-80e3-a8d1ac89da33",
+  "_links": {
+    "self": null,
+    "messages": {
+      "href": "https://api.salesforce.com/einstein/ai-agent/v1/sessions/8e715939.../messages/stream"
+    },
+    "session": {
+      "href": "https://api.salesforce.com/einstein/ai-agent/v1/agents/0XxQZ.../sessions"
+    },
+    "end": {
+      "href": "https://api.salesforce.com/einstein/ai-agent/v1/sessions/8e715939..."
+    }
+  },
+  "messages": [
+    {
+      "type": "Inform",
+      "id": "8e7cafae-0eb5-44b1-9195-21f1cd6e1f4b",
+      "feedbackId": "",
+      "planId": "",
+      "isContentSafe": true,
+      "message": "Hi, I'm an AI service assistant. How can I help you?",
+      "result": [],
+      "citedReferences": []
+    }
+  ]
 }
 ```
+
+> **Note:** The session start response includes an initial greeting message from the agent in the `messages` array.
 
 **Error Responses:**
 
@@ -148,29 +176,51 @@ Content-Type: application/json
 {
   "messages": [
     {
-      "type": "Text",
-      "id": "msg-001",
-      "message": "I'd be happy to help you cancel your appointment. Could you provide the appointment date or confirmation number?",
-      "result": {
-        "type": "Inform"
-      },
-      "planId": "plan-abc-123"
+      "type": "Inform",
+      "id": "ceb6b5de-6063-4e39-bc02-91e9bf7da867",
+      "metrics": {},
+      "feedbackId": "0bc8720e-e010-4129-87bb-70caaa885ee4",
+      "planId": "0bc8720e-e010-4129-87bb-70caaa885ee4",
+      "isContentSafe": true,
+      "message": "I'd be happy to help you cancel your appointment...",
+      "result": [],
+      "citedReferences": []
     }
-  ]
+  ],
+  "_links": {
+    "self": null,
+    "messages": { "href": "https://api.salesforce.com/einstein/ai-agent/v1/sessions/{sessionId}/messages" },
+    "messagesStream": { "href": "https://api.salesforce.com/einstein/ai-agent/v1/sessions/{sessionId}/messages/stream" },
+    "session": { "href": "https://api.salesforce.com/einstein/ai-agent/v1/agents/{agentId}/sessions" },
+    "end": { "href": "https://api.salesforce.com/einstein/ai-agent/v1/sessions/{sessionId}" }
+  }
 }
 ```
+
+**Response Message Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | Message type (see types below) |
+| `id` | string | Unique message identifier |
+| `message` | string | The agent's text response |
+| `feedbackId` | string | ID for submitting feedback on this response |
+| `planId` | string | ID of the execution plan |
+| `isContentSafe` | boolean | Whether content passed safety checks |
+| `result` | array | Action result data (empty if no actions executed) |
+| `citedReferences` | array | Cited sources with optional inline metadata |
 
 **Response Message Types:**
 
 | Type | Description | When It Appears |
 |------|-------------|-----------------|
-| `Text` | Agent text response | Standard replies |
-| `Inform` | Informational response | Agent providing info |
-| `Confirm` | Confirmation request | Before executing action |
+| `Inform` | Informational response | Standard agent replies |
+| `Confirm` | Confirmation request | Before executing an action |
 | `Escalation` | Handoff to human | Escalation triggered |
-| `ActionResult` | Action output data | After Flow/Apex execution |
-| `SessionEnd` | Session terminated | Agent ends conversation |
-| `Failure` | Error occurred | Action failed or system error |
+| `SessionEnded` | Session terminated | Agent or system ends conversation |
+| `ProgressIndicator` | Processing notification | Streaming: action in progress |
+| `TextChunk` | Incremental text | Streaming: partial response |
+| `EndOfTurn` | Turn complete | Streaming: response finished |
 
 ---
 
@@ -186,11 +236,89 @@ DELETE /einstein/ai-agent/v1/sessions/{sessionId}
 **Headers:**
 ```
 Authorization: Bearer {access_token}
+x-session-end-reason: UserRequest
 ```
 
-**Response (204 No Content):** Session successfully terminated.
+> **IMPORTANT:** The `x-session-end-reason` header is required. Use `UserRequest` for normal session termination.
+
+**Response (200 OK):**
+```json
+{
+  "messages": [
+    {
+      "type": "SessionEnded",
+      "id": "c5692ca0-ee1b-414a-9d96-4e7862456500",
+      "reason": "ClientRequest",
+      "feedbackId": ""
+    }
+  ],
+  "_links": { ... }
+}
+```
 
 > **Best Practice:** Always end sessions after testing to avoid resource leaks and rate limit issues.
+
+---
+
+### 4. Send Agent Variables
+
+Variables can be passed at session start and (for editable variables) with messages.
+
+**Session Start with Variables:**
+```json
+{
+  "externalSessionKey": "{UUID}",
+  "instanceConfig": { "endpoint": "https://{MY_DOMAIN_URL}" },
+  "streamingCapabilities": { "chunkTypes": ["Text"] },
+  "bypassUser": true,
+  "variables": [
+    { "name": "$Context.EndUserLanguage", "type": "Text", "value": "en_US" },
+    { "name": "$Context.AccountId", "type": "Id", "value": "001XXXXXXXXXXXX" },
+    { "name": "team_descriptor", "type": "Text", "value": "Premium Support" }
+  ]
+}
+```
+
+**Variable Types:**
+
+| Type | Description |
+|------|-------------|
+| `Text` | String value |
+| `Number` | Numeric value |
+| `Boolean` | true/false |
+| `Id` | Salesforce record ID |
+| `Date` | Date value |
+| `DateTime` | DateTime value |
+| `Currency` | Currency value |
+| `Object` | Complex object |
+
+**Important Notes:**
+- Context variables (`$Context.*`) are **read-only after session start** (except `$Context.EndUserLanguage`)
+- Custom variables derived from custom fields: omit the `__c` suffix (e.g., `Conversation_Key__c` → `$Context.Conversation_Key`)
+- Variables must have `Allow value to be set by API` checked in Agentforce Builder
+- Only editable variables can be modified in a `send message` call
+
+---
+
+### 5. Submit Feedback
+
+Submit feedback on an agent's response for Data 360 tracking.
+
+**Request:**
+```
+POST /einstein/ai-agent/v1/sessions/{sessionId}/feedback
+```
+
+**Body:**
+```json
+{
+  "feedbackId": "0bc8720e-e010-4129-87bb-70caaa885ee4",
+  "feedback": "GOOD",
+  "text": "Response was accurate and helpful"
+}
+```
+
+Returns HTTP 201 on success.
 
 ---
 

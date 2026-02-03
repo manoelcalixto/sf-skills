@@ -12,7 +12,6 @@ CRITICAL (BLOCK):
 - Deploy to production without --checkonly/--dry-run
 
 HIGH (AUTO-FIX):
-- Unbounded SOQL → Add LIMIT 200
 - Production deploy → Add --dry-run flag
 - Missing sharing keyword → Suggest fix
 
@@ -131,14 +130,11 @@ CRITICAL_PATTERNS = [
 # =============================================================================
 
 HIGH_PATTERNS = [
-    # Unbounded SOQL - auto-fix by adding LIMIT
-    {
-        "pattern": r"(SELECT\s+.+\s+FROM\s+\w+)(?!\s+.*LIMIT\s+\d+)(\s*(?:WHERE|ORDER|GROUP)?[^;]*)(;|\s*$|--)",
-        "fix_pattern": r"(SELECT\s+.+\s+FROM\s+\w+)(\s*(?:WHERE|ORDER|GROUP)?[^;]*)(;|\s*$|--)",
-        "replacement": r"\1\2 LIMIT 200\3",
-        "message": "Unbounded SOQL detected - adding LIMIT 200 for safety",
-        "context": "soql_dml"
-    },
+    # NOTE: Unbounded SOQL auto-fix removed — regex cannot reliably parse
+    # SOQL inside shell-quoted strings with pipes. The greedy .+ pattern
+    # matched past pipe boundaries, appending "LIMIT 200" as jq file args.
+    # Claude's sf-soql skill already adds LIMIT to queries when appropriate.
+    #
     # Deploy without dry-run to sandbox - add flag
     {
         "pattern": r"(sf\s+(?:project\s+)?deploy\s+start)(?!.*(?:--dry-run|--check-only))(.*)$",

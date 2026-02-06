@@ -8,7 +8,7 @@ description: >
 license: MIT
 compatibility: "Requires Agentforce license, API v65.0+, Einstein Agent User"
 metadata:
-  version: "1.4.0"
+  version: "1.5.0"
   author: "Jag Valaiyapathy"
   scoring: "100 points across 6 categories"
   validated: "0-shot generation tested (Pet_Adoption_Advisor, TechCorp_IT_Agent, Quiz_Master, Expense_Calculator, Order_Processor)"
@@ -410,6 +410,8 @@ run @actions.transform_recommendation
 run @actions.transform_recommendation
    with Reco_Input = @variables.ProductReco
 ```
+
+> **📖 For prompt template action definitions, input binding syntax, and grounded data patterns**, see [resources/action-prompt-templates.md](resources/action-prompt-templates.md). For context-aware descriptions, instruction references (`{!@actions.X}`), and advanced binding strategies, see [resources/action-patterns.md](resources/action-patterns.md).
 
 ### Latch Variable Pattern for Topic Re-entry
 
@@ -1055,6 +1057,9 @@ topic refund:
 | Post-action logic doesn't run | Check not at TOP | Move post-action check to first lines |
 | Wrong data retrieved | Missing filter | Wrap retriever in Flow with filter inputs |
 | Variables don't change | Using `@utils.setVariables` with `set` | Post-action `set` only works on `@actions.*`, use Helper Topics |
+| Wrong target protocol | `flows://` instead of `flow://` | Remove trailing `s`: `flow://FlowName` |
+| Prompt template input not mapped | Unquoted `Input:` parameter | Quote it: `with "Input:email"=...` |
+| Missing type on action input | `email:` with no type in definition | Add type: `email: string` |
 
 ### Deployment Gotchas (Validated by Testing)
 
@@ -1096,6 +1101,8 @@ Present the results to the user and ask them to select which user to use for `de
 | Data & multi-agent | [resources/grounding-multiagent.md](resources/grounding-multiagent.md) | Retriever actions & SOMA patterns |
 | Debugging | [resources/debugging-guide.md](resources/debugging-guide.md) | Trace analysis & forensics |
 | Testing | [resources/testing-guide.md](resources/testing-guide.md) | Batch testing & quality metrics |
+| Prompt template actions | [resources/action-prompt-templates.md](resources/action-prompt-templates.md) | `generatePromptResponse://` input binding, grounded data, `run` limitation |
+| Advanced action patterns | [resources/action-patterns.md](resources/action-patterns.md) | Context-aware descriptions, `{!@actions.X}` instruction refs, binding matrix |
 
 ### Tier 3: Quick References (Docs)
 | Need | Document | Description |
@@ -1212,6 +1219,7 @@ This skill draws from multiple authoritative sources:
 | TDD Validation (this skill) | 13 validation agents confirming current-release syntax compatibility |
 | Tribal knowledge interviews | Canvas View bugs, VS Code limitations, credit consumption patterns |
 | [agentforce.guide](https://agentforce.guide/) | Unofficial but useful examples (note: some patterns don't compile in current release) |
+| @kunello ([PR #20](https://github.com/Jaganpro/sf-skills/pull/20)) | Prompt template `"Input:fieldName"` binding syntax, context-aware description overrides, `{!@actions.X}` instruction reference patterns, callback behavior notes, error pattern catalog |
 
 > **⚠️ Note on Feature Validation**: Some patterns from external sources (e.g., `always_expect_input:`, `label:` property, certain action properties on transitions) do NOT compile in Winter '26. The `before_reasoning:`/`after_reasoning:` lifecycle hooks ARE valid but require **direct content** (no `instructions:` wrapper) - see the Lifecycle Hooks section for correct syntax. This skill documents only patterns that pass TDD validation.
 
@@ -1221,6 +1229,7 @@ This skill draws from multiple authoritative sources:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.0 | 2026-02-06 | **Action patterns & prompt template docs** (from @kunello PR #20): Added `resources/action-prompt-templates.md` documenting `generatePromptResponse://` input binding syntax (`"Input:fieldName"`), grounded data integration, output handling, and `run` keyword limitation workaround. Added `resources/action-patterns.md` covering context-aware action description overrides (beginner/advanced mode), `{!@actions.X}` instruction references for guided LLM action selection, input binding decision matrix, callback success-only behavior, and additional error patterns. Updated Common Issues table with 3 new error entries (wrong protocol, unquoted Input: params, missing type annotations). Added Document Map entries and cross-reference after Action Chaining section. Content consolidated from @kunello's 8-file contribution against Agent Script Recipes. |
 | 1.3.0 | 2026-01-20 | **Lifecycle hooks validated**: Added full documentation for `before_reasoning:` and `after_reasoning:` with CORRECT syntax (content directly under block, NO `instructions:` wrapper). Added "Features NOT Valid in Current Release" section documenting 7 features that appear in docs/recipes but don't compile (label on topics/actions, always_expect_input, action properties on transitions). Updated validation_agents count to 13. Confirmed `@utils.transition` only supports `description:` property. |
 | 1.2.0 | 2026-01-20 | **Gap analysis vs agent-script-recipes**: Expanded Action Target Protocols from 7 to 16 (with validation status indicators), added Variable vs Action I/O Type Matrix, added lifecycle hooks note with TDD validation caveat, added Sources & Acknowledgments section, documented future/planned features notice. TDD validation confirmed `label:` IS reserved (SKILL.md was correct), `before_reasoning:`/`after_reasoning:` syntax from recipes does NOT compile in current release |
 | 1.1.0 | 2026-01-20 | **"Ultimate Guide" tribal knowledge integration**: Added `complex_data_type_name` mapping table, Canvas View corruption bugs, Reserved field names, Preview mode workarounds, Credit consumption table, Supervision vs Handoff clarification, Action output flags for zero-hallucination routing, Latch variable pattern, Loop protection guardrails, Token/size limits, Progress indicators, Connection block escalation patterns, VS Code limitations, Language block quirks. Added 4 new templates: flow-action-lookup, prompt-rag-search, deterministic-routing, escalation-pattern |

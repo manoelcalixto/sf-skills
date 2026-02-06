@@ -55,6 +55,16 @@ def read_stdin_safe(timeout_seconds: float = 0.1) -> dict:
         return {}
 
 
+def find_sfdx_project_root() -> Optional[Path]:
+    """Walk up from CWD looking for sfdx-project.json."""
+    current = Path.cwd()
+    while current != current.parent:
+        if (current / "sfdx-project.json").exists():
+            return current
+        current = current.parent
+    return None
+
+
 # Configuration
 PID_FILE = Path("/tmp/sf-skills-lsp-pids.json")
 PREWARM_TIMEOUT = 10  # Max seconds to wait for each server init
@@ -396,6 +406,15 @@ def main():
     # On /clear: skip if we have fresh, valid state with running servers
     # This prevents status bar from resetting to "Loading..." unnecessarily
     if should_skip_on_clear(input_data):
+        sys.exit(0)
+
+    # Guard: skip LSP prewarm if not in a Salesforce project
+    if find_sfdx_project_root() is None:
+        save_lsp_state({
+            "apex": (False, "Not a Salesforce project", None),
+            "lwc": (False, "Not a Salesforce project", None),
+            "agentscript": (False, "Not a Salesforce project", None),
+        })
         sys.exit(0)
 
     # Cleanup any old servers first

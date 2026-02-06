@@ -73,6 +73,7 @@ yarn-error.log*
 # Salesforce
 .sfdx/
 .sf/
+null/
 .localdevserver/
 node_modules/
 force-app/*/

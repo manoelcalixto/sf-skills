@@ -48,6 +48,16 @@ def read_stdin_safe(timeout_seconds: float = 0.1) -> dict:
         return {}
 
 
+def find_sfdx_project_root() -> Optional[Path]:
+    """Walk up from CWD looking for sfdx-project.json."""
+    current = Path.cwd()
+    while current != current.parent:
+        if (current / "sfdx-project.json").exists():
+            return current
+        current = current.parent
+    return None
+
+
 # Session directory and state file (PID-keyed for multi-session support)
 # The session directory is created by session-init.py which runs synchronously first
 SESSION_PID = os.getppid()
@@ -225,6 +235,12 @@ def format_preflight_output(org_info: Dict) -> str:
             lines.append("    Re-authenticate with:")
             lines.append("    sf org login web --alias <alias>")
 
+        elif error == "not_sf_project":
+            lines.append("(!) Not a Salesforce project directory")
+            lines.append("")
+            lines.append("    No sfdx-project.json found.")
+            lines.append("    Org preflight check skipped.")
+
         else:
             lines.append(f"(!) Error: {org_info.get('details', 'Unknown error')}")
 
@@ -339,6 +355,14 @@ def main():
     # On /clear: skip if we have fresh, valid state
     # This prevents status bar from resetting to "Loading..." unnecessarily
     if should_skip_on_clear(input_data):
+        sys.exit(0)
+
+    # Guard: skip SF CLI call if not in a Salesforce project
+    if find_sfdx_project_root() is None:
+        save_org_state({
+            "error": "not_sf_project",
+            "details": "No sfdx-project.json found in directory hierarchy"
+        })
         sys.exit(0)
 
     # Perform preflight check

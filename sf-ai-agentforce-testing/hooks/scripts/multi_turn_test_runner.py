@@ -53,6 +53,7 @@ License: MIT
 """
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
@@ -157,11 +158,18 @@ def _run_check(
             check["detail"] = f"Response {'has' if turn.has_response else 'has no'} content"
 
         elif name == "response_contains":
-            val = expected.lower()
-            found = val in text
-            check["actual"] = found
-            check["passed"] = found
-            check["detail"] = f"'{expected}' {'found' if found else 'not found'} in response"
+            if isinstance(expected, bool):
+                check["passed"] = False
+                check["detail"] = (
+                    "response_contains expects a string, got bool. "
+                    "Use response_not_empty for boolean checks."
+                )
+            else:
+                val = str(expected).lower()
+                found = val in text
+                check["actual"] = found
+                check["passed"] = found
+                check["detail"] = f"'{expected}' {'found' if found else 'not found'} in response"
 
         elif name == "response_contains_any":
             found_any = any(v.lower() in text for v in expected)
@@ -179,13 +187,14 @@ def _run_check(
 
         elif name == "topic_contains":
             # Heuristic: infer topic from response language (API doesn't return topic name)
+            # Use word-boundary matching to avoid false positives on substrings
             val = expected.lower()
-            found = val in text
+            found = bool(re.search(rf"\b{re.escape(val)}\b", text))
             check["actual"] = found
             check["passed"] = found
             check["detail"] = (
                 f"Topic keyword '{expected}' {'inferred' if found else 'not found'} in response"
-                " (heuristic — verify manually)"
+                " (heuristic — word-boundary match)"
             )
 
         elif name == "escalation_triggered":
@@ -207,16 +216,40 @@ def _run_check(
 
         elif name == "action_invoked":
             has_action = turn.has_action_result
-            check["actual"] = has_action
-            check["passed"] = has_action
-            check["detail"] = (
-                f"Action result {'present' if has_action else 'absent'}"
-                f" (expected: {expected})"
-            )
+            if isinstance(expected, bool):
+                check["actual"] = has_action
+                check["passed"] = has_action == expected
+                check["detail"] = (
+                    f"Action result {'present' if has_action else 'absent'}"
+                    f" (expected: {expected})"
+                )
+            else:
+                # String: check action was invoked AND the action name matches
+                action_name = str(expected)
+                raw_json = json.dumps(turn.raw_response)
+                name_found = action_name.lower() in raw_json.lower()
+                check["actual"] = has_action and name_found
+                check["passed"] = has_action and name_found
+                if not has_action:
+                    check["detail"] = f"No action result (expected action '{action_name}')"
+                elif not name_found:
+                    check["detail"] = f"Action invoked but '{action_name}' not found in response"
+                else:
+                    check["detail"] = f"Action '{action_name}' invoked successfully"
 
         elif name == "has_action_result":
             check["actual"] = turn.has_action_result
             check["passed"] = turn.has_action_result == expected
+
+        elif name == "turn_elapsed_max":
+            elapsed = turn.elapsed_ms
+            check["actual"] = elapsed
+            check["passed"] = elapsed <= expected
+            check["detail"] = (
+                f"Turn took {elapsed:.0f}ms (max: {expected}ms)"
+                if elapsed <= expected
+                else f"Turn took {elapsed:.0f}ms — EXCEEDED max {expected}ms"
+            )
 
         elif name == "response_acknowledges_change":
             # Heuristic: look for acknowledgment phrases
@@ -312,10 +345,25 @@ def _run_check(
             check["detail"] = f"Context '{expected}' {'used' if found else 'not used'} in response"
 
         elif name == "action_uses_variable":
-            # Cannot directly verify from sync response; mark as informational
-            check["actual"] = "cannot_verify"
-            check["passed"] = True  # Soft pass — requires manual/STDM verification
-            check["detail"] = f"Variable {expected} usage cannot be verified from response alone (check STDM)"
+            # Heuristic: extract keyword from variable name and check agent didn't re-ask
+            keyword = _extract_variable_keyword(str(expected))
+            if keyword:
+                re_ask_patterns = [
+                    rf"(?i)(?:what|which|could\s+you\s+(?:please\s+)?(?:provide|give|tell)).*{re.escape(keyword)}",
+                    rf"(?i)(?:can\s+you|please)\s+(?:provide|share|give|tell).*{re.escape(keyword)}",
+                ]
+                re_asked = _matches_patterns(turn.agent_text, re_ask_patterns)
+                check["actual"] = not re_asked
+                check["passed"] = not re_asked
+                check["detail"] = (
+                    f"Variable {expected} appears used (agent did not re-ask for '{keyword}')"
+                    if not re_asked
+                    else f"Agent re-asked for '{keyword}' — variable {expected} may not be used"
+                )
+            else:
+                check["actual"] = "cannot_verify"
+                check["passed"] = True  # Soft pass if we can't extract a keyword
+                check["detail"] = f"Variable {expected} usage cannot be verified from response alone (check STDM)"
 
         elif name == "action_uses_prior_output":
             # Heuristic: check that agent doesn't re-ask for data from prior action
@@ -359,6 +407,53 @@ def _run_check(
             check["passed"] = declined
             check["detail"] = "Gracefully declined" if declined else "Did not decline"
 
+        elif name == "response_matches_regex":
+            try:
+                match = re.search(expected, turn.agent_text)
+                check["actual"] = bool(match)
+                check["passed"] = bool(match)
+                check["detail"] = (
+                    f"Regex '{expected}' matched" if match
+                    else f"Regex '{expected}' did not match"
+                )
+            except re.error as regex_err:
+                check["passed"] = False
+                check["detail"] = f"Invalid regex '{expected}': {regex_err}"
+
+        elif name == "response_length_min":
+            actual_len = len(turn.agent_text.strip())
+            check["actual"] = actual_len
+            check["passed"] = actual_len >= expected
+            check["detail"] = (
+                f"Response length {actual_len} >= {expected} (min)"
+                if actual_len >= expected
+                else f"Response length {actual_len} < {expected} (min)"
+            )
+
+        elif name == "response_length_max":
+            actual_len = len(turn.agent_text.strip())
+            check["actual"] = actual_len
+            check["passed"] = actual_len <= expected
+            check["detail"] = (
+                f"Response length {actual_len} <= {expected} (max)"
+                if actual_len <= expected
+                else f"Response length {actual_len} > {expected} (max)"
+            )
+
+        elif name == "action_result_contains":
+            results = turn.action_results
+            results_str = json.dumps(results) if results else ""
+            found = str(expected).lower() in results_str.lower()
+            check["actual"] = found
+            check["passed"] = found
+            if not results:
+                check["detail"] = f"No action results to search for '{expected}'"
+                check["passed"] = False
+            elif found:
+                check["detail"] = f"'{expected}' found in action results"
+            else:
+                check["detail"] = f"'{expected}' not found in action results"
+
         else:
             check["detail"] = f"Unknown check '{name}' — skipped"
             check["passed"] = True  # Don't fail on unknown checks
@@ -373,6 +468,25 @@ def _run_check(
 def _matches_patterns(text: str, patterns: List[str]) -> bool:
     """Check if text matches any of the given regex patterns."""
     return any(re.search(p, text) for p in patterns)
+
+
+def _extract_variable_keyword(variable_name: str) -> Optional[str]:
+    """
+    Extract a human-readable keyword from a variable name for re-ask detection.
+
+    Examples:
+        "$Context.AccountId" → "account"
+        "$Context.EndUserLanguage" → "language"
+        "CaseId" → "case"
+        "Verified_Check" → "verified"
+    """
+    # Strip $Context. prefix
+    name = variable_name.replace("$Context.", "").replace("$", "")
+    # Split on camelCase or underscores
+    parts = re.split(r'(?<=[a-z])(?=[A-Z])|_', name)
+    # Filter out common suffixes like 'Id', 'Key', 'Name'
+    keywords = [p.lower() for p in parts if p.lower() not in ("id", "key", "name", "type", "value")]
+    return keywords[0] if keywords else None
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -391,6 +505,7 @@ def execute_scenario(
     scenario: Dict[str, Any],
     global_variables: List[Dict] = None,
     verbose: bool = False,
+    turn_retry: int = 0,
 ) -> Dict[str, Any]:
     """
     Execute a single multi-turn test scenario.
@@ -401,6 +516,7 @@ def execute_scenario(
         scenario: Scenario dict from YAML template.
         global_variables: CLI-level variables to merge with scenario variables.
         verbose: Print progress to stderr.
+        turn_retry: Number of retries per turn on transient failures (default 0).
 
     Returns:
         Scenario result dict with turn results and evaluation.
@@ -451,8 +567,24 @@ def execute_scenario(
                 if verbose:
                     print(f"    Turn {i}: \"{user_message[:50]}{'...' if len(user_message) > 50 else ''}\"", file=sys.stderr)
 
-                # Send message
-                turn_result = session.send(user_message, variables=turn_variables)
+                # Send message with optional per-turn retry
+                turn_result = None
+                for attempt in range(turn_retry + 1):
+                    try:
+                        turn_result = session.send(user_message, variables=turn_variables)
+                        if not turn_result.is_error:
+                            break
+                    except Exception as send_err:
+                        if attempt < turn_retry:
+                            if verbose:
+                                print(f"      ⟳ Retry {attempt + 1}/{turn_retry}: {send_err}", file=sys.stderr)
+                            time.sleep(1 * (attempt + 1))
+                        else:
+                            raise
+                    if attempt < turn_retry and turn_result and turn_result.is_error:
+                        if verbose:
+                            print(f"      ⟳ Retry {attempt + 1}/{turn_retry}: turn error", file=sys.stderr)
+                        time.sleep(1 * (attempt + 1))
 
                 # Evaluate against expectations
                 evaluation = evaluate_turn(turn_result, expectations, prior_turn_results)
@@ -490,6 +622,12 @@ def execute_scenario(
         result["status"] = "error"
         if verbose:
             print(f"    ❌ API Error: {e}", file=sys.stderr)
+        return result
+    except Exception as e:
+        result["error"] = f"Unexpected error: {type(e).__name__}: {e}"
+        result["status"] = "error"
+        if verbose:
+            print(f"    ❌ Unexpected Error: {type(e).__name__}: {e}", file=sys.stderr)
         return result
 
     result["elapsed_ms"] = round((time.time() - start_time) * 1000, 1)
@@ -635,6 +773,11 @@ def _infer_failure_category(check_name: str, turn: Dict) -> Optional[str]:
         "response_not_empty": "RESPONSE_QUALITY_ISSUE",
         "response_declines_gracefully": "GUARDRAIL_NOT_TRIGGERED",
         "resumes_normal": "GUARDRAIL_RECOVERY_FAILURE",
+        "turn_elapsed_max": "RESPONSE_QUALITY_ISSUE",
+        "response_matches_regex": "CONTEXT_PRESERVATION_FAILURE",
+        "response_length_min": "RESPONSE_QUALITY_ISSUE",
+        "response_length_max": "RESPONSE_QUALITY_ISSUE",
+        "action_result_contains": "ACTION_CHAIN_FAILURE",
     }
     return mapping.get(check_name)
 
@@ -712,6 +855,12 @@ Environment Variables:
     parser.add_argument("--json-only", action="store_true",
                         help="Only output JSON (no terminal report)")
 
+    # Robustness
+    parser.add_argument("--turn-retry", type=int, default=0,
+                        help="Number of retries per turn on transient failures (default: 0)")
+    parser.add_argument("--parallel", type=int, default=0,
+                        help="Run scenarios in parallel with N workers (default: 0 = sequential)")
+
     args = parser.parse_args()
 
     # Validate required args
@@ -764,21 +913,33 @@ Environment Variables:
         sys.exit(2)
 
     # Execute scenarios
+    parallel = getattr(args, 'parallel', 0)
     if args.verbose:
-        print(f"\nRunning {len(scenarios)} scenario(s) from {args.scenarios}...", file=sys.stderr)
+        mode = f"parallel ({parallel} workers)" if parallel else "sequential"
+        print(f"\nRunning {len(scenarios)} scenario(s) from {args.scenarios} [{mode}]...", file=sys.stderr)
 
     start_time = time.time()
     scenario_results = []
 
-    for scenario in scenarios:
-        result = execute_scenario(
+    def _run_one(scenario):
+        return execute_scenario(
             client=client,
             agent_id=args.agent_id,
             scenario=scenario,
             global_variables=global_variables,
             verbose=args.verbose,
+            turn_retry=args.turn_retry,
         )
-        scenario_results.append(result)
+
+    if parallel and parallel > 0 and len(scenarios) > 1:
+        max_workers = min(parallel, len(scenarios))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_run_one, s): s for s in scenarios}
+            for future in concurrent.futures.as_completed(futures):
+                scenario_results.append(future.result())
+    else:
+        for scenario in scenarios:
+            scenario_results.append(_run_one(scenario))
 
     total_elapsed = (time.time() - start_time) * 1000
 

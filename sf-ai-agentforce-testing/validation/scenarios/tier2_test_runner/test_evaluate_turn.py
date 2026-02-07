@@ -191,11 +191,32 @@ def test_guardrail_not_triggered(sample_turn_result):
 
 @pytest.mark.tier2
 @pytest.mark.offline
-def test_action_invoked_passes(sample_turn_result):
-    """TurnResult with has_action_result=True should pass action_invoked."""
+def test_action_invoked_passes_bool(sample_turn_result):
+    """TurnResult with has_action_result=True should pass action_invoked: true."""
     turn = sample_turn_result(
         agent_text="I found your order details.",
         has_action_result=True,
+    )
+    result = evaluate_turn(turn, {"action_invoked": True}, [])
+    assert result["passed"] is True
+
+
+@pytest.mark.tier2
+@pytest.mark.offline
+def test_action_invoked_passes_string(sample_turn_result):
+    """action_invoked with string checks action name in raw_response."""
+    from agent_api_client import TurnResult, AgentMessage
+    turn = TurnResult(
+        sequence_id=1,
+        user_message="Look up order",
+        agent_messages=[AgentMessage(
+            type="Inform", id="msg-001", message="I found your order details.",
+            result=[{"orderId": "12345"}],
+        )],
+        raw_response={"messages": [
+            {"type": "Inform", "message": "Found it.", "actionName": "LookupOrder"}
+        ]},
+        elapsed_ms=100.0,
     )
     result = evaluate_turn(turn, {"action_invoked": "LookupOrder"}, [])
     assert result["passed"] is True

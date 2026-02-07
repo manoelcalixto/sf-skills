@@ -26,6 +26,11 @@ KNOWN_CHECK_TO_CATEGORY = {
     "response_not_empty": "RESPONSE_QUALITY_ISSUE",
     "response_declines_gracefully": "GUARDRAIL_NOT_TRIGGERED",
     "resumes_normal": "GUARDRAIL_RECOVERY_FAILURE",
+    "turn_elapsed_max": "RESPONSE_QUALITY_ISSUE",
+    "response_matches_regex": "CONTEXT_PRESERVATION_FAILURE",
+    "response_length_min": "RESPONSE_QUALITY_ISSUE",
+    "response_length_max": "RESPONSE_QUALITY_ISSUE",
+    "action_result_contains": "ACTION_CHAIN_FAILURE",
 }
 
 ALL_CATEGORIES = {

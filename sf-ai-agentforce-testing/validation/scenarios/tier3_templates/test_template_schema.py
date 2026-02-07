@@ -45,6 +45,11 @@ VALID_CHECK_TYPES = {
     "response_acknowledges_error",
     "resumes_normal",
     "conversation_resolved",
+    "turn_elapsed_max",
+    "response_matches_regex",
+    "response_length_min",
+    "response_length_max",
+    "action_result_contains",
 }
 
 REQUIRED_TOP_LEVEL_FIELDS = {"apiVersion", "kind", "metadata", "scenarios"}

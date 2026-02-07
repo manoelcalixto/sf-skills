@@ -68,7 +68,12 @@
     "response_offers_alternative",
     "response_acknowledges_error",
     "resumes_normal",
-    "conversation_resolved"
+    "conversation_resolved",
+    "turn_elapsed_max",
+    "response_matches_regex",
+    "response_length_min",
+    "response_length_max",
+    "action_result_contains"
   ],
   "failure_categories": [
     "TOPIC_RE_MATCHING_FAILURE",

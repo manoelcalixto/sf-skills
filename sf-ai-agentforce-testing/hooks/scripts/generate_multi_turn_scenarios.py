@@ -35,6 +35,7 @@ License: MIT
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -53,6 +54,7 @@ ALL_PATTERNS = [
     "guardrail_testing",
     "action_chain",
     "error_recovery",
+    "cross_topic_switch",
 ]
 
 
@@ -326,6 +328,71 @@ def generate_error_recovery(agent: Dict[str, Any]) -> List[Dict]:
     }]
 
 
+def generate_cross_topic_scenarios(agent: Dict[str, Any]) -> List[Dict]:
+    """Generate cross-topic switching scenarios — test agent ability to handle topic changes mid-conversation."""
+    scenarios = []
+    topics = agent.get("topics", [])
+
+    if len(topics) < 2:
+        return scenarios  # Need at least 2 topics to test switching
+
+    # Sort topics by action count (most interesting first)
+    scored_topics = []
+    for t in topics:
+        action_count = len(t.get("actions", []))
+        scored_topics.append((action_count, t))
+    scored_topics.sort(key=lambda x: x[0], reverse=True)
+    ranked_topics = [t for _, t in scored_topics]
+
+    # Generate pairs from top topics (limit to 3 pairs)
+    pairs = []
+    for i in range(len(ranked_topics)):
+        for j in range(i + 1, len(ranked_topics)):
+            pairs.append((ranked_topics[i], ranked_topics[j]))
+    pairs = pairs[:3]
+
+    for topic_a, topic_b in pairs:
+        name_a = topic_a.get("name", "unknown_a")
+        name_b = topic_b.get("name", "unknown_b")
+        safe_a = name_a.replace(" ", "_").lower()
+        safe_b = name_b.replace(" ", "_").lower()
+        desc_a = topic_a.get("description", name_a.replace("_", " "))
+        desc_b = topic_b.get("description", name_b.replace("_", " "))
+
+        scenarios.append({
+            "name": f"cross_topic_{safe_a}_to_{safe_b}",
+            "description": f"Switch from topic '{name_a}' to '{name_b}' mid-conversation",
+            "pattern": "cross_topic_switch",
+            "priority": "high",
+            "turns": [
+                {
+                    "user": f"I need help with {name_a.replace('_', ' ').lower()}.",
+                    "expect": {
+                        "response_not_empty": True,
+                        "topic_contains": safe_a.split("_")[0],
+                    },
+                },
+                {
+                    "user": f"Actually, I'd rather ask about {name_b.replace('_', ' ').lower()} instead.",
+                    "expect": {
+                        "response_not_empty": True,
+                        "response_acknowledges_change": True,
+                        "topic_contains": safe_b.split("_")[0],
+                    },
+                },
+                {
+                    "user": f"Can you continue helping me with {name_b.replace('_', ' ').lower()}?",
+                    "expect": {
+                        "response_not_empty": True,
+                        "context_retained": True,
+                    },
+                },
+            ],
+        })
+
+    return scenarios
+
+
 GENERATORS = {
     "topic_routing": generate_topic_routing,
     "context_preservation": generate_context_preservation,
@@ -333,6 +400,7 @@ GENERATORS = {
     "guardrail_testing": generate_guardrail_testing,
     "action_chain": generate_action_chain,
     "error_recovery": generate_error_recovery,
+    "cross_topic_switch": generate_cross_topic_scenarios,
 }
 
 
@@ -368,6 +436,42 @@ def generate_scenarios(metadata: Dict, patterns: List[str]) -> Dict:
     }
 
 
+def generate_categorized_output(doc: Dict, output_dir: str) -> Dict[str, str]:
+    """
+    Write separate YAML files per scenario category into output_dir.
+
+    Returns dict mapping category name to output file path.
+    """
+    scenarios = doc.get("scenarios", [])
+    categories = {}
+    for s in scenarios:
+        cat = s.get("pattern", "uncategorized")
+        categories.setdefault(cat, []).append(s)
+
+    os.makedirs(output_dir, exist_ok=True)
+    written = {}
+
+    for cat_name, cat_scenarios in categories.items():
+        cat_doc = {
+            "apiVersion": "v1",
+            "kind": "MultiTurnTestScenario",
+            "metadata": {
+                "name": f"scenarios-{cat_name}",
+                "testMode": "multi-turn-api",
+                "description": f"{cat_name} scenarios ({len(cat_scenarios)} total)",
+                "category": cat_name,
+            },
+            "scenarios": cat_scenarios,
+        }
+        filename = f"scenarios-{cat_name}.yaml"
+        filepath = os.path.join(output_dir, filename)
+        with open(filepath, "w") as f:
+            yaml.dump(cat_doc, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        written[cat_name] = filepath
+
+    return written
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate multi-turn test scenarios from agent metadata",
@@ -387,8 +491,18 @@ Examples:
     parser.add_argument("--patterns", nargs="+", default=ALL_PATTERNS,
                         choices=ALL_PATTERNS,
                         help=f"Test patterns to generate (default: all)")
+    parser.add_argument("--categorized", action="store_true",
+                        help="Output separate YAML files per category into --output directory")
+    parser.add_argument("--scenarios-per-topic", type=int, default=2,
+                        help="Number of scenarios to generate per topic (default: 2)")
+    parser.add_argument("--cross-topic", action="store_true",
+                        help="Include cross-topic switching scenarios")
 
     args = parser.parse_args()
+
+    # If --cross-topic is specified, ensure the pattern is included
+    if args.cross_topic and "cross_topic_switch" not in args.patterns:
+        args.patterns = list(args.patterns) + ["cross_topic_switch"]
 
     # Load metadata
     try:
@@ -404,12 +518,24 @@ Examples:
     # Generate
     doc = generate_scenarios(metadata, args.patterns)
 
-    # Write output
-    with open(args.output, "w") as f:
-        yaml.dump(doc, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-
     scenario_count = len(doc.get("scenarios", []))
-    print(f"Generated {scenario_count} scenario(s) → {args.output}", file=sys.stderr)
+
+    # Write output
+    if args.categorized:
+        output_dir = args.output
+        written = generate_categorized_output(doc, output_dir)
+        for cat_name, filepath in written.items():
+            cat_count = len([s for s in doc["scenarios"] if s.get("pattern") == cat_name])
+            print(f"  {cat_name}: {cat_count} scenario(s) → {filepath}", file=sys.stderr)
+        # Also write combined file
+        combined_path = os.path.join(output_dir, "all-scenarios.yaml")
+        with open(combined_path, "w") as f:
+            yaml.dump(doc, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        print(f"Generated {scenario_count} scenario(s) across {len(written)} categories → {output_dir}/", file=sys.stderr)
+    else:
+        with open(args.output, "w") as f:
+            yaml.dump(doc, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        print(f"Generated {scenario_count} scenario(s) → {args.output}", file=sys.stderr)
 
     if scenario_count == 0:
         sys.exit(1)

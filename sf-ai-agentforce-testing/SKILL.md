@@ -71,11 +71,14 @@ Expert testing engineer specializing in Agentforce agent testing via **dual-trac
 | **Fix decision tree** | [agentic-fix-loop.md](docs/agentic-fix-loop.md) | Detailed fix strategies |
 
 **⚡ Quick Links:**
-- [Scoring System](#scoring-system-100-points) - 7-category validation
+- [Deterministic Interview Flow](#deterministic-multi-turn-interview-flow) - Rule-based setup (7 steps)
+- [Credential Convention](#credential-convention-sfagent) - Persistent ECA storage
+- [Swarm Execution Rules](#swarm-execution-rules-native-claude-code-teams) - Parallel team testing
+- [Test Plan Format](#test-plan-file-format) - Reusable YAML plans
 - [Phase A: Multi-Turn API Testing](#phase-a-multi-turn-api-testing-primary) - Primary workflow
 - [Phase B: CLI Testing Center](#phase-b-cli-testing-center-secondary) - Secondary workflow
+- [Scoring System](#scoring-system-100-points) - 7-category validation
 - [Agentic Fix Loop](#phase-c-agentic-fix-loop) - Auto-fix workflow
-- [Multi-Turn Templates](#multi-turn-test-templates) - Pre-built test scenarios
 
 ---
 
@@ -100,14 +103,21 @@ Expert testing engineer specializing in Agentforce agent testing via **dual-trac
 ## Architecture: Dual-Track Testing Workflow
 
 ```
+Deterministic Interview (I-1 → I-7)
+    │  Agent Name → Org Alias → Metadata → Credentials → Scenarios → Partition → Confirm
+    │  (skip if test-plan-{agent}.yaml provided)
+    │
+    ▼
 Phase 0: Prerequisites & Agent Discovery
     │
     ├──► Phase A: Multi-Turn API Testing (PRIMARY)
-    │    A1: ECA Credential Setup
+    │    A1: ECA Credential Setup (via credential_manager.py)
     │    A2: Agent Discovery & Metadata Retrieval
-    │    A3: Test Scenario Planning (interview user)
+    │    A3: Test Scenario Planning (generate_multi_turn_scenarios.py --categorized)
     │    A4: Multi-Turn Execution (Agent Runtime API)
-    │    A5: Results & Scoring
+    │        ├─ Sequential: single multi_turn_test_runner.py process
+    │        └─ Swarm: TeamCreate → N workers (--rich-output --worker-id N)
+    │    A5: Results & Scoring (rich Unicode output)
     │
     └──► Phase B: CLI Testing Center (SECONDARY)
          B1: Test Spec Creation
@@ -214,6 +224,238 @@ sf agent test list --target-org [alias]
 | **Dependencies deployed** | Flows and Apex in org | Actions will fail without them |
 | **ECA configured** (Phase A) | Token request test | Required for Agent Runtime API |
 | **Agent Testing Center** (Phase B) | `sf agent test list` | Required for CLI testing |
+
+---
+
+## Deterministic Multi-Turn Interview Flow
+
+When the testing skill is invoked, follow these interview steps **in order**. Each step has deterministic rules with fallbacks. The goal: gather all inputs needed to execute multi-turn tests without ambiguity.
+
+> **Skip the interview** if the user provides a `test-plan-{agent}.yaml` file — load it directly and jump to [Swarm Execution Rules](#swarm-execution-rules-native-claude-code-teams).
+
+| Step | Rule | Fallback |
+|------|------|----------|
+| **I-1: Agent Name** | User provided → use it. Else walk up from CWD looking for `sfdx-project.json` → run `python3 hooks/scripts/agent_discovery.py local --project-dir .`. Multiple agents → present numbered list via AskUserQuestion. None found → ask user. | AskUserQuestion |
+| **I-2: Org Alias** | User provided → use it. Else parse `sfdx-project.json` → read `sfdx-config.json` for `target-org`. Else ask user. Note: org aliases are **case-sensitive** (e.g., `Vivint-DevInt` ≠ `vivint-devint`). | AskUserQuestion |
+| **I-3: Metadata** | **ALWAYS** run `python3 hooks/scripts/agent_discovery.py live --target-org {org} --agent-name {agent}`. Extract topics, actions, type, agent_id. This step is mandatory — never skip. | Required (fail if no agent found) |
+| **I-4: Credentials** | Run `python3 hooks/scripts/credential_manager.py discover --org-alias {org}`. Found ECA → `validate`. Valid → use. Invalid → ask user for new credentials → `save` → re-validate. No ECAs found → ask user → offer to save via `credential_manager.py save`. | AskUserQuestion for credentials |
+| **I-5: Scenarios** | Pipe discovery metadata to `python3 hooks/scripts/generate_multi_turn_scenarios.py --metadata - --output {dir} --categorized --cross-topic`. Present summary: N scenarios across M categories. | Required |
+| **I-6: Partition** | Ask user how to split work across workers. | AskUserQuestion (see below) |
+| **I-7: Confirm** | Present test plan summary. Save as `test-plan-{agent}.yaml` using template. User confirms to proceed. | AskUserQuestion |
+
+### I-6: Partition Strategy
+
+```
+AskUserQuestion:
+  question: "How should test scenarios be distributed across workers?"
+  header: "Partition"
+  options:
+    - label: "By category (Recommended)"
+      description: "One worker per test pattern (topic_routing, context, escalation, etc.) — best for parallel isolation"
+    - label: "By count"
+      description: "Split scenarios evenly across N workers regardless of category"
+    - label: "Sequential"
+      description: "Run all scenarios in a single process — no team needed, simpler but slower"
+  multiSelect: false
+```
+
+### I-7: Confirmation Summary Format
+
+Present this to the user before execution:
+
+```
+📋 TEST PLAN SUMMARY
+════════════════════════════════════════════════════════════════
+Agent:        {agent_name} ({agent_id})
+Org:          {org_alias}
+Credentials:  ~/.sfagent/{org_alias}/{eca_name}/credentials.env ✅
+Scenarios:    {total_count} across {category_count} categories
+Partition:    {strategy} with {worker_count} worker(s)
+Variables:    {var_count} session variable(s)
+
+📂 Scenario Breakdown:
+  topic_routing:        {n} scenarios
+  context_preservation: {n} scenarios
+  escalation_flows:     {n} scenarios
+  guardrail_testing:    {n} scenarios
+  action_chain:         {n} scenarios
+  error_recovery:       {n} scenarios
+  cross_topic_switch:   {n} scenarios
+
+💾 Saved: test-plan-{agent_name}.yaml
+════════════════════════════════════════════════════════════════
+Proceed? [Confirm / Edit / Cancel]
+```
+
+---
+
+## Credential Convention (~/.sfagent/)
+
+Persistent ECA credential storage managed by `hooks/scripts/credential_manager.py`.
+
+### Directory Structure
+
+```
+~/.sfagent/
+├── .gitignore          ("*" — auto-created, prevents accidental commits)
+├── Vivint-DevInt/      (org alias — case-sensitive)
+│   ├── IRIS_ECA/       (ECA app name)
+│   │   └── credentials.env
+│   └── Testing_ECA/
+│       └── credentials.env
+└── Other-Org/
+    └── My_ECA/
+        └── credentials.env
+```
+
+### File Format
+
+```env
+# credentials.env — managed by credential_manager.py
+SF_MY_DOMAIN=yourdomain.my.salesforce.com
+SF_CONSUMER_KEY=3MVG9...
+SF_CONSUMER_SECRET=ABC123...
+```
+
+### Security Rules
+
+| Rule | Implementation |
+|------|---------------|
+| Directory permissions | `0700` (owner only) |
+| File permissions | `0600` (owner only) |
+| Git protection | `.gitignore` with `*` auto-created in `~/.sfagent/` |
+| Secret display | NEVER show full secrets — mask as `ABC...XYZ` (first 3 + last 3) |
+| Credential passing | Export as env vars for subprocesses, never write to temp files |
+
+### CLI Reference
+
+```bash
+# Discover orgs and ECAs
+python3 hooks/scripts/credential_manager.py discover
+python3 hooks/scripts/credential_manager.py discover --org-alias Vivint-DevInt
+
+# Load credentials (secrets masked in output)
+python3 hooks/scripts/credential_manager.py load --org-alias Vivint-DevInt --eca-name IRIS_ECA
+
+# Save new credentials
+python3 hooks/scripts/credential_manager.py save \
+  --org-alias Vivint-DevInt --eca-name IRIS_ECA \
+  --domain yourdomain.my.salesforce.com \
+  --consumer-key 3MVG9... --consumer-secret ABC123...
+
+# Validate OAuth flow
+python3 hooks/scripts/credential_manager.py validate --org-alias Vivint-DevInt --eca-name IRIS_ECA
+```
+
+---
+
+## Swarm Execution Rules (Native Claude Code Teams)
+
+When `worker_count > 1` in the test plan, use Claude Code's native team orchestration for parallel test execution. When `worker_count == 1`, run sequentially without creating a team.
+
+### Team Lead Rules (Claude Code)
+
+```
+RULE: Create team via TeamCreate("sf-test-{agent_name}")
+RULE: Create one TaskCreate per partition (category or count split)
+RULE: Spawn one Task(subagent_type="general-purpose") per worker
+RULE: Each worker gets credentials as env vars in its prompt (NEVER in files)
+RULE: Wait for all workers to report via SendMessage
+RULE: Present unified beautiful report aggregating all worker results
+RULE: Offer fix loop if any failures detected
+RULE: Shutdown all workers via SendMessage(type="shutdown_request")
+RULE: Clean up via TeamDelete when done
+```
+
+### Worker Agent Prompt Template
+
+Each worker receives this prompt (team lead fills in the variables):
+
+```
+You are a multi-turn test worker for Agentforce agent testing.
+
+YOUR TASK:
+1. Export credentials:
+   export SF_MY_DOMAIN="{domain}"
+   export SF_CONSUMER_KEY="{key}"
+   export SF_CONSUMER_SECRET="{secret}"
+
+2. Run the test:
+   python3 {skill_path}/hooks/scripts/multi_turn_test_runner.py \
+     --scenarios {scenario_file} \
+     --agent-id {agent_id} \
+     --output /tmp/sf-test-{session}/worker-{N}-results.json \
+     --rich-output --worker-id {N} --verbose
+
+3. Read the results JSON file
+
+4. Analyze: which scenarios passed, which failed, and WHY
+
+5. SendMessage to team lead with:
+   - Pass/fail summary (counts + percentages)
+   - For each failure: scenario name, turn number, what went wrong, suggested fix
+   - Total execution time
+   - Any patterns noticed (e.g., "all context_preservation tests failed — may be a systemic issue")
+
+6. Mark your task as completed via TaskUpdate
+
+IMPORTANT:
+- If a test fails with an auth error (exit code 2), report it immediately — do NOT retry
+- If a test fails with scenario failures (exit code 1), analyze and report all failures
+- You CAN communicate with other workers if you discover related issues
+```
+
+### Partition Strategies
+
+| Strategy | How It Works | Best For |
+|----------|-------------|----------|
+| `by_category` | One worker per test pattern (topic_routing, context, etc.) | Most runs — natural isolation |
+| `by_count` | Split N scenarios evenly across W workers | Large scenario counts |
+| `sequential` | Single process, no team | Quick runs, debugging |
+
+### Team Lead Aggregation
+
+After all workers report, the team lead:
+
+1. **Collects** all worker results (pass/fail counts, timing, failures)
+2. **Deduplicates** any shared failure patterns across workers
+3. **Presents** a unified rich report combining all partitions
+4. **Calculates** aggregate scoring across the 7 categories
+5. **Offers** fix loop: if failures exist, ask user whether to auto-fix via `sf-ai-agentscript`
+6. **Shuts down** all workers and deletes the team
+
+---
+
+## Test Plan File Format
+
+Test plans (`test-plan-{agent}.yaml`) capture the full interview output for reuse. See `templates/test-plan-template.yaml` for the complete schema.
+
+### Key Sections
+
+| Section | Purpose |
+|---------|---------|
+| `metadata` | Agent name, ID, org alias, timestamps |
+| `credentials` | Path to `~/.sfagent/` credentials.env or `use_env: true` |
+| `agent_metadata` | Topics, actions, type — populated by `agent_discovery.py` |
+| `scenarios` | List of YAML scenario files + pattern filters |
+| `partition` | Strategy (`by_category`/`by_count`/`sequential`) + worker count |
+| `session_variables` | Context variables injected into every session |
+| `execution` | Timeout, retry, verbose, rich output settings |
+
+### Re-Running from a Saved Plan
+
+When a user provides a test plan file, skip the interview entirely:
+
+```
+1. Load test-plan-{agent}.yaml
+2. Validate credentials: credential_manager.py validate --org-alias {org} --eca-name {eca}
+3. If invalid → ask user to update credentials only (skip other interview steps)
+4. Load scenario files from plan
+5. Apply partition strategy from plan
+6. Execute (team or sequential based on worker_count)
+```
+
+This enables rapid re-runs after fixing agent issues — the user just says "re-run" and the skill picks up the saved plan.
 
 ---
 

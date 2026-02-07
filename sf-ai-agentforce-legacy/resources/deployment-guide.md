@@ -226,8 +226,8 @@ sf agent preview --target-org [alias]
 # Preview specific agent (simulated mode - default)
 sf agent preview --api-name [AgentName] --target-org [alias]
 
-# Preview in live mode (requires connected app)
-sf agent preview --api-name [AgentName] --use-live-actions --client-app [AppName] --target-org [alias]
+# Preview in live mode
+sf agent preview --api-name [AgentName] --use-live-actions --target-org [alias]
 
 # Preview with debug output saved
 sf agent preview --api-name [AgentName] --output-dir ./logs --apex-debug --target-org [alias]
@@ -238,9 +238,9 @@ sf agent preview --api-name [AgentName] --output-dir ./logs --apex-debug --targe
 | Mode | Flag | Description |
 |------|------|-------------|
 | Simulated | (default) | LLM simulates action responses - safe for testing |
-| Live | `--use-live-actions` | Uses actual Apex/Flows in org - requires connected app |
+| Live | `--use-live-actions` | Uses actual Apex/Flows in org — standard org auth (v2.121.7+) |
 
-**Connected App Setup**: See [testing-guide.md](testing-guide.md#connected-app-setup-for-live-mode).
+> **v2.121.7+**: Live preview no longer requires a Connected App. Standard org auth (`sf org login web`) suffices.
 
 ### Lifecycle Commands
 
@@ -306,8 +306,8 @@ sf agent preview --api-name [AgentName] --target-org [alias]
 # 7. Activate (when ready for production)
 sf agent activate --api-name [AgentName] --target-org [alias]
 
-# 8. Preview (live mode - optional, requires connected app)
-sf agent preview --api-name [AgentName] --use-live-actions --client-app [App] --target-org [alias]
+# 8. Preview (live mode - optional)
+sf agent preview --api-name [AgentName] --use-live-actions --target-org [alias]
 ```
 
 **IMPORTANT**:

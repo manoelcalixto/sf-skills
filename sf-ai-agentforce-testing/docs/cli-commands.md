@@ -322,7 +322,6 @@ sf agent preview --api-name <name> --target-org <alias> [options]
 | Flag | Description |
 |------|-------------|
 | `--use-live-actions` | Execute real Flows/Apex (vs simulated) |
-| `-c, --client-app` | Connected app name (required for live mode) |
 | `--authoring-bundle` | Specific authoring bundle to preview |
 | `-d, --output-dir` | Directory to save transcripts |
 | `-x, --apex-debug` | Capture Apex debug logs |
@@ -332,7 +331,9 @@ sf agent preview --api-name <name> --target-org <alias> [options]
 | Mode | Command | Description |
 |------|---------|-------------|
 | **Simulated** | `sf agent preview --api-name Agent` | LLM simulates action results |
-| **Live** | `sf agent preview --api-name Agent --use-live-actions --client-app App` | Real Flows/Apex execute |
+| **Live** | `sf agent preview --api-name Agent --use-live-actions` | Real Flows/Apex execute |
+
+> **v2.121.7+**: When `--api-name` is omitted, the interactive agent selection now shows **(Published)** and **(Agent Script)** labels next to agent names to help distinguish agent types.
 
 **Example:**
 
@@ -344,10 +345,10 @@ sf agent preview --api-name Customer_Support_Agent --target-org dev
 sf agent preview --api-name Customer_Support_Agent --output-dir ./logs --target-org dev
 
 # Live preview with real actions
-sf agent preview --api-name Customer_Support_Agent --use-live-actions --client-app MyConnectedApp --target-org dev
+sf agent preview --api-name Customer_Support_Agent --use-live-actions --target-org dev
 
 # Live preview with debug logs
-sf agent preview --api-name Customer_Support_Agent --use-live-actions --client-app MyApp --apex-debug --output-dir ./logs --target-org dev
+sf agent preview --api-name Customer_Support_Agent --use-live-actions --apex-debug --output-dir ./logs --target-org dev
 ```
 
 **Interactive Session:**
@@ -500,7 +501,7 @@ fi
 
 ```bash
 # 1. Run preview with debug logs
-sf agent preview --api-name MyAgent --use-live-actions --client-app App --apex-debug --output-dir ./debug --target-org dev
+sf agent preview --api-name MyAgent --use-live-actions --apex-debug --output-dir ./debug --target-org dev
 
 # 2. Analyze transcripts
 cat ./debug/responses.json | jq '.messages'
@@ -517,7 +518,7 @@ cat ./debug/apex-debug.log | grep ERROR
 |-------|-------|----------|
 | "Agent not found" | Agent not published | Run `sf agent publish authoring-bundle` |
 | "Test not found" | Test not created | Run `sf agent test create` first |
-| "401 Unauthorized" | Connected app issue | Check OAuth setup via sf-connected-apps |
+| "401 Unauthorized" | Org auth expired | Re-authenticate: `sf org login web` |
 | "Job ID not found" | Test timed out | Use `sf agent test resume` |
 | "No results" | Test still running | Wait longer or use `--wait` |
 | **"Nonexistent flag: --use-most-recent"** | CLI bug | Use `--job-id` explicitly instead |

@@ -366,7 +366,7 @@ sf agent deactivate --api-name [AgentName] --target-org [alias]
 sf agent preview --api-name [AgentName] --target-org [alias]
 
 # Preview agent (live mode - real Apex/Flows)
-sf agent preview --api-name [AgentName] --use-live-actions --client-app [App] --target-org [alias]
+sf agent preview --api-name [AgentName] --use-live-actions --target-org [alias]
 
 # Validate Agent Script syntax
 sf afdx agent validate --api-name [AgentName] --target-org [alias]
@@ -440,6 +440,7 @@ sf agent activate --api-name [AgentName] --target-org target-org
 | `sf agent preview --api-name X` | Preview agent behavior |
 | `sf afdx agent validate --api-name X` | Validate Agent Script syntax |
 | `sf org open agent --api-name X` | Open in Agentforce Builder |
+| `sf org open authoring-bundle` | Open Agentforce Studio list view (v2.121.7+) |
 | `sf project retrieve start --metadata Agent:X` | Retrieve agent + components |
 | `sf project deploy start --metadata Agent:X` | Deploy agent metadata |
 

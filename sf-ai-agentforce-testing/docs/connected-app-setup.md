@@ -1,159 +1,60 @@
-# Connected App Setup for Live Preview
+# Authentication Guide for Agent Testing
 
-Guide for configuring OAuth to enable live preview mode with real Flow and Apex execution.
+Guide to authentication methods for agent preview and API-based testing.
 
 ---
 
 ## Overview
 
-Agent preview has two modes:
+> **v2.121.7 Breaking Change**: The `--client-app` flag has been **removed** from `sf agent preview`. Live preview now uses standard org authentication — no Connected App required.
 
-| Mode | Flag | Actions | Use Case |
-|------|------|---------|----------|
-| **Simulated** | (default) | LLM simulates action results | Logic testing, early development |
-| **Live** | `--use-live-actions` | Real Flows/Apex execute | Integration testing, validation |
+Agent testing uses **two different auth methods** depending on the testing approach:
 
-Live mode requires a **Connected App** for OAuth authentication.
-
----
-
-## When You Need a Connected App
-
-✅ **Required for:**
-- `sf agent preview --use-live-actions`
-- Testing real data queries
-- Validating Flow execution
-- Debugging Apex integration
-
-❌ **Not required for:**
-- `sf agent preview` (simulated mode)
-- `sf agent test run` (automated tests)
-- Agent validation and publishing
+| Testing Approach | Auth Method | Setup Required |
+|------------------|-------------|----------------|
+| **Preview (Simulated)** | Standard org auth | `sf org login web` |
+| **Preview (Live)** | Standard org auth | `sf org login web` |
+| **Agent Runtime API** (multi-turn) | External Client App (ECA) | Client Credentials flow |
 
 ---
 
-## Quick Setup
+## Preview Authentication
 
-### Option 1: Use sf-connected-apps Skill (Recommended)
+Both simulated and live preview modes use standard Salesforce CLI authentication. No Connected App or ECA is required.
 
-```
-Skill(skill="sf-connected-apps", args="Create Connected App for Agentforce live preview with callback http://localhost:1717/OauthRedirect")
-```
-
-### Option 2: Manual Setup via UI
-
-1. **Setup → App Manager → New Connected App**
-2. Configure OAuth settings (see below)
-3. Get Consumer Key and Secret
-
----
-
-## Connected App Configuration
-
-### Required Settings
-
-| Field | Value |
-|-------|-------|
-| **Connected App Name** | Agentforce Preview App (or your choice) |
-| **API Name** | Agentforce_Preview_App |
-| **Contact Email** | Your email |
-| **Enable OAuth Settings** | ✅ Checked |
-| **Callback URL** | `http://localhost:1717/OauthRedirect` |
-| **Selected OAuth Scopes** | See below |
-
-### Required OAuth Scopes
-
-| Scope | Purpose |
-|-------|---------|
-| `Full access (full)` | OR use specific scopes below |
-| `Access and manage your data (api)` | Data operations |
-| `Perform requests on your behalf (refresh_token, offline_access)` | Token refresh |
-| `Access unique user identifiers (openid)` | User identification |
-
-**Minimal Scopes (if not using `full`):**
-- `api`
-- `refresh_token`
-- `offline_access`
-- `openid`
-
-### Security Settings (Optional)
-
-| Setting | Recommendation |
-|---------|----------------|
-| **Require Secret for Refresh Token Flow** | ✅ Enable for production |
-| **Require Proof Key for Code Exchange (PKCE)** | ✅ Enable for enhanced security |
-| **IP Restrictions** | Configure if needed |
-
----
-
-## Retrieve Credentials
-
-After creating the Connected App:
-
-1. **Click "Manage Consumer Details"**
-2. **Verify identity** (email/SMS code)
-3. **Copy:**
-   - Consumer Key (Client ID)
-   - Consumer Secret (Client Secret)
-
----
-
-## Authentication
-
-### Authenticate with the Connected App
+### Authenticate to Your Org
 
 ```bash
 # Web-based OAuth login
-sf org login web --client-id YOUR_CONSUMER_KEY --set-default-dev-hub --alias preview-auth
+sf org login web --alias myorg
+
+# Verify authentication
+sf org display --target-org myorg
 ```
 
-### Or use existing org authentication
-
-If already authenticated to the org:
+### Run Live Preview
 
 ```bash
-# Check current auth
-sf org display --target-org [alias]
+# Simulated mode (default - no real actions executed)
+sf agent preview --api-name Customer_Support_Agent --target-org myorg
 
-# Re-authenticate if needed
-sf org login web --alias [alias]
-```
+# Live mode (real Flows/Apex execute)
+sf agent preview --api-name Customer_Support_Agent --use-live-actions --target-org myorg
 
----
-
-## Using Live Preview
-
-### Basic Live Preview
-
-```bash
+# Live mode with debug output
 sf agent preview \
   --api-name Customer_Support_Agent \
   --use-live-actions \
-  --client-app Agentforce_Preview_App \
-  --target-org dev
-```
-
-### With Debug Logs
-
-```bash
-sf agent preview \
-  --api-name Customer_Support_Agent \
-  --use-live-actions \
-  --client-app Agentforce_Preview_App \
   --apex-debug \
   --output-dir ./logs \
-  --target-org dev
-```
+  --target-org myorg
 
-### Save Transcripts
-
-```bash
+# Save transcripts
 sf agent preview \
   --api-name Customer_Support_Agent \
   --use-live-actions \
-  --client-app Agentforce_Preview_App \
   --output-dir ./preview-logs \
-  --target-org dev
+  --target-org myorg
 ```
 
 ---
@@ -219,20 +120,12 @@ When using `--apex-debug`:
 
 ### 401 Unauthorized
 
-**Cause:** Connected App not properly configured or not authorized.
+**Cause:** Org authentication expired or invalid.
 
 **Solution:**
-1. Verify Connected App callback URL matches `http://localhost:1717/OauthRedirect`
-2. Re-authenticate: `sf org login web --alias [alias]`
-3. Check Connected App is enabled for the user's profile
-
-### "Connected App not found"
-
-**Cause:** Wrong API name in `--client-app` flag.
-
-**Solution:**
-1. Check the API Name (not Display Name) in Setup → App Manager
-2. Use exact API name: `--client-app Agentforce_Preview_App`
+1. Re-authenticate: `sf org login web --alias [alias]`
+2. Verify auth is valid: `sf org display --target-org [alias]`
+3. Ensure user has Agentforce permissions
 
 ### Actions not executing
 
@@ -254,68 +147,20 @@ When using `--apex-debug`:
 
 ---
 
-## Security Best Practices
+## Agent Runtime API Auth (ECA)
 
-| Practice | Description |
-|----------|-------------|
-| **Use dedicated app** | Create separate Connected App for preview vs production |
-| **Limit scopes** | Use minimum necessary OAuth scopes |
-| **Enable PKCE** | Require Proof Key for Code Exchange |
-| **IP restrictions** | Limit access by IP range if possible |
-| **Rotate secrets** | Periodically rotate Consumer Secret |
-| **Audit logs** | Monitor Connected App usage |
+For **multi-turn API testing** (not CLI preview), you need an External Client App with Client Credentials flow.
 
----
+### Standard Auth vs ECA Comparison
 
-## Connected App Metadata
-
-If using metadata-based deployment:
-
-```xml
-<!-- connectedApps/Agentforce_Preview.connectedApp-meta.xml -->
-<?xml version="1.0" encoding="UTF-8"?>
-<ConnectedApp xmlns="http://soap.sforce.com/2006/04/metadata">
-    <label>Agentforce Preview</label>
-    <contactEmail>admin@example.com</contactEmail>
-    <oauthConfig>
-        <callbackUrl>http://localhost:1717/OauthRedirect</callbackUrl>
-        <certificate>YOUR_CERT_IF_NEEDED</certificate>
-        <consumerKey>AUTO_GENERATED</consumerKey>
-        <isAdminApproved>true</isAdminApproved>
-        <isConsumerSecretOptional>false</isConsumerSecretOptional>
-        <isIntrospectAllTokens>false</isIntrospectAllTokens>
-        <scopes>Full</scopes>
-        <scopes>Api</scopes>
-        <scopes>RefreshToken</scopes>
-    </oauthConfig>
-    <oauthPolicy>
-        <ipRelaxation>ENFORCE</ipRelaxation>
-        <refreshTokenPolicy>infinite</refreshTokenPolicy>
-    </oauthPolicy>
-</ConnectedApp>
-```
-
-Deploy with:
-```bash
-sf project deploy start --metadata ConnectedApp:Agentforce_Preview --target-org [alias]
-```
-
----
-
-## Web OAuth vs Client Credentials: Which Do You Need?
-
-There are **two different OAuth approaches** used in agent testing, each requiring a different app type:
-
-### Comparison
-
-| Aspect | Web OAuth (this guide) | Client Credentials (ECA) |
-|--------|----------------------|--------------------------|
-| **Used by** | `sf agent preview --use-live-actions` | Agent Runtime API (multi-turn testing) |
-| **App type** | Connected App | External Client App (ECA) |
-| **Auth flow** | Authorization Code (browser login) | Client Credentials (machine-to-machine) |
-| **User interaction** | Browser redirect required | None — fully automated |
+| Aspect | Standard Auth (Preview) | Client Credentials (ECA) |
+|--------|------------------------|--------------------------|
+| **Used by** | `sf agent preview` (simulated + live) | Agent Runtime API (multi-turn testing) |
+| **App type** | None required | External Client App (ECA) |
+| **Auth flow** | Standard CLI auth (browser login) | Client Credentials (machine-to-machine) |
+| **User interaction** | Browser redirect | None — fully automated |
 | **Best for** | Manual interactive testing | Automated multi-turn API testing |
-| **Setup guide** | This document | [ECA Setup Guide](eca-setup-guide.md) |
+| **Setup guide** | This section | [ECA Setup Guide](eca-setup-guide.md) |
 
 ### Decision Flow
 
@@ -323,19 +168,19 @@ There are **two different OAuth approaches** used in agent testing, each requiri
 What are you testing?
     │
     ├─ Interactive preview (sf agent preview)?
-    │   → Use Connected App (Web OAuth) — this guide
+    │   → Standard org auth (sf org login web) — no app setup needed
     │
     └─ Multi-turn API conversations?
         → Use External Client App (Client Credentials) — see eca-setup-guide.md
 ```
 
-### When You Need Both
+### When You Need an ECA
 
-If you're doing **comprehensive testing** (both CLI preview and multi-turn API), you'll need:
-1. A **Connected App** for `sf agent preview --use-live-actions` (this guide)
-2. An **External Client App** for Agent Runtime API testing ([ECA Setup Guide](eca-setup-guide.md))
+If you're doing **multi-turn API testing** via Agent Runtime API, you'll need:
+- An **External Client App** with Client Credentials flow ([ECA Setup Guide](eca-setup-guide.md))
+- Scopes: `api`, `chatbot_api`, `sfap_api`
 
-These are separate app types and can coexist in the same org.
+Preview testing (simulated or live) only requires standard `sf org login web`.
 
 ---
 

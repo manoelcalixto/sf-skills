@@ -66,7 +66,7 @@ sf agent test results --job-id JOB_ID --result-format json --target-org [alias]
 sf agent preview --api-name AgentName --target-org [alias]
 
 # Interactive preview (live actions)
-sf agent preview --api-name AgentName --use-live-actions --client-app AppName --target-org [alias]
+sf agent preview --api-name AgentName --use-live-actions --target-org [alias]
 ```
 
 ## Scoring System (100 Points)
@@ -122,7 +122,7 @@ When enabled, the skill will:
 - sf CLI v2
 - Target Salesforce org with Agentforce enabled
 - Agent published and activated for testing
-- Connected App for live preview mode (optional)
+- Standard org auth for live preview mode (`sf org login web`)
 
 ## License
 

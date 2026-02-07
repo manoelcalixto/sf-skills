@@ -22,7 +22,7 @@ There are **three main approaches** to testing Agentforce agents:
 | Approach | Use When | Command | Requires Org |
 |----------|----------|---------|--------------|
 | **Preview (Simulated)** | Quick syntax/logic testing | `sf agent preview` | Yes |
-| **Preview (Live)** | End-to-end testing with real actions | `sf agent preview --use-live-actions` | Yes + Connected App |
+| **Preview (Live)** | End-to-end testing with real actions | `sf agent preview --use-live-actions` | Yes |
 | **Agent Testing Center** | Automated regression testing | `sf agent test run` | Yes + Feature Enabled |
 
 ---
@@ -57,12 +57,12 @@ sf agent preview --api-name My_Agent --target-org MyOrg
 **Uses actual Apex/Flows in org** - executes real actions with real data.
 
 ```bash
-# Preview in live mode (requires connected app)
-sf agent preview --api-name My_Agent --use-live-actions --client-app MyConnectedApp --target-org MyOrg
+# Preview in live mode
+sf agent preview --api-name My_Agent --use-live-actions --target-org MyOrg
 ```
 
 **Requirements:**
-1. **Connected App** must be created in org
+1. Standard org auth (`sf org login web`) — **v2.121.7+**: Connected App no longer required
 2. Agent must be **activated**
 3. All Flow/Apex dependencies must be **deployed**
 
@@ -72,26 +72,7 @@ sf agent preview --api-name My_Agent --use-live-actions --client-app MyConnected
 - Testing with real org data
 - Pre-production verification
 
-### Connected App Setup (for Live Mode)
-
-**Step 1: Create Connected App in Salesforce**
-
-1. Setup → App Manager → New Connected App
-2. Enable OAuth Settings
-3. Callback URL: `http://localhost:1717/OauthRedirect`
-4. Selected OAuth Scopes:
-   - `api` - Access the API
-   - `refresh_token` - Refresh token
-5. Save and note the **Consumer Key**
-
-**Step 2: Use in Preview**
-
-```bash
-sf agent preview --api-name My_Agent \
-  --use-live-actions \
-  --client-app MyConnectedApp \
-  --target-org MyOrg
-```
+> **v2.121.7+**: Live preview no longer requires a Connected App. Standard org auth (`sf org login web`) suffices. Simply authenticate to your org and use `--use-live-actions`.
 
 ### Debug Output
 
@@ -447,5 +428,5 @@ sf agent test run --api-name My_Agent_Tests --wait 10 --target-org MyOrg
 # 7. Review results and fix failures (manual or via sf-ai-agentforce-testing)
 
 # 8. Preview in live mode (final validation)
-sf agent preview --api-name My_Agent --use-live-actions --client-app MyApp --target-org MyOrg
+sf agent preview --api-name My_Agent --use-live-actions --target-org MyOrg
 ```

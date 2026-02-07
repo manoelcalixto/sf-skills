@@ -12,7 +12,7 @@ The Agent Runtime API requires **OAuth 2.0 Client Credentials flow**, which is d
 
 | Flow | Used By | App Type | User Interaction |
 |------|---------|----------|-----------------|
-| **Web Server (Authorization Code)** | `sf agent preview --use-live-actions` | Connected App | Browser login required |
+| **Standard Org Auth** | `sf agent preview --use-live-actions` | None (standard `sf org login web`) | Browser login required |
 | **Client Credentials** | Agent Runtime API (multi-turn testing) | External Client App (ECA) | None (machine-to-machine) |
 
 > **Key Difference:** Client Credentials flow is machine-to-machine — no browser login needed. Perfect for automated testing.
@@ -167,7 +167,7 @@ curl -s -X POST "https://${SF_MY_DOMAIN}/services/oauth2/token" \
 
 | Scenario | Use | Why |
 |----------|-----|-----|
-| `sf agent preview --use-live-actions` | Connected App (Web OAuth) | CLI needs browser-based user login |
+| `sf agent preview --use-live-actions` | Standard org auth | No app setup needed (v2.121.7+) |
 | Multi-turn API testing | External Client App (Client Credentials) | Machine-to-machine, no browser needed |
 | CI/CD automated testing | External Client App (Client Credentials) | Non-interactive, scriptable |
 | Manual ad-hoc testing | Either | Depends on test approach |

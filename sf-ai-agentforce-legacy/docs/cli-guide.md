@@ -101,7 +101,6 @@ sf agent preview [flags]
 | `--api-name` | Agent API name | No |
 | `--target-org` | Org username or alias | No |
 | `--use-live-actions` | Enable live mode (real Apex/Flows) | No |
-| `--client-app` | Connected app name | For live mode |
 | `--output-dir` | Save transcript/response files | No |
 | `--apex-debug` | Generate Apex debug logs | No |
 | `--authoring-bundle` | Specify authoring bundle | No |
@@ -110,8 +109,8 @@ sf agent preview [flags]
 # Simulated mode (default)
 sf agent preview --api-name Customer_Support_Agent --target-org myorg
 
-# Live mode with connected app
-sf agent preview --api-name Customer_Support_Agent --use-live-actions --client-app MyAgentApp --target-org myorg
+# Live mode
+sf agent preview --api-name Customer_Support_Agent --use-live-actions --target-org myorg
 
 # With debug output
 sf agent preview --api-name Customer_Support_Agent --output-dir ./logs --apex-debug --target-org myorg
@@ -124,37 +123,18 @@ sf agent preview --api-name Customer_Support_Agent --output-dir ./logs --apex-de
 | **Simulated** (default) | LLM simulates action responses | Apex/Flows not ready, testing logic |
 | **Live** | Uses actual Apex/Flows | Integration testing with real data |
 
+> **v2.121.7+**: When `--api-name` is omitted, the interactive agent selection now shows **(Published)** and **(Agent Script)** labels next to agent names to help distinguish agent types.
+
 ---
 
-### Connected App Setup (Required for Live Preview)
-
-#### Step 1: Create Connected App
-
-1. **Setup → App Manager → New Connected App**
-2. Configure:
-
-| Setting | Value |
-|---------|-------|
-| Connected App Name | `AgentPreviewApp` |
-| Enable OAuth Settings | ✅ Checked |
-| Callback URL | `http://localhost:1717/OauthRedirect` |
-| OAuth Scopes | `Manage user data via Web browsers (web)` |
-
-3. Save and wait for activation
-
-#### Step 2: Link to CLI User
+> **v2.121.7+**: Live preview no longer requires a Connected App. Standard org auth (`sf org login web`) suffices.
 
 ```bash
-sf org login web \
-  --client-app AgentPreviewApp \
-  --client-id YOUR_CONSUMER_KEY \
-  --scopes web
-```
+# Authenticate to org (if not already)
+sf org login web --alias myorg
 
-#### Step 3: Run Live Preview
-
-```bash
-sf agent preview --api-name My_Agent --use-live-actions --client-app AgentPreviewApp --target-org myorg
+# Run live preview
+sf agent preview --api-name My_Agent --use-live-actions --target-org myorg
 ```
 
 ---
@@ -182,7 +162,6 @@ When using `--output-dir`:
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | "No active agents found" | Agent not activated | Run `sf agent activate` first |
-| "Connected app not found" | Not linked to CLI user | Run `sf org login web --client-app` |
 | "default_agent_user not found" | Invalid user in config | Update config block |
 | Preview hangs | Action timeout | Use `--apex-debug`, check limits |
 | Actions not executing | Not deployed | Deploy Apex/Flows first |
@@ -233,6 +212,9 @@ sf org open --source-file force-app/main/default/aiAuthoringBundles/My_Agent/My_
 
 # Or navigate to Agentforce Studio
 sf org open --path /lightning/setup/AgentStudio/home --target-org myorg
+
+# Open Agentforce Studio list view (all agents) — v2.121.7+
+sf org open authoring-bundle --target-org myorg
 ```
 
 ---
@@ -284,7 +266,7 @@ sf agent preview --api-name My_Agent --target-org myorg
 sf agent activate --api-name My_Agent --target-org myorg
 
 # 6. Preview (live mode)
-sf agent preview --api-name My_Agent --use-live-actions --client-app MyApp --target-org myorg
+sf agent preview --api-name My_Agent --use-live-actions --target-org myorg
 ```
 
 ---

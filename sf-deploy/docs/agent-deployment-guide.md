@@ -182,7 +182,7 @@ Preview allows testing agent behavior before production deployment.
 | Mode | Command | Use When |
 |------|---------|----------|
 | **Simulated** | `sf agent preview --api-name X` | Testing logic, Apex/Flows not ready |
-| **Live** | `sf agent preview --api-name X --use-live-actions --client-app Y` | Integration testing with real data |
+| **Live** | `sf agent preview --api-name X --use-live-actions` | Integration testing with real data |
 
 ### Simulated Mode (Default)
 
@@ -197,11 +197,11 @@ sf agent preview --api-name Customer_Support_Agent --target-org myorg
 ### Live Mode
 
 ```bash
-sf agent preview --api-name Customer_Support_Agent --use-live-actions --client-app MyAgentApp --target-org myorg
+sf agent preview --api-name Customer_Support_Agent --use-live-actions --target-org myorg
 ```
 
 **Requirements:**
-- Connected app configured
+- Standard org auth (`sf org login web`)
 - Apex classes and Flows deployed
 - Agent must be active
 
@@ -211,7 +211,7 @@ sf agent preview --api-name Customer_Support_Agent --use-live-actions --client-a
 sf agent preview --api-name Customer_Support_Agent --output-dir ./preview-logs --apex-debug --target-org myorg
 ```
 
-**See `sf-ai-agentscript/docs/agent-preview-guide.md`** for connected app setup (or `sf-ai-agentforce-legacy` for existing agents).
+> **v2.121.7+**: Live preview no longer requires a Connected App. Standard org auth (`sf org login web`) suffices.
 
 ---
 
@@ -241,7 +241,7 @@ sf agent preview --api-name Customer_Support_Agent --target-org myorg
 sf agent activate --api-name Customer_Support_Agent --target-org myorg
 
 # 7. Preview (live mode - optional)
-sf agent preview --api-name Customer_Support_Agent --use-live-actions --client-app MyApp --target-org myorg
+sf agent preview --api-name Customer_Support_Agent --use-live-actions --target-org myorg
 ```
 
 ### Update Existing Agent
@@ -473,6 +473,7 @@ sf agent activate --api-name My_Agent --target-org myorg
 | Command | Description |
 |---------|-------------|
 | `sf org open agent --api-name X` | Open agent in Agentforce Builder |
+| `sf org open authoring-bundle` | Open Agentforce Studio list view (v2.121.7+) |
 | `sf org list metadata --metadata-type Bot` | List bots in org |
 | `sf org list metadata --metadata-type GenAiPlannerBundle` | List planner bundles |
 

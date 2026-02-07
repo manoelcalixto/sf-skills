@@ -514,7 +514,7 @@ Skill(skill="sf-ai-agentscript", args="Fix action chaining in agent MyAgent - en
 | Create test data | sf-data | `Skill(skill="sf-data", args="Create test Account with order data")` |
 | Fix failing Flow | sf-flow | `Skill(skill="sf-flow", args="Fix flow 'Get_Order_Status' - add validation")` |
 | Fix Apex error | sf-apex | `Skill(skill="sf-apex", args="Fix Apex class 'OrderController'")` |
-| Setup OAuth | sf-connected-apps | `Skill(skill="sf-connected-apps", args="Create Connected App for agent preview")` |
+| Setup ECA | sf-connected-apps | `Skill(skill="sf-connected-apps", args="Create External Client App for Agent Runtime API testing")` |
 | Analyze debug logs | sf-debug | `Skill(skill="sf-debug", args="Analyze apex-debug.log from agent test")` |
 
 ---

@@ -66,7 +66,7 @@ Expert testing engineer specializing in Agentforce agent testing via **dual-trac
 | **CLI commands** | [cli-commands.md](docs/cli-commands.md) | Complete sf agent test/preview reference |
 | **Test spec format** | [test-spec-reference.md](resources/test-spec-reference.md) | YAML specification format and examples |
 | **Auto-fix workflow** | [agentic-fix-loops.md](resources/agentic-fix-loops.md) | Automated test-fix cycles (10 failure categories) |
-| **Live preview setup** | [connected-app-setup.md](docs/connected-app-setup.md) | OAuth for live preview mode |
+| **Auth guide** | [connected-app-setup.md](docs/connected-app-setup.md) | Authentication for preview and API testing |
 | **Coverage metrics** | [coverage-analysis.md](docs/coverage-analysis.md) | Topic/action/multi-turn coverage analysis |
 | **Fix decision tree** | [agentic-fix-loop.md](docs/agentic-fix-loop.md) | Detailed fix strategies |
 
@@ -529,7 +529,7 @@ sf agent preview --api-name AgentName --output-dir ./logs --target-org [alias]
 
 **Interactive Preview (Live):**
 ```bash
-sf agent preview --api-name AgentName --use-live-actions --client-app AppName --apex-debug --target-org [alias]
+sf agent preview --api-name AgentName --use-live-actions --apex-debug --target-org [alias]
 ```
 
 ### B3: Results Analysis
@@ -695,7 +695,7 @@ Skill(skill="sf-ai-agentforce-observability", args="Analyze STDM sessions for ag
 | Agent activated | Check status | API and preview require activation |
 | Flows deployed | `sf org list metadata --metadata-type Flow` | Actions need Flows |
 | ECA configured (Phase A) | Token request test | API auth required |
-| Connected App (Phase B live) | Check OAuth | Live mode requires auth |
+| Org auth (Phase B live) | `sf org display` | Live mode requires valid auth |
 
 **NEVER do these:**
 
@@ -728,7 +728,7 @@ Skill(skill="sf-ai-agentforce-observability", args="Analyze STDM sessions for ag
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `sf agent preview` | Interactive testing | `sf agent preview --api-name Agent --target-org alias` |
-| `--use-live-actions` | Use real Flows/Apex | `sf agent preview --use-live-actions --client-app App` |
+| `--use-live-actions` | Use real Flows/Apex | `sf agent preview --use-live-actions` |
 | `--output-dir` | Save transcripts | `sf agent preview --output-dir ./logs` |
 | `--apex-debug` | Capture debug logs | `sf agent preview --apex-debug` |
 
@@ -886,7 +886,7 @@ CLAUDE CODE:
 | Tests fail silently | No results returned | Agent not published - run `sf agent publish authoring-bundle` |
 | Topic not matched | Wrong topic selected | Add keywords to topic description |
 | Action not invoked | Action never called | Improve action description |
-| Live preview 401 | Authentication error | Connected App not configured |
+| Live preview 401 | Authentication error | Re-authenticate: `sf org login web` |
 | API 401 | Token expired or wrong credentials | Re-authenticate ECA |
 | API 404 on session create | Wrong Agent ID | Re-query BotDefinition for correct Id |
 | Empty API response | Agent not activated | Activate and publish agent |

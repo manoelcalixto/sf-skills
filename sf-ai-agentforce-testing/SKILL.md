@@ -349,7 +349,7 @@ Proceed? [Confirm / Edit / Cancel]
 Run a single `multi_turn_test_runner.py` process. No team needed.
 
 ```bash
-source ~/.sfagent/{org_alias}/{eca_name}/credentials.env
+set -a; source ~/.sfagent/{org_alias}/{eca_name}/credentials.env; set +a
 python3 {SKILL_PATH}/hooks/scripts/multi_turn_test_runner.py \
   --scenarios {scenario_file} \
   --agent-id {agent_id} \
@@ -422,10 +422,8 @@ Persistent ECA credential storage managed by `hooks/scripts/credential_manager.p
 ```
 ~/.sfagent/
 ├── .gitignore          ("*" — auto-created, prevents accidental commits)
-├── Vivint-DevInt/      (org alias — case-sensitive)
-│   ├── IRIS_ECA/       (ECA app name)
-│   │   └── credentials.env
-│   └── Testing_ECA/
+├── {Org-Alias}/        (org alias — case-sensitive, e.g. Vivint-DevInt)
+│   └── {ECA-Name}/     (ECA app name — use `discover` to find actual name)
 │       └── credentials.env
 └── Other-Org/
     └── My_ECA/
@@ -436,9 +434,10 @@ Persistent ECA credential storage managed by `hooks/scripts/credential_manager.p
 
 ```env
 # credentials.env — managed by credential_manager.py
-SF_MY_DOMAIN=yourdomain.my.salesforce.com
-SF_CONSUMER_KEY=3MVG9...
-SF_CONSUMER_SECRET=ABC123...
+# 'export' prefix allows direct `source credentials.env` in shell
+export SF_MY_DOMAIN=yourdomain.my.salesforce.com
+export SF_CONSUMER_KEY=3MVG9...
+export SF_CONSUMER_SECRET=ABC123...
 ```
 
 ### Security Rules
@@ -459,16 +458,19 @@ python3 {SKILL_PATH}/hooks/scripts/credential_manager.py discover
 python3 {SKILL_PATH}/hooks/scripts/credential_manager.py discover --org-alias Vivint-DevInt
 
 # Load credentials (secrets masked in output)
-python3 {SKILL_PATH}/hooks/scripts/credential_manager.py load --org-alias Vivint-DevInt --eca-name IRIS_ECA
+python3 {SKILL_PATH}/hooks/scripts/credential_manager.py load --org-alias {org} --eca-name {eca}
 
 # Save new credentials
 python3 {SKILL_PATH}/hooks/scripts/credential_manager.py save \
-  --org-alias Vivint-DevInt --eca-name IRIS_ECA \
+  --org-alias {org} --eca-name {eca} \
   --domain yourdomain.my.salesforce.com \
   --consumer-key 3MVG9... --consumer-secret ABC123...
 
 # Validate OAuth flow
-python3 {SKILL_PATH}/hooks/scripts/credential_manager.py validate --org-alias Vivint-DevInt --eca-name IRIS_ECA
+python3 {SKILL_PATH}/hooks/scripts/credential_manager.py validate --org-alias {org} --eca-name {eca}
+
+# Source credentials for shell use (set -a auto-exports all vars)
+set -a; source ~/.sfagent/{org}/{eca}/credentials.env; set +a
 ```
 
 ---
@@ -505,10 +507,8 @@ You are a multi-turn test worker for Agentforce agent testing.
 YOUR TASK:
 1. Claim your task via TaskUpdate(status="in_progress", owner=your_name)
 
-2. Export credentials and run the test:
-   export SF_MY_DOMAIN="{domain}"
-   export SF_CONSUMER_KEY="{key}"
-   export SF_CONSUMER_SECRET="{secret}"
+2. Load credentials and run the test:
+   set -a; source ~/.sfagent/{org_alias}/{eca_name}/credentials.env; set +a
 
    python3 {skill_path}/hooks/scripts/multi_turn_test_runner.py \
      --scenarios {scenario_file} \

@@ -9,39 +9,40 @@ load/save, OAuth validation, and environment export.
 Directory layout:
     ~/.sfagent/
     ├── .gitignore          ("*" — prevents accidental commits)
-    ├── Vivint-DevInt/      (org alias)
-    │   ├── IRIS_ECA/       (ECA app name)
-    │   │   └── credentials.env
-    │   └── Other_ECA/
+    ├── {Org-Alias}/        (org alias — case-sensitive)
+    │   └── {ECA-Name}/     (ECA app name — use `discover` to find)
     │       └── credentials.env
-    └── MyOrg/
+    └── Other-Org/
         └── ...
 
-credentials.env format:
-    SF_MY_DOMAIN=domain.my.salesforce.com
-    SF_CONSUMER_KEY=3MVG9...
-    SF_CONSUMER_SECRET=ABC...
+credentials.env format (with export prefix for shell sourcing):
+    export SF_MY_DOMAIN=domain.my.salesforce.com
+    export SF_CONSUMER_KEY=3MVG9...
+    export SF_CONSUMER_SECRET=ABC...
 
 Usage:
-    # Discover orgs and ECAs
+    # Discover orgs and ECAs (ALWAYS run this first to find actual names)
     python3 credential_manager.py discover
-    python3 credential_manager.py discover --org-alias Vivint-DevInt
+    python3 credential_manager.py discover --org-alias {org}
 
     # Load credentials (secrets masked in output)
-    python3 credential_manager.py load --org-alias Vivint-DevInt --eca-name IRIS_ECA
+    python3 credential_manager.py load --org-alias {org} --eca-name {eca}
 
     # Save credentials
-    python3 credential_manager.py save --org-alias Vivint-DevInt --eca-name IRIS_ECA \\
+    python3 credential_manager.py save --org-alias {org} --eca-name {eca} \\
         --domain myorg.my.salesforce.com \\
         --consumer-key 3MVG9... --consumer-secret ABC123...
 
     # Validate OAuth flow
-    python3 credential_manager.py validate --org-alias Vivint-DevInt --eca-name IRIS_ECA
+    python3 credential_manager.py validate --org-alias {org} --eca-name {eca}
+
+    # Source credentials in shell (export prefix makes vars available to subprocesses)
+    source ~/.sfagent/{org}/{eca}/credentials.env
 
 Programmatic usage:
     from credential_manager import load_credentials, validate_credentials, export_env
 
-    creds = load_credentials("Vivint-DevInt", "IRIS_ECA")
+    creds = load_credentials("{org}", "{eca}")
     result = validate_credentials(creds)
     if result["valid"]:
         export_env(creds)
@@ -167,6 +168,9 @@ def load_credentials(org_alias: str, eca_name: str) -> Dict[str, str]:
             continue
         if "=" not in line:
             continue
+        # Strip optional 'export ' prefix for shell-compatible credentials.env
+        if line.startswith("export "):
+            line = line[7:]
         key, _, value = line.partition("=")
         creds[key.strip()] = value.strip()
 
@@ -210,9 +214,10 @@ def save_credentials(
 
     cred_file = eca_dir / CREDENTIALS_FILE
     content = (
-        f"SF_MY_DOMAIN={domain}\n"
-        f"SF_CONSUMER_KEY={key}\n"
-        f"SF_CONSUMER_SECRET={secret}\n"
+        f"# credentials.env — managed by credential_manager.py\n"
+        f"export SF_MY_DOMAIN={domain}\n"
+        f"export SF_CONSUMER_KEY={key}\n"
+        f"export SF_CONSUMER_SECRET={secret}\n"
     )
     cred_file.write_text(content)
     os.chmod(cred_file, FILE_MODE)

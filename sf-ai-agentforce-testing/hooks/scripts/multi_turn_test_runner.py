@@ -133,8 +133,13 @@ class StreamingConsole:
         self._enabled = enabled
         self._lock = threading.Lock()
         if enabled and HAS_RICH and use_rich:
+            # Write to stdout (not stderr) so ANSI codes render in real-time
+            # in CLI tools like Claude Code that only interpret ANSI on stdout
+            # during streaming. Line-buffer ensures each print() flushes immediately.
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(line_buffering=True)
             self._console = Console(
-                stderr=True, force_terminal=True,
+                stderr=False, force_terminal=True,
                 width=_detect_width(width), highlight=False,
             )
             self._rich = True

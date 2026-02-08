@@ -11,8 +11,9 @@
 # Server is ONLY distributed bundled within the VS Code Agent Script extension.
 # There is NO standalone npm package or separate download available.
 #
-# The server is located at:
-#   ~/.vscode/extensions/salesforce.agent-script-language-client-*/server/server.js
+# The server is located at (depending on your VS Code setup):
+#   ~/.vscode/extensions/salesforce.agent-script-language-client-*/server/server.js          (local)
+#   ~/.vscode-server/extensions/salesforce.agent-script-language-client-*/server/server.js   (VS Code Remote/WSL)
 #
 # Prerequisites:
 #   - VS Code with Agent Script extension installed (REQUIRED)
@@ -66,25 +67,29 @@ find_node() {
 
 # Find VS Code extension directory (handles version updates)
 find_vscode_extension() {
-    local ext_base="$HOME/.vscode/extensions"
     local pattern="salesforce.agent-script-language-client-*"
+    local ext_bases=(
+        "$HOME/.vscode/extensions"
+        "$HOME/.vscode-server/extensions"
+        "$HOME/.vscode-server-insiders/extensions"
+        "$HOME/.vscode-insiders/extensions"
+    )
 
-    # Check if VS Code extensions directory exists
-    if [[ ! -d "$ext_base" ]]; then
-        log "VS Code extensions directory not found: $ext_base"
-        return 1
-    fi
+    # Find the newest version (sort by version number) across common locations
+    local ext_base=""
+    for ext_base in "${ext_bases[@]}"; do
+        [[ -d "$ext_base" ]] || continue
 
-    # Find the newest version (sort by version number)
-    local latest
-    latest=$(find "$ext_base" -maxdepth 1 -type d -name "$pattern" 2>/dev/null | sort -V | tail -1)
+        local latest
+        latest=$(find "$ext_base" -maxdepth 1 -type d -name "$pattern" 2>/dev/null | sort -V | tail -1)
 
-    if [[ -n "$latest" ]] && [[ -f "$latest/server/server.js" ]]; then
-        echo "$latest/server/server.js"
-        return 0
-    fi
+        if [[ -n "$latest" ]] && [[ -f "$latest/server/server.js" ]]; then
+            echo "$latest/server/server.js"
+            return 0
+        fi
+    done
 
-    log "Agent Script extension not found in: $ext_base"
+    log "Agent Script extension not found in any known VS Code extensions directory"
     return 1
 }
 

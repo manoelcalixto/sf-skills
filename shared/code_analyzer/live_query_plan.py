@@ -2,7 +2,7 @@
 """
 Live Query Plan Analyzer - Real-time SOQL query plan analysis via Salesforce REST API.
 
-Calls the Salesforce `explain` endpoint through sf CLI to get actual query plan data:
+Calls the Salesforce `explain` endpoint (using org auth from `sf org display`) to get actual query plan data:
 - relativeCost (cost > 1 = non-selective)
 - leadingOperationType (Index, TableScan, etc.)
 - cardinality estimates
@@ -28,6 +28,9 @@ import re
 import os
 from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass, field
+from urllib.parse import quote
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 
 @dataclass
@@ -95,8 +98,8 @@ class LiveQueryPlanAnalyzer:
     """
     Analyzes SOQL queries using Salesforce's Query Plan API.
 
-    Uses `sf data query --plan` to call the REST API explain endpoint,
-    which returns real query execution plans from the connected org.
+    Calls the REST API `query/?explain=` endpoint and returns real query
+    execution plans from the connected org.
 
     Usage:
         analyzer = LiveQueryPlanAnalyzer()
@@ -253,49 +256,76 @@ class LiveQueryPlanAnalyzer:
             )
 
         try:
-            # Build command
-            cmd = [
-                'sf', 'data', 'query',
-                '--query', prepared_query,
-                '--plan',  # This is the key flag that invokes the explain API
-                '--json'
-            ]
-
-            # Add target org if specified
-            if org_name:
-                cmd.extend(['--target-org', org_name])
-
-            # Execute
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout_seconds
-            )
-
-            # Parse response
-            if result.returncode != 0:
-                # Try to extract error from JSON
-                try:
-                    error_data = json.loads(result.stdout)
-                    error_msg = error_data.get('message', result.stderr or 'Unknown error')
-                except json.JSONDecodeError:
-                    error_msg = result.stderr.strip() or 'Query plan failed'
-
+            instance_url, access_token, api_version = self._get_org_connection(org_name)
+            if not instance_url or not access_token or not api_version:
                 return QueryPlanResult(
                     is_selective=False,
                     relative_cost=0.0,
-                    leading_operation="Error",
+                    leading_operation="AuthError",
                     sobject_type=self._extract_sobject(query),
                     cardinality=0,
                     sobject_cardinality=0,
                     success=False,
-                    error=error_msg[:200]  # Truncate long errors
+                    error="Could not resolve org connection details (instanceUrl/accessToken/apiVersion).",
                 )
 
-            # Parse successful response
-            return self._parse_plan_response(result.stdout, query)
+            encoded_query = quote(prepared_query, safe="")
+            explain_url = (
+                f"{instance_url.rstrip('/')}/services/data/v{api_version}/query/?explain={encoded_query}"
+            )
 
+            req = Request(
+                explain_url,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                },
+                method="GET",
+            )
+
+            with urlopen(req, timeout=self.timeout_seconds) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+
+            return self._parse_plan_response(body, query)
+
+        except HTTPError as e:
+            try:
+                body = e.read().decode("utf-8", errors="replace")
+            except Exception:
+                body = ""
+
+            # Best-effort readable message extraction
+            msg = body or str(e)
+            try:
+                parsed = json.loads(body)
+                if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+                    msg = parsed[0].get("message") or msg
+                elif isinstance(parsed, dict):
+                    msg = parsed.get("message") or msg
+            except json.JSONDecodeError:
+                pass
+
+            return QueryPlanResult(
+                is_selective=False,
+                relative_cost=0.0,
+                leading_operation="HTTPError",
+                sobject_type=self._extract_sobject(query),
+                cardinality=0,
+                sobject_cardinality=0,
+                success=False,
+                error=f"Explain API error: {str(msg)[:200]}",
+            )
+        except URLError as e:
+            return QueryPlanResult(
+                is_selective=False,
+                relative_cost=0.0,
+                leading_operation="NetworkError",
+                sobject_type=self._extract_sobject(query),
+                cardinality=0,
+                sobject_cardinality=0,
+                success=False,
+                error=f"Network error calling explain API: {str(e)[:200]}",
+            )
         except subprocess.TimeoutExpired:
             return QueryPlanResult(
                 is_selective=False,
@@ -305,7 +335,7 @@ class LiveQueryPlanAnalyzer:
                 cardinality=0,
                 sobject_cardinality=0,
                 success=False,
-                error=f"Query plan timed out after {self.timeout_seconds}s"
+                error=f"Query plan timed out after {self.timeout_seconds}s",
             )
         except FileNotFoundError:
             return QueryPlanResult(
@@ -316,7 +346,7 @@ class LiveQueryPlanAnalyzer:
                 cardinality=0,
                 sobject_cardinality=0,
                 success=False,
-                error="sf CLI not found - install Salesforce CLI"
+                error="sf CLI not found - install Salesforce CLI",
             )
         except Exception as e:
             return QueryPlanResult(
@@ -327,8 +357,41 @@ class LiveQueryPlanAnalyzer:
                 cardinality=0,
                 sobject_cardinality=0,
                 success=False,
-                error=f"Unexpected error: {str(e)[:100]}"
+                error=f"Unexpected error: {str(e)[:100]}",
             )
+
+    def _get_org_connection(self, org_name: Optional[str]) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """
+        Resolve instance URL, access token, and API version for the target org.
+
+        Uses `sf org display --json` as the source of truth for auth.
+
+        Returns:
+            (instance_url, access_token, api_version)
+        """
+        if not org_name:
+            return (None, None, None)
+
+        result = subprocess.run(
+            ["sf", "org", "display", "--target-org", org_name, "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return (None, None, None)
+
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return (None, None, None)
+
+        org_result = data.get("result", {})
+        instance_url = org_result.get("instanceUrl")
+        access_token = org_result.get("accessToken")
+        api_version = org_result.get("apiVersion")
+
+        return (instance_url, access_token, api_version)
 
     def _prepare_query(self, query: str) -> str:
         """
@@ -361,7 +424,7 @@ class LiveQueryPlanAnalyzer:
 
     def _parse_plan_response(self, stdout: str, original_query: str) -> QueryPlanResult:
         """
-        Parse the sf data query --plan JSON response.
+        Parse the REST API explain endpoint JSON response.
 
         Args:
             stdout: JSON output from sf CLI
@@ -384,7 +447,7 @@ class LiveQueryPlanAnalyzer:
                 error=f"Failed to parse response: {e}"
             )
 
-        # The plan is in data.result.plans[] (sf CLI wraps the API response)
+        # Some callers wrap the API response under a top-level "result" key.
         result_data = data.get('result', data)
         plans = result_data.get('plans', [])
 

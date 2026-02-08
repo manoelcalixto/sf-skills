@@ -86,7 +86,7 @@ class DependencyChecker:
             "win32": "Download from https://python.org/",
         },
         "sf_cli": {
-            "all": "npm install -g @salesforce/cli && sf plugins install @salesforce/sfdx-code-analyzer",
+            "all": "npm install -g @salesforce/cli && sf plugins install @salesforce/plugin-code-analyzer",
         },
     }
 
@@ -373,7 +373,7 @@ class DependencyChecker:
                     version=sf_version,
                     path=sf_path,
                     error="Code Analyzer plugin not installed",
-                    install_hint="sf plugins install @salesforce/sfdx-code-analyzer",
+                    install_hint="sf plugins install @salesforce/plugin-code-analyzer",
                 )
 
             self._cache["sf_cli"] = status

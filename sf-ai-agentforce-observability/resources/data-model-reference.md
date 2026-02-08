@@ -138,6 +138,7 @@ Represents an overarching container capturing contiguous interactions with one o
 | Value | Description |
 |-------|-------------|
 | `Completed` | Session resolved successfully |
+| `Deflected` | Session deflected (resolved without human escalation) |
 | `Escalated` | Transferred to human agent |
 | `Abandoned` | User left without resolution |
 | `Failed` | Session failed due to error |
@@ -313,6 +314,7 @@ Represents a discrete action or operation performed during an interaction to ful
 | `SESSION_END` | 14,990 | Session termination | Final step when session closes |
 | `ACTION_STEP` | 13,780 | Function/action execution | Calling flows, Apex actions |
 | `INTERRUPT_STEP` | 5 | Interrupt processing | Handling interruptions (rare) |
+| `USER_INPUT` | — | User input ingestion (UserInputStep) | Capturing a user's input as a discrete processing step (not observed in T6 discovery) |
 
 **Common Step Names (Live API Verified):**
 

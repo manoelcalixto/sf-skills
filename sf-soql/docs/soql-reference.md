@@ -221,6 +221,11 @@ sf data query --query "SELECT Id, Name FROM Account" --result-format csv --targe
 # Bulk export (for large results, > 2,000 records)
 sf data export bulk --query "SELECT Id, Name FROM Account" --target-org my-org --output-file accounts.csv
 
-# Query plan
-sf data query --query "SELECT Id FROM Account WHERE Name = 'Test'" --use-tooling-api --plan --target-org my-org
+# Query plan (Explain API)
+ENCODED_QUERY=$(python3 - <<'PY'
+import urllib.parse
+print(urllib.parse.quote("SELECT Id FROM Account WHERE Name = 'Test'", safe=""))
+PY
+)
+sf api request rest "/services/data/v65.0/query/?explain=${ENCODED_QUERY}" --target-org my-org
 ```

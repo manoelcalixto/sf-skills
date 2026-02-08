@@ -247,7 +247,7 @@ Skills integrate with Salesforce's **REST API explain endpoint** to provide real
 
 **How It Works:**
 1. When you write a `.soql`, `.cls`, or `.trigger` file, the hook extracts SOQL queries
-2. Calls `sf data query --plan` to invoke the Salesforce explain API
+2. Calls the REST API explain endpoint (`/services/data/vXX.X/query/?explain=...`) using auth from `sf org display`
 3. Returns actual query execution plan from your connected org
 4. Provides optimization suggestions based on plan notes
 
@@ -343,7 +343,7 @@ Hooks provide **advisory feedback** — they inform but don't block operations.
 *Code Analyzer V5 engines:*
 - **Java 11+** — Enables PMD, CPD, SFGE engines (`brew install openjdk@11`)
 - **Node.js 18+** — Enables ESLint, RetireJS for LWC (`brew install node`)
-- **Code Analyzer plugin** — `sf plugins install @salesforce/sfdx-code-analyzer`
+- **Code Analyzer plugin** — `sf plugins install @salesforce/plugin-code-analyzer`
 
 *LWC Testing & Linting:*
 - **@salesforce/sfdx-lwc-jest** — Jest testing for LWC (`npm install @salesforce/sfdx-lwc-jest --save-dev`)

@@ -815,9 +815,9 @@ public static void sendEmail(EmailAddress address, String subject, String body) 
 | **Developer Console** | Test coverage, debug logs |
 | **Grep/Search** | Hardcoded IDs, empty catches, magic numbers |
 
-**VS Code Command:**
+**CLI Command:**
 ```bash
-sf scanner run --target "force-app/main/default/classes/**/*.cls" --format table
+sf code-analyzer run --target "force-app/main/default/classes/**/*.cls" --view table
 ```
 
 **Example output:**

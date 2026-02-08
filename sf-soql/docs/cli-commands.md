@@ -8,7 +8,7 @@
 | JSON output | `sf data query --query "..." --json` |
 | CSV output | `sf data query --query "..." --result-format csv` |
 | Bulk export | `sf data export bulk --query "SELECT..." --target-org alias` |
-| Query plan | `sf data query --query "..." --use-tooling-api --plan` |
+| Query plan | `sf api request rest "/services/data/vXX.X/query/?explain=<url-encoded SOQL>" --target-org alias` |
 
 ---
 
@@ -114,11 +114,16 @@ sf data export bulk \
 Analyze query performance before running:
 
 ```bash
-sf data query \
-  --query "SELECT Id FROM Account WHERE Name = 'Acme'" \
-  --target-org my-sandbox \
-  --use-tooling-api \
-  --plan
+# URL-encode the SOQL query (example uses python)
+ENCODED_QUERY=$(python3 - <<'PY'
+import urllib.parse
+print(urllib.parse.quote("SELECT Id FROM Account WHERE Name = 'Acme'", safe=""))
+PY
+)
+
+# Call the REST API explain endpoint
+sf api request rest "/services/data/v65.0/query/?explain=${ENCODED_QUERY}" \
+  --target-org my-sandbox
 ```
 
 ### Understanding Query Plan Output

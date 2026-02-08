@@ -398,19 +398,20 @@ Code Analyzer v5 (`@salesforce/plugin-code-analyzer`) validates LWC files for SL
 # Install Code Analyzer v5 plugin
 sf plugins install @salesforce/plugin-code-analyzer
 
-# Run scan on LWC components
+# Run scan on LWC components (report format is inferred from file extension)
 sf code-analyzer run \
   --workspace force-app/main/default/lwc \
-  --output-format html \
   --output-file lwc-scan-results.html
 
-# Run with specific rules
+# Run with specific rules (examples)
 sf code-analyzer run \
   --workspace force-app/main/default/lwc \
-  --rule-selector "Category:Best Practices,Security"
+  --rule-selector eslint:Recommended \
+  --rule-selector retire-js:Recommended \
+  --view table
 ```
 
-> **Migration from sfdx-scanner**: v5 uses `--workspace` instead of `--target`, `--output-format` instead of `--format`, `--output-file` instead of `--outfile`, and `--rule-selector` instead of `--engine`/`--category`.
+> **Migration from sfdx-scanner**: Code Analyzer uses `sf code-analyzer run`. Use `--workspace` to define your workspace, `--target` to narrow to specific files, `--view` to control terminal output, `--output-file` (file extension defines format), and `--rule-selector` to choose engines/rules.
 
 ### SLDS 2 Compliance Checks
 

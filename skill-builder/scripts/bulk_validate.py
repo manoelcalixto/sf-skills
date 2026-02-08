@@ -108,7 +108,7 @@ def discover_skills() -> List[Tuple[Path, str]]:
     Returns:
         List of (skill_path, location_type) tuples
     """
-    skills = []
+    skills: List[Tuple[Path, str]] = []
 
     # Global skills (~/.claude/skills/)
     global_skills_dir = Path.home() / ".claude" / "skills"
@@ -124,7 +124,295 @@ def discover_skills() -> List[Tuple[Path, str]]:
             if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
                 skills.append((skill_dir / "SKILL.md", "project"))
 
-    return skills
+    # Repo skills (./<skill>/SKILL.md) - useful when validating the sf-skills repo itself
+    for skill_dir in Path.cwd().iterdir():
+        if (
+            skill_dir.is_dir()
+            and not skill_dir.name.startswith(".")
+            and (skill_dir / "SKILL.md").exists()
+        ):
+            skills.append((skill_dir / "SKILL.md", "repo"))
+
+    # De-duplicate while preserving order
+    unique: List[Tuple[Path, str]] = []
+    seen: set[str] = set()
+    for skill_path, location_type in skills:
+        key = str(skill_path.resolve())
+        if key not in seen:
+            seen.add(key)
+            unique.append((skill_path, location_type))
+
+    return unique
+
+
+SF_SKILLS_V4_HOOK_EVENTS = {
+    "SessionStart",
+    "PreToolUse",
+    "PostToolUse",
+    "SubagentStop",
+    "PermissionRequest",
+    "UserPromptSubmit",
+}
+
+
+def is_sf_skills_v4_frontmatter(data: dict) -> bool:
+    """Detect sf-skills v4+ schema (hooks in frontmatter, version in metadata.version)."""
+    if not isinstance(data, dict):
+        return False
+    metadata = data.get("metadata")
+    return isinstance(metadata, dict) and bool(metadata.get("version"))
+
+
+def find_plugin_root(start_dir: Path) -> Optional[Path]:
+    """
+    Find the plugin root directory that contains shared/hooks.
+
+    Works for:
+    - repo checkout (./shared/hooks)
+    - installed layout (~/.claude/sf-skills/shared/hooks)
+    """
+    current = start_dir.resolve()
+    while current != current.parent:
+        if (current / "shared" / "hooks").exists():
+            return current
+        current = current.parent
+    return None
+
+
+def resolve_hook_path_token(token: str, skill_dir: Path, plugin_root: Optional[Path]) -> Optional[Path]:
+    """
+    Resolve a single argv token that points to a hook file via placeholders.
+
+    Supports:
+      - ${SHARED_HOOKS}/...
+      - ${SKILL_HOOKS}/...
+      - ${CLAUDE_PLUGIN_ROOT}/...
+      - ${PLUGIN_ROOT}/... (legacy)
+    """
+    placeholders = {
+        "${SKILL_HOOKS}/": skill_dir / "hooks" / "scripts",
+        "${CLAUDE_PLUGIN_ROOT}/": skill_dir,
+    }
+
+    if plugin_root:
+        placeholders.update(
+            {
+                "${SHARED_HOOKS}/": plugin_root / "shared" / "hooks",
+                "${PLUGIN_ROOT}/": plugin_root,
+            }
+        )
+
+    for prefix, base_dir in placeholders.items():
+        if token.startswith(prefix):
+            rel = token[len(prefix):]
+            return base_dir / rel
+
+    return None
+
+
+def validate_hook_command_paths(
+    command: str, skill_dir: Path, plugin_root: Optional[Path]
+) -> List[Path]:
+    """
+    Extract and resolve any placeholder-based file paths inside a hook command.
+
+    Returns:
+        List of resolved Paths found in the command.
+    """
+    import shlex
+
+    resolved: List[Path] = []
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        # Malformed quoting; caller should handle separately
+        return resolved
+
+    for token in tokens:
+        path = resolve_hook_path_token(token, skill_dir=skill_dir, plugin_root=plugin_root)
+        if path is not None:
+            resolved.append(path)
+
+    return resolved
+
+
+def validate_v4_hooks(hooks: object, result: SkillValidationResult, skill_dir: Path):
+    """Validate sf-skills v4 hook frontmatter structure + referenced scripts."""
+    if hooks is None:
+        result.warnings.append(
+            ValidationIssue(
+                severity="warning",
+                message="No hooks defined in frontmatter",
+                location=f"{result.skill_path}:frontmatter:hooks",
+            )
+        )
+        return
+
+    if not isinstance(hooks, dict):
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Invalid hooks - expected a mapping (YAML object)",
+                location=f"{result.skill_path}:frontmatter:hooks",
+                fix="Set hooks to a YAML mapping, e.g. hooks: { SessionStart: [...] }",
+            )
+        )
+        return
+
+    plugin_root = find_plugin_root(skill_dir)
+
+    for event_name, steps in hooks.items():
+        if event_name not in SF_SKILLS_V4_HOOK_EVENTS:
+            result.warnings.append(
+                ValidationIssue(
+                    severity="warning",
+                    message=f"Unknown hook event '{event_name}'",
+                    location=f"{result.skill_path}:frontmatter:hooks",
+                )
+            )
+
+        if not isinstance(steps, list):
+            result.errors.append(
+                ValidationIssue(
+                    severity="error",
+                    message=f"Invalid hooks.{event_name} - expected a list",
+                    location=f"{result.skill_path}:frontmatter:hooks:{event_name}",
+                    fix="Define hooks for an event as a YAML list",
+                )
+            )
+            continue
+
+        for i, step in enumerate(steps):
+            location_prefix = f"{result.skill_path}:frontmatter:hooks:{event_name}[{i}]"
+
+            if not isinstance(step, dict):
+                result.errors.append(
+                    ValidationIssue(
+                        severity="error",
+                        message="Hook step must be a mapping (YAML object)",
+                        location=location_prefix,
+                    )
+                )
+                continue
+
+            # Matcher-based step (PreToolUse/PostToolUse)
+            if "matcher" in step:
+                matcher = step.get("matcher")
+                nested = step.get("hooks")
+                if not isinstance(matcher, str) or not matcher.strip():
+                    result.errors.append(
+                        ValidationIssue(
+                            severity="error",
+                            message="Hook matcher must be a non-empty string",
+                            location=f"{location_prefix}:matcher",
+                        )
+                    )
+                if not isinstance(nested, list) or not nested:
+                    result.errors.append(
+                        ValidationIssue(
+                            severity="error",
+                            message="Matcher hook must include non-empty 'hooks' list",
+                            location=f"{location_prefix}:hooks",
+                            fix="Add hooks: [ {type: command, command: ...} ]",
+                        )
+                    )
+                    continue
+
+                for j, action in enumerate(nested):
+                    action_loc = f"{location_prefix}:hooks[{j}]"
+                    _validate_v4_hook_action(
+                        action=action,
+                        location=action_loc,
+                        result=result,
+                        skill_dir=skill_dir,
+                        plugin_root=plugin_root,
+                    )
+            else:
+                _validate_v4_hook_action(
+                    action=step,
+                    location=location_prefix,
+                    result=result,
+                    skill_dir=skill_dir,
+                    plugin_root=plugin_root,
+                )
+
+
+def _validate_v4_hook_action(
+    action: object,
+    location: str,
+    result: SkillValidationResult,
+    skill_dir: Path,
+    plugin_root: Optional[Path],
+):
+    """Validate a single hook action object for sf-skills v4 schema."""
+    if not isinstance(action, dict):
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Hook action must be a mapping (YAML object)",
+                location=location,
+            )
+        )
+        return
+
+    hook_type = action.get("type")
+    if hook_type not in ("command", "prompt"):
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Hook action 'type' must be 'command' or 'prompt'",
+                location=f"{location}:type",
+            )
+        )
+        return
+
+    timeout = action.get("timeout")
+    if timeout is not None and not isinstance(timeout, (int, float)):
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Hook action timeout must be a number (milliseconds)",
+                location=f"{location}:timeout",
+            )
+        )
+
+    if hook_type == "prompt":
+        prompt = action.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            result.errors.append(
+                ValidationIssue(
+                    severity="error",
+                    message="Prompt hook missing 'prompt' content",
+                    location=f"{location}:prompt",
+                )
+            )
+        return
+
+    # command hook
+    command = action.get("command")
+    if not isinstance(command, str) or not command.strip():
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Command hook missing 'command' string",
+                location=f"{location}:command",
+            )
+        )
+        return
+
+    # Best-effort check that referenced scripts exist.
+    # Only validates placeholder-based paths (SHARED_HOOKS/SKILL_HOOKS/etc).
+    resolved_paths = validate_hook_command_paths(command, skill_dir=skill_dir, plugin_root=plugin_root)
+    for path in resolved_paths:
+        if not path.exists():
+            result.errors.append(
+                ValidationIssue(
+                    severity="error",
+                    message=f"Hook references missing file: {path}",
+                    location=f"{location}:command",
+                    fix="Update the hook command path or add the missing script",
+                )
+            )
 
 
 def extract_frontmatter(file_path: Path) -> Tuple[str, str]:
@@ -197,82 +485,185 @@ def validate_single_skill(skill_path: Path, location_type: str) -> SkillValidati
         ))
         return result
 
-    # Check required fields
-    required_fields = {'name': 'Skill name', 'description': 'Description', 'version': 'Version'}
-
-    for field, label in required_fields.items():
-        if field not in data or not data[field]:
-            result.errors.append(ValidationIssue(
-                severity='error',
-                message=f"Missing required field: '{field}'",
+    if not isinstance(data, dict):
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Invalid YAML frontmatter - expected a mapping (YAML object)",
                 location=f"{skill_path}:frontmatter",
-                fix=f"Add '{field}' field to YAML frontmatter"
-            ))
+            )
+        )
+        return result
 
-    # Get version if present
-    if 'version' in data:
-        result.version = str(data['version'])
+    # Detect schema
+    is_v4 = is_sf_skills_v4_frontmatter(data)
 
-    # Validate name format (kebab-case)
-    if 'name' in data:
-        name = data['name']
-        import re
-        if not re.match(r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$', name):
-            result.errors.append(ValidationIssue(
-                severity='error',
-                message=f"Invalid skill name '{name}' - must be kebab-case",
-                location=f"{skill_path}:name",
-                fix="Use lowercase letters, numbers, and hyphens only (e.g., 'my-skill')"
-            ))
-
-    # Validate version format (semver)
-    if 'version' in data:
-        version = str(data['version'])
-        import re
-        if not re.match(r'^\d+\.\d+\.\d+$', version):
-            result.errors.append(ValidationIssue(
-                severity='error',
-                message=f"Invalid version '{version}' - must be semver (X.Y.Z)",
-                location=f"{skill_path}:version",
-                fix="Use semantic versioning format (e.g., '1.0.0')"
-            ))
-
-    # Validate allowed-tools
-    if 'allowed-tools' in data:
-        allowed_tools = data['allowed-tools']
-        if allowed_tools:
-            invalid_tools = []
-            for tool in allowed_tools:
-                if tool not in VALID_TOOLS:
-                    invalid_tools.append(tool)
-                    # Check for case mismatch
-                    correct_case = next((t for t in VALID_TOOLS if t.lower() == tool.lower()), None)
-                    if correct_case:
-                        result.errors.append(ValidationIssue(
-                            severity='error',
-                            message=f"Invalid tool '{tool}' - should be '{correct_case}' (case-sensitive)",
-                            location=f"{skill_path}:allowed-tools",
-                            fix=f"Change '{tool}' to '{correct_case}'"
-                        ))
-                    else:
-                        result.errors.append(ValidationIssue(
-                            severity='error',
-                            message=f"Unknown tool '{tool}'",
-                            location=f"{skill_path}:allowed-tools",
-                            fix=f"Remove '{tool}' or check valid tool names"
-                        ))
-        else:
-            result.warnings.append(ValidationIssue(
-                severity='warning',
-                message="No allowed-tools specified - skill may not be functional",
-                location=f"{skill_path}:allowed-tools"
-            ))
+    # Common validation: name should exist and be kebab-case
+    name = data.get("name")
+    if not name:
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Missing required field: 'name'",
+                location=f"{skill_path}:frontmatter",
+                fix="Add name: <kebab-case-skill-name> to YAML frontmatter",
+            )
+        )
     else:
-        result.warnings.append(ValidationIssue(
-            severity='warning',
-            message="No allowed-tools field - skill may not be functional",
-            location=f"{skill_path}:frontmatter"
-        ))
+        import re
+
+        if not re.match(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$", str(name)):
+            result.errors.append(
+                ValidationIssue(
+                    severity="error",
+                    message=f"Invalid skill name '{name}' - must be kebab-case",
+                    location=f"{skill_path}:frontmatter:name",
+                    fix="Use lowercase letters, numbers, and hyphens only (e.g., 'my-skill')",
+                )
+            )
+        elif str(name) != skill_name:
+            result.warnings.append(
+                ValidationIssue(
+                    severity="warning",
+                    message=f"Skill name '{name}' does not match directory '{skill_name}'",
+                    location=f"{skill_path}:frontmatter:name",
+                )
+            )
+
+    # Schema-specific validation
+    if is_v4:
+        # Required fields for sf-skills v4 frontmatter
+        for field in ("description", "license", "metadata"):
+            if not data.get(field):
+                result.errors.append(
+                    ValidationIssue(
+                        severity="error",
+                        message=f"Missing required field: '{field}'",
+                        location=f"{skill_path}:frontmatter",
+                    )
+                )
+
+        metadata = data.get("metadata")
+        if not isinstance(metadata, dict):
+            result.errors.append(
+                ValidationIssue(
+                    severity="error",
+                    message="Invalid metadata - expected a mapping (YAML object)",
+                    location=f"{skill_path}:frontmatter:metadata",
+                )
+            )
+        else:
+            version = metadata.get("version")
+            if version:
+                version_str = str(version)
+                result.version = version_str
+                import re
+
+                if not re.match(r"^\d+\.\d+\.\d+$", version_str):
+                    result.errors.append(
+                        ValidationIssue(
+                            severity="error",
+                            message=f"Invalid metadata.version '{version_str}' - must be semver (X.Y.Z)",
+                            location=f"{skill_path}:frontmatter:metadata:version",
+                            fix="Use semantic versioning format (e.g., '1.0.0')",
+                        )
+                    )
+            else:
+                result.errors.append(
+                    ValidationIssue(
+                        severity="error",
+                        message="Missing required field: metadata.version",
+                        location=f"{skill_path}:frontmatter:metadata",
+                        fix="Add metadata: { version: \"1.0.0\" }",
+                    )
+                )
+
+            if not metadata.get("author"):
+                result.infos.append(
+                    ValidationIssue(
+                        severity="info",
+                        message="Consider adding metadata.author for attribution",
+                        location=f"{skill_path}:frontmatter:metadata",
+                    )
+                )
+
+        # Hooks are optional but strongly recommended for sf-skills
+        validate_v4_hooks(data.get("hooks"), result=result, skill_dir=skill_path.parent)
+
+    else:
+        # Legacy schema (generic Claude Code skills)
+        required_fields = {"name": "Skill name", "description": "Description", "version": "Version"}
+        for field in required_fields:
+            if not data.get(field):
+                result.errors.append(
+                    ValidationIssue(
+                        severity="error",
+                        message=f"Missing required field: '{field}'",
+                        location=f"{skill_path}:frontmatter",
+                        fix=f"Add '{field}' field to YAML frontmatter",
+                    )
+                )
+
+        # Get version if present
+        if "version" in data:
+            result.version = str(data["version"])
+
+        # Validate version format (semver)
+        if "version" in data:
+            import re
+
+            version = str(data["version"])
+            if not re.match(r"^\d+\.\d+\.\d+$", version):
+                result.errors.append(
+                    ValidationIssue(
+                        severity="error",
+                        message=f"Invalid version '{version}' - must be semver (X.Y.Z)",
+                        location=f"{skill_path}:version",
+                        fix="Use semantic versioning format (e.g., '1.0.0')",
+                    )
+                )
+
+        # Validate allowed-tools (legacy)
+        if "allowed-tools" in data:
+            allowed_tools = data["allowed-tools"]
+            if allowed_tools:
+                for tool in allowed_tools:
+                    if tool not in VALID_TOOLS:
+                        correct_case = next((t for t in VALID_TOOLS if t.lower() == str(tool).lower()), None)
+                        if correct_case:
+                            result.errors.append(
+                                ValidationIssue(
+                                    severity="error",
+                                    message=f"Invalid tool '{tool}' - should be '{correct_case}' (case-sensitive)",
+                                    location=f"{skill_path}:allowed-tools",
+                                    fix=f"Change '{tool}' to '{correct_case}'",
+                                )
+                            )
+                        else:
+                            result.errors.append(
+                                ValidationIssue(
+                                    severity="error",
+                                    message=f"Unknown tool '{tool}'",
+                                    location=f"{skill_path}:allowed-tools",
+                                    fix=f"Remove '{tool}' or check valid tool names",
+                                )
+                            )
+            else:
+                result.warnings.append(
+                    ValidationIssue(
+                        severity="warning",
+                        message="No allowed-tools specified - skill may not be functional",
+                        location=f"{skill_path}:allowed-tools",
+                    )
+                )
+        else:
+            result.warnings.append(
+                ValidationIssue(
+                    severity="warning",
+                    message="No allowed-tools field - skill may not be functional",
+                    location=f"{skill_path}:frontmatter",
+                )
+            )
 
     # Check for content
     if not content.strip():
@@ -283,27 +674,34 @@ def validate_single_skill(skill_path: Path, location_type: str) -> SkillValidati
             fix="Add skill instructions, workflow, and examples"
         ))
 
-    # Check for recommended fields
-    if 'author' not in data:
-        result.infos.append(ValidationIssue(
-            severity='info',
-            message="Consider adding 'author' field for attribution",
-            location=f"{skill_path}:frontmatter"
-        ))
+    # Legacy-only recommended fields
+    if not is_v4:
+        if "author" not in data:
+            result.infos.append(
+                ValidationIssue(
+                    severity="info",
+                    message="Consider adding 'author' field for attribution",
+                    location=f"{skill_path}:frontmatter",
+                )
+            )
 
-    if 'tags' not in data or not data.get('tags'):
-        result.infos.append(ValidationIssue(
-            severity='info',
-            message="Consider adding 'tags' for categorization",
-            location=f"{skill_path}:frontmatter"
-        ))
+        if "tags" not in data or not data.get("tags"):
+            result.infos.append(
+                ValidationIssue(
+                    severity="info",
+                    message="Consider adding 'tags' for categorization",
+                    location=f"{skill_path}:frontmatter",
+                )
+            )
 
-    if 'examples' not in data or not data.get('examples'):
-        result.infos.append(ValidationIssue(
-            severity='info',
-            message="Consider adding 'examples' to help users",
-            location=f"{skill_path}:frontmatter"
-        ))
+        if "examples" not in data or not data.get("examples"):
+            result.infos.append(
+                ValidationIssue(
+                    severity="info",
+                    message="Consider adding 'examples' to help users",
+                    location=f"{skill_path}:frontmatter",
+                )
+            )
 
     # Determine if valid (no errors)
     result.is_valid = len(result.errors) == 0
@@ -410,9 +808,17 @@ def generate_console_report(report: ValidationReport, errors_only: bool = False)
     # Recommendations
     print(f"\n{Colors.CYAN}{Colors.BOLD}💡 Recommendations:{Colors.NC}")
 
-    needs_update = sum(1 for r in report.results if r.version != "2.0.0")
-    if needs_update > 0:
-        print(f"   • {needs_update} skill(s) not at v2.0.0 - consider updating with interactive editor")
+    unknown_versions = sum(1 for r in report.results if not r.version or r.version == "unknown")
+    if unknown_versions > 0:
+        print(f"   • {unknown_versions} skill(s) missing a detectable version - add metadata.version (sf-skills v4) or version (legacy)")
+
+    missing_hooks = sum(
+        1
+        for r in report.results
+        if any("No hooks defined in frontmatter" in w.message for w in r.warnings)
+    )
+    if missing_hooks > 0:
+        print(f"   • {missing_hooks} skill(s) without hooks - add frontmatter hooks to enable auto-validation")
 
     if report.skills_with_errors > 0:
         print(f"   • Fix {report.skills_with_errors} critical issues to ensure skills load correctly")

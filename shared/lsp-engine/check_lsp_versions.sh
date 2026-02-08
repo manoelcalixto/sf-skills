@@ -24,7 +24,17 @@ CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/sf-skills"
 CACHE_FILE="$CACHE_DIR/version_check.json"
 TIMESTAMP_FILE="$CACHE_DIR/last_check_timestamp"
 CACHE_TTL_DAYS=7
-VSCODE_EXT_DIR="$HOME/.vscode/extensions"
+
+# VS Code extension install locations
+# - Local VS Code:            ~/.vscode/extensions
+# - VS Code Remote / WSL:     ~/.vscode-server/extensions
+# - VS Code Insiders Remote:  ~/.vscode-server-insiders/extensions
+VSCODE_EXT_DIRS=(
+    "$HOME/.vscode/extensions"
+    "$HOME/.vscode-server/extensions"
+    "$HOME/.vscode-server-insiders/extensions"
+    "$HOME/.vscode-insiders/extensions"
+)
 
 # VS Code extensions to check (parallel arrays for portability)
 EXTENSION_IDS=(
@@ -64,6 +74,10 @@ mkdir -p "$CACHE_DIR"
 # ============================================================================
 # Utility Functions
 # ============================================================================
+
+has_cmd() {
+    command -v "$1" &>/dev/null
+}
 
 # Check if cache is fresh (less than 7 days old)
 cache_is_fresh() {
@@ -133,18 +147,24 @@ update_timestamp() {
 # Get installed VS Code extension version
 get_installed_extension_version() {
     local ext_id="$1"
-    local ext_dir
+    local ext_base=""
+    local ext_dir=""
 
-    # Find extension directory (handles version suffix)
-    ext_dir=$(find "$VSCODE_EXT_DIR" -maxdepth 1 -type d -name "${ext_id}-*" 2>/dev/null | sort -V | tail -1)
+    # Find extension directory (handles version suffix) across common locations.
+    # Prefer the first location that contains a matching extension.
+    for ext_base in "${VSCODE_EXT_DIRS[@]}"; do
+        [[ -d "$ext_base" ]] || continue
+        # Only match the primary extension folder, not related extensions
+        # like "salesforce.salesforcedx-vscode-apex-testing-*".
+        ext_dir=$(find "$ext_base" -maxdepth 1 -type d -name "${ext_id}-[0-9]*" 2>/dev/null | sort -V | tail -1)
+        if [[ -n "$ext_dir" ]]; then
+            # Extract version from directory name (e.g., salesforce.xxx-62.8.0 -> 62.8.0)
+            basename "$ext_dir" | sed "s/${ext_id}-//"
+            return
+        fi
+    done
 
-    if [[ -z "$ext_dir" ]]; then
-        echo ""
-        return
-    fi
-
-    # Extract version from directory name (e.g., salesforce.xxx-62.8.0 -> 62.8.0)
-    basename "$ext_dir" | sed "s/${ext_id}-//"
+    echo ""
 }
 
 # Query VS Code Marketplace for latest version
@@ -481,14 +501,44 @@ display_results() {
             IFS='|' read -r type id name installed latest status <<< "$result"
             if [[ "$status" == "UPDATE" || "$status" == "NOT_INSTALLED" ]]; then
                 case "$type" in
-                    ext)     echo "   code --install-extension $id" ;;
+                    ext)
+                        if has_cmd code; then
+                            echo "   code --install-extension $id"
+                        else
+                            echo "   # Install in VS Code: $id"
+                        fi
+                        ;;
                     runtime)
                         case "$id" in
-                            java) echo "   brew install openjdk@$JAVA_REC_VERSION" ;;
-                            node) echo "   brew install node" ;;
+                            java)
+                                if has_cmd brew; then
+                                    echo "   brew install openjdk@$JAVA_REC_VERSION"
+                                elif has_cmd apt-get; then
+                                    echo "   sudo apt-get install openjdk-$JAVA_REC_VERSION-jdk"
+                                else
+                                    echo "   # Install Java $JAVA_REC_VERSION (Temurin/OpenJDK)"
+                                fi
+                                ;;
+                            node)
+                                if has_cmd brew; then
+                                    echo "   brew install node"
+                                elif has_cmd apt-get; then
+                                    echo "   sudo apt-get install nodejs npm"
+                                else
+                                    echo "   # Install Node.js >=$NODE_MIN_VERSION"
+                                fi
+                                ;;
                         esac
                         ;;
-                    cli)     echo "   brew upgrade sf" ;;
+                    cli)
+                        if has_cmd brew; then
+                            echo "   brew upgrade sf"
+                        elif has_cmd npm; then
+                            echo "   npm install -g @salesforce/cli@latest"
+                        else
+                            echo "   # Install/update Salesforce CLI: https://developer.salesforce.com/tools/salesforcecli"
+                        fi
+                        ;;
                 esac
             fi
         done

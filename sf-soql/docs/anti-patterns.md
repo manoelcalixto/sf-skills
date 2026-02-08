@@ -341,9 +341,13 @@ Before deploying SOQL to production:
 
 ```bash
 # CLI Query Plan
-sf data query \
-  --query "SELECT Id FROM Account WHERE Name = 'Test'" \
-  --target-org my-org \
-  --use-tooling-api \
-  --plan
+# URL-encode the SOQL query (example uses python)
+ENCODED_QUERY=$(python3 - <<'PY'
+import urllib.parse
+print(urllib.parse.quote("SELECT Id FROM Account WHERE Name = 'Test'", safe=""))
+PY
+)
+
+sf api request rest "/services/data/v65.0/query/?explain=${ENCODED_QUERY}" \
+  --target-org my-org
 ```

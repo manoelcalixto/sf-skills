@@ -54,7 +54,7 @@ class TestCountCLI:
 class TestCountLive:
     """Live tests for count command."""
 
-    def test_count_sessions(self, org_alias, cli_runner, cli_app):
+    def test_count_sessions(self, org_alias, cli_runner, cli_app, auth_client):
         """count sessions returns a number."""
         result = cli_runner.invoke(cli_app, [
             "count",
@@ -69,7 +69,7 @@ class TestCountLive:
         # Output should contain "Count:" and a number
         assert "count" in result.output.lower()
 
-    def test_count_with_days_filter(self, org_alias, cli_runner, cli_app):
+    def test_count_with_days_filter(self, org_alias, cli_runner, cli_app, auth_client):
         """count --days N filters by date."""
         result = cli_runner.invoke(cli_app, [
             "count",
@@ -83,7 +83,7 @@ class TestCountLive:
         # Should mention the period
         assert "1" in result.output or "day" in result.output.lower()
 
-    def test_count_interactions(self, org_alias, cli_runner, cli_app):
+    def test_count_interactions(self, org_alias, cli_runner, cli_app, auth_client):
         """count interactions works."""
         result = cli_runner.invoke(cli_app, [
             "count",
@@ -94,7 +94,7 @@ class TestCountLive:
 
         assert result.exit_code == 0
 
-    def test_count_steps(self, org_alias, cli_runner, cli_app):
+    def test_count_steps(self, org_alias, cli_runner, cli_app, auth_client):
         """count steps works."""
         result = cli_runner.invoke(cli_app, [
             "count",

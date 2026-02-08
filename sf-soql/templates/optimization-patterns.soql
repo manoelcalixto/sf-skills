@@ -214,7 +214,7 @@ Use Developer Console or CLI to analyze query plans:
    - Click "Query Plan" button
 
 2. CLI:
-   sf data query --query "SELECT..." --use-tooling-api --plan
+   sf api request rest "/services/data/vXX.X/query/?explain=<url-encoded SOQL>" --target-org my-org
 
 Plan Output:
 - Cardinality: Estimated rows returned

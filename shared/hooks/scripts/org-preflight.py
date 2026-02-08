@@ -158,7 +158,7 @@ def get_org_type_label(org_info: Dict) -> str:
     """Get a human-readable label for the org type."""
     if org_info.get("is_scratch"):
         return "Scratch Org"
-    elif org_info.get("is_sandbox"):
+    elif org_info.get("is_sandbox") or ".sandbox." in (org_info.get("instance_url") or ""):
         return "Sandbox"
     elif org_info.get("is_dev_hub"):
         return "Dev Hub"

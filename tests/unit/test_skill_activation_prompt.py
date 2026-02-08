@@ -21,8 +21,8 @@ from unittest.mock import patch
 
 import pytest
 
-# Import the module under test from conftest (handles hyphenated filename)
-from conftest import skill_activation_prompt as sap
+# Import the module under test from tests.conftest (handles hyphenated filename)
+from tests.conftest import skill_activation_prompt as sap
 
 
 # =============================================================================

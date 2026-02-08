@@ -210,7 +210,9 @@ To disable the weekly check, remove the `SessionStart` hook from your skill's `h
 
 The VS Code Agent Script extension is not installed:
 1. Install from VS Code Marketplace
-2. Verify: `ls ~/.vscode/extensions/salesforce.agent-script-*`
+2. Verify the extension folder exists:
+   - Local VS Code: `ls ~/.vscode/extensions/salesforce.agent-script-*`
+   - VS Code Remote/WSL: `ls ~/.vscode-server/extensions/salesforce.agent-script-*`
 
 #### "Node.js not found"
 
@@ -229,8 +231,12 @@ Upgrade to Node.js 18+:
 
 The VS Code Salesforce Extension Pack is not installed:
 1. Install from VS Code Marketplace: "Salesforce Extension Pack"
-2. Verify: `ls ~/.vscode/extensions/salesforce.salesforcedx-vscode-apex-*`
-3. Check JAR exists: `ls ~/.vscode/extensions/salesforce.salesforcedx-vscode-apex-*/dist/apex-jorje-lsp.jar`
+2. Verify the extension folder exists:
+   - Local VS Code: `ls ~/.vscode/extensions/salesforce.salesforcedx-vscode-apex-*`
+   - VS Code Remote/WSL: `ls ~/.vscode-server/extensions/salesforce.salesforcedx-vscode-apex-*`
+3. Check JAR exists:
+   - Local VS Code: `ls ~/.vscode/extensions/salesforce.salesforcedx-vscode-apex-*/dist/apex-jorje-lsp.jar`
+   - VS Code Remote/WSL: `ls ~/.vscode-server/extensions/salesforce.salesforcedx-vscode-apex-*/dist/apex-jorje-lsp.jar`
 
 #### "Java not found"
 

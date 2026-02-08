@@ -83,7 +83,7 @@ Use **AskUserQuestion** to gather:
 sf data query --query "SELECT Id, Name FROM Account LIMIT 10" --target-org my-org
 
 # Analyze query plan
-sf data query --query "..." --target-org my-org --use-tooling-api --plan
+sf api request rest "/services/data/vXX.X/query/?explain=<url-encoded SOQL>" --target-org my-org
 ```
 
 ---
@@ -329,11 +329,15 @@ SELECT Id FROM Account WHERE Name LIKE 'Acme%'
 
 ```bash
 # Get query plan
-sf data query \
-  --query "SELECT Id FROM Account WHERE Name = 'Test'" \
-  --target-org my-org \
-  --use-tooling-api \
-  --plan
+# URL-encode the query (example uses python)
+ENCODED_QUERY=$(python3 - <<'PY'
+import urllib.parse
+print(urllib.parse.quote("SELECT Id FROM Account WHERE Name = 'Test'", safe=""))
+PY
+)
+
+sf api request rest "/services/data/v65.0/query/?explain=${ENCODED_QUERY}" \
+  --target-org my-org
 ```
 
 **Plan Output Interpretation**:
@@ -506,11 +510,14 @@ sf data export bulk --query "SELECT Id, Name FROM Account" --target-org my-org -
 ### Query Plan
 
 ```bash
-sf data query \
-  --query "SELECT Id FROM Account WHERE Name = 'Test'" \
-  --target-org my-org \
-  --use-tooling-api \
-  --plan
+ENCODED_QUERY=$(python3 - <<'PY'
+import urllib.parse
+print(urllib.parse.quote("SELECT Id FROM Account WHERE Name = 'Test'", safe=""))
+PY
+)
+
+sf api request rest "/services/data/v65.0/query/?explain=${ENCODED_QUERY}" \
+  --target-org my-org
 ```
 
 ---

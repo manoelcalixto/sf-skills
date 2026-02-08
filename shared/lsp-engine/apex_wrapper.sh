@@ -12,8 +12,9 @@
 # bundled within the VS Code Salesforce Extension Pack. There is NO standalone
 # npm package or separate download available.
 #
-# The JAR is located at:
-#   ~/.vscode/extensions/salesforce.salesforcedx-vscode-apex-*/dist/apex-jorje-lsp.jar
+# The JAR is located at (depending on your VS Code setup):
+#   ~/.vscode/extensions/salesforce.salesforcedx-vscode-apex-*/dist/apex-jorje-lsp.jar          (local)
+#   ~/.vscode-server/extensions/salesforce.salesforcedx-vscode-apex-*/dist/apex-jorje-lsp.jar   (VS Code Remote/WSL)
 #
 # Prerequisites:
 #   - VS Code with Salesforce Apex extension installed (REQUIRED)
@@ -111,36 +112,40 @@ validate_java_version() {
 
 # Find VS Code Apex extension directory (handles version updates)
 find_apex_extension() {
-    local ext_base="$HOME/.vscode/extensions"
-
-    # Check if VS Code extensions directory exists
-    if [[ ! -d "$ext_base" ]]; then
-        log "VS Code extensions directory not found: $ext_base"
-        return 1
-    fi
+    local ext_bases=(
+        "$HOME/.vscode/extensions"
+        "$HOME/.vscode-server/extensions"
+        "$HOME/.vscode-server-insiders/extensions"
+        "$HOME/.vscode-insiders/extensions"
+    )
 
     # Find the main Apex extension (exclude -debugger, -testing, etc.)
     # Pattern: salesforce.salesforcedx-vscode-apex-VERSION (version starts with digit)
-    local latest
-    latest=$(find "$ext_base" -maxdepth 1 -type d -name "salesforce.salesforcedx-vscode-apex-[0-9]*" 2>/dev/null | sort -V | tail -1)
+    local ext_base=""
+    for ext_base in "${ext_bases[@]}"; do
+        [[ -d "$ext_base" ]] || continue
 
-    if [[ -n "$latest" ]]; then
-        # Check dist directory first (newer versions)
-        local jar_path="$latest/dist/apex-jorje-lsp.jar"
-        if [[ -f "$jar_path" ]]; then
-            echo "$jar_path"
-            return 0
+        local latest
+        latest=$(find "$ext_base" -maxdepth 1 -type d -name "salesforce.salesforcedx-vscode-apex-[0-9]*" 2>/dev/null | sort -V | tail -1)
+
+        if [[ -n "$latest" ]]; then
+            # Check dist directory first (newer versions)
+            local jar_path="$latest/dist/apex-jorje-lsp.jar"
+            if [[ -f "$jar_path" ]]; then
+                echo "$jar_path"
+                return 0
+            fi
+
+            # Try out directory (older versions)
+            jar_path="$latest/out/apex-jorje-lsp.jar"
+            if [[ -f "$jar_path" ]]; then
+                echo "$jar_path"
+                return 0
+            fi
         fi
+    done
 
-        # Try out directory (older versions)
-        jar_path="$latest/out/apex-jorje-lsp.jar"
-        if [[ -f "$jar_path" ]]; then
-            echo "$jar_path"
-            return 0
-        fi
-    fi
-
-    log "Apex extension not found in: $ext_base"
+    log "Apex extension not found in any known VS Code extensions directory"
     return 1
 }
 

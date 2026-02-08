@@ -406,12 +406,15 @@ sf config set org-api-version=62.0
 ### Query Plan Analysis
 
 ```bash
-# Use Developer Console or Tooling API
-sf data query \
-  --query "SELECT Id FROM Account WHERE Name = 'Test'" \
-  --target-org my-sandbox \
-  --use-tooling-api \
-  --plan
+# Use Developer Console or the REST API explain endpoint
+ENCODED_QUERY=$(python3 - <<'PY'
+import urllib.parse
+print(urllib.parse.quote("SELECT Id FROM Account WHERE Name = 'Test'", safe=""))
+PY
+)
+
+sf api request rest "/services/data/v65.0/query/?explain=${ENCODED_QUERY}" \
+  --target-org my-sandbox
 ```
 
 ---

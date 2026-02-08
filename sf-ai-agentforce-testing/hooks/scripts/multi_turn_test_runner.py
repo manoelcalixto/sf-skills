@@ -1233,6 +1233,8 @@ Environment Variables:
     # Output
     parser.add_argument("--output", default=None,
                         help="Write JSON results to this file path")
+    parser.add_argument("--report-file", default=None,
+                        help="Write Rich terminal report to this file (ANSI codes included)")
     parser.add_argument("--verbose", action="store_true",
                         help="Print progress to stderr")
     parser.add_argument("--json-only", action="store_true",
@@ -1376,6 +1378,20 @@ Environment Variables:
             json.dump(results, f, indent=2)
         if args.verbose:
             print(f"\n📄 JSON results written to: {args.output}", file=sys.stderr)
+
+    if args.report_file:
+        # Write the Rich report (with ANSI codes) to a file for later viewing
+        use_rich_for_file = HAS_RICH and not args.no_rich
+        if use_rich_for_file:
+            report_content = format_results_rich(results, args.worker_id, args.scenarios, width=args.width)
+        elif not args.no_rich:
+            report_content = format_results_rich_legacy(results, args.worker_id, args.scenarios)
+        else:
+            report_content = format_results(results)
+        with open(args.report_file, "w") as f:
+            f.write(report_content)
+        if args.verbose:
+            print(f"\n📊 Rich report written to: {args.report_file}", file=sys.stderr)
 
     if args.json_only:
         print(json.dumps(results, indent=2))

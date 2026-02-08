@@ -296,15 +296,17 @@ AskUserQuestion:
 
 ### I-6: Partition Strategy
 
+**DEFAULT RULE**: If total generated scenarios > 4, default to "2 workers by category". If ≤ 4, default to "Sequential". ALWAYS default — only change if the user explicitly requests otherwise.
+
 ```
 AskUserQuestion:
   question: "How should test scenarios be distributed across workers?"
   header: "Partition"
   options:
     - label: "2 workers by category (Recommended)"
-      description: "Group test patterns into 2 balanced buckets — best balance of parallelism and readability"
+      description: "Group test patterns into 2 balanced buckets — best balance of parallelism and readability. DEFAULT when > 4 scenarios."
     - label: "Sequential"
-      description: "Run all scenarios in a single process — no team needed, simpler but slower"
+      description: "Run all scenarios in a single process — no team needed, simpler but slower. DEFAULT when ≤ 4 scenarios."
   multiSelect: false
 ```
 
@@ -335,6 +337,79 @@ Variables:    {var_count} session variable(s)
 ════════════════════════════════════════════════════════════════
 Proceed? [Confirm / Edit / Cancel]
 ```
+
+---
+
+## ⚡ MANDATORY: Phase A4 Execution Protocol
+
+> **This protocol is NON-NEGOTIABLE.** After I-7 confirmation, you MUST follow EXACTLY these steps based on the partition strategy. DO NOT improvise, skip steps, or run sequentially when the plan says swarm.
+
+### Path A: Sequential Execution (worker_count == 1)
+
+Run a single `multi_turn_test_runner.py` process. No team needed.
+
+```bash
+source ~/.sfagent/{org_alias}/{eca_name}/credentials.env
+python3 {SKILL_PATH}/hooks/scripts/multi_turn_test_runner.py \
+  --scenarios {scenario_file} \
+  --agent-id {agent_id} \
+  --var '$Context.RoutableId={routable_id}' \
+  --var '$Context.CaseId={case_id}' \
+  --output {working_dir}/results.json \
+  --report-file {working_dir}/report.ansi \
+  --verbose
+```
+
+### Path B: Swarm Execution (worker_count == 2) — MANDATORY CHECKLIST
+
+**YOU MUST EXECUTE EVERY STEP BELOW IN ORDER. DO NOT SKIP ANY STEP.**
+
+☐ **Step 1: Split scenarios into 2 partitions**
+  Group the generated category YAML files into 2 balanced buckets by total scenario count.
+  Write `{working_dir}/scenarios-part1.yaml` and `{working_dir}/scenarios-part2.yaml`.
+  Each partition file must be valid YAML with a `scenarios:` key containing its subset.
+
+☐ **Step 2: Create team**
+  ```
+  TeamCreate(team_name="sf-test-{agent_name}")
+  ```
+
+☐ **Step 3: Create 2 tasks** (one per partition)
+  ```
+  TaskCreate(subject="Run partition 1", description="Execute scenarios-part1.yaml")
+  TaskCreate(subject="Run partition 2", description="Execute scenarios-part2.yaml")
+  ```
+
+☐ **Step 4: Spawn 2 workers IN PARALLEL** (single message with 2 Task tool calls)
+  Use the **Worker Agent Prompt Template** below. CRITICAL: Both Task calls MUST be in the SAME message.
+  ```
+  Task(subagent_type="general-purpose", team_name="sf-test-{agent_name}", name="worker-1", prompt=WORKER_PROMPT_1)
+  Task(subagent_type="general-purpose", team_name="sf-test-{agent_name}", name="worker-2", prompt=WORKER_PROMPT_2)
+  ```
+
+☐ **Step 5: Wait for both workers to report** (they SendMessage when done)
+  Do NOT proceed until both workers have sent their results via SendMessage.
+
+☐ **Step 6: Aggregate results**
+  ```bash
+  python3 {SKILL_PATH}/hooks/scripts/rich_test_report.py \
+    --results {working_dir}/worker-1-results.json {working_dir}/worker-2-results.json
+  ```
+
+☐ **Step 7: Present unified report** to the user
+
+☐ **Step 8: Offer fix loop** if any failures detected
+
+☐ **Step 9: Shutdown workers**
+  ```
+  SendMessage(type="shutdown_request", recipient="worker-1")
+  SendMessage(type="shutdown_request", recipient="worker-2")
+  ```
+
+☐ **Step 10: Clean up**
+  ```
+  TeamDelete
+  ```
 
 ---
 
@@ -428,19 +503,37 @@ Each worker receives this prompt (team lead fills in the variables):
 You are a multi-turn test worker for Agentforce agent testing.
 
 YOUR TASK:
-1. Export credentials:
+1. Claim your task via TaskUpdate(status="in_progress", owner=your_name)
+
+2. Export credentials and run the test:
    export SF_MY_DOMAIN="{domain}"
    export SF_CONSUMER_KEY="{key}"
    export SF_CONSUMER_SECRET="{secret}"
 
-2. Run the test:
    python3 {skill_path}/hooks/scripts/multi_turn_test_runner.py \
      --scenarios {scenario_file} \
      --agent-id {agent_id} \
-     --output /tmp/sf-test-{session}/worker-{N}-results.json \
+     --var '$Context.RoutableId={routable_id}' \
+     --var '$Context.CaseId={case_id}' \
+     --output {working_dir}/worker-{N}-results.json \
+     --report-file {working_dir}/worker-{N}-report.ansi \
      --worker-id {N} --verbose
 
-3. Read the results JSON file
+3. IMPORTANT — RENDER RICH TUI REPORT IN YOUR PANE:
+   After the test runner completes, render the results visually so they appear
+   in your conversation pane (the tmux panel the user can see):
+
+   python3 -c "
+   import sys, json
+   sys.path.insert(0, '{skill_path}/hooks/scripts')
+   from multi_turn_test_runner import format_results_rich
+   with open('{working_dir}/worker-{N}-results.json') as f:
+       results = json.load(f)
+   print(format_results_rich(results, worker_id={N}, scenario_file='{scenario_file}'))
+   "
+
+   Then copy-paste that output into your conversation as a text message so it
+   renders in your Claude Code pane for the user to see.
 
 4. Analyze: which scenarios passed, which failed, and WHY
 
@@ -456,6 +549,7 @@ IMPORTANT:
 - If a test fails with an auth error (exit code 2), report it immediately — do NOT retry
 - If a test fails with scenario failures (exit code 1), analyze and report all failures
 - You CAN communicate with other workers if you discover related issues
+- The --report-file flag writes a persistent ANSI report file viewable with `cat` or `bat`
 ```
 
 ### Partition Strategies
@@ -1096,6 +1190,7 @@ Skill(skill="sf-ai-agentforce-observability", args="Analyze STDM sessions for ag
 
 | Flag | Default | Purpose |
 |------|---------|---------|
+| `--report-file PATH` | none | Write Rich terminal report to file (ANSI codes included) — viewable with `cat` or `bat` |
 | `--no-rich` | off | Disable Rich colored output; use plain-text format |
 | `--width N` | auto | Override terminal width (auto-detects from $COLUMNS; fallback 80) |
 | `--rich-output` | _(deprecated)_ | No-op — Rich is now default when installed |

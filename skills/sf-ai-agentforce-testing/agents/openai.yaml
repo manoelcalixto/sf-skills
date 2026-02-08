@@ -1,0 +1,14 @@
+interface:
+  display_name: SF Agentforce Testing
+  short_description: Generate multi-turn test scenarios and run them.
+  default_prompt: Generate multi-turn Agentforce test scenarios, run them against an org, and summarize failures with actionable fixes.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts

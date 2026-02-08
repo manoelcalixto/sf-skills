@@ -1,0 +1,14 @@
+interface:
+  display_name: SF Diagram (Mermaid)
+  short_description: Generate diagrams from Salesforce artifacts.
+  default_prompt: Generate Mermaid diagrams to communicate Salesforce architecture and flows.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts

@@ -1,0 +1,17 @@
+interface:
+  display_name: SF Agent Script
+  short_description: Author and validate Agent Script.
+  default_prompt: Help author and validate Agent Script. Prefer offline validation first, then org-based checks.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts
+  - type: runtime
+    value: node>=18
+    description: Required for Agent Script language server runtime

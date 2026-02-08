@@ -1,0 +1,14 @@
+interface:
+  display_name: SF Conversation Design
+  short_description: Design Agentforce conversation flows and content.
+  default_prompt: Help design Agentforce conversation flows, prompts, and topic structure. Emphasize clarity and testability.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts

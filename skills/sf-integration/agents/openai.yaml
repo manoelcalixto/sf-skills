@@ -1,0 +1,14 @@
+interface:
+  display_name: SF Integration
+  short_description: 'Build integrations: auth, callouts, external clients.'
+  default_prompt: Help implement Salesforce integrations (Auth, Named Credentials, callouts). Use sf CLI and secure patterns.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts

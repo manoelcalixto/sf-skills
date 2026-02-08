@@ -1,0 +1,14 @@
+interface:
+  display_name: SF Metadata
+  short_description: Generate and validate Salesforce metadata (XML).
+  default_prompt: Generate or modify Salesforce metadata XML. Validate with sf CLI and the provided templates.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts

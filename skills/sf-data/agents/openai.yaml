@@ -1,0 +1,14 @@
+interface:
+  display_name: SF Data
+  short_description: Work with data loads, queries, and transformations.
+  default_prompt: Help move, query, and validate Salesforce data using sf CLI and lightweight scripts.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts

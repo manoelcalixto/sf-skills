@@ -1,0 +1,14 @@
+interface:
+  display_name: SF Debug
+  short_description: Debug org behavior via logs, queries, and trace flags.
+  default_prompt: Debug Salesforce behavior using logs and targeted queries. Prefer reproducible steps.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts

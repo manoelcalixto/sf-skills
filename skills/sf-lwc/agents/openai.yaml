@@ -1,0 +1,21 @@
+interface:
+  display_name: SF LWC
+  short_description: Build and review Lightning Web Components.
+  default_prompt: Build or review LWC. Use sf CLI, Jest, and Code Analyzer when available.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts
+  - type: runtime
+    value: node>=18
+    description: Required for LWC tooling and language server
+  - type: sf-plugin
+    value: '@salesforce/plugin-code-analyzer'
+    description: Salesforce Code Analyzer v5
+    command: sf plugins install @salesforce/plugin-code-analyzer

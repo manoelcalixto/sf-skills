@@ -1,0 +1,14 @@
+interface:
+  display_name: SF Flow
+  short_description: Build and review Salesforce Flows.
+  default_prompt: Help build, debug, and document Salesforce Flows (record-triggered, screen flows). Validate structure with the included scripts when available.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts

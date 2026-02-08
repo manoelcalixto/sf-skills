@@ -1,0 +1,14 @@
+interface:
+  display_name: SF Agentforce Observability
+  short_description: Extract and analyze Session Tracing data in Data Cloud.
+  default_prompt: Help extract and analyze Agentforce session tracing (STDM). Prefer reproducible CLI steps and schema-accurate outputs.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts

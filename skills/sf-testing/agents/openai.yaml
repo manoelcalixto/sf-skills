@@ -1,0 +1,14 @@
+interface:
+  display_name: SF Testing
+  short_description: Write robust Salesforce tests and run them in CI-like flows.
+  default_prompt: Write and improve Salesforce tests (Apex, LWC) and help run them through sf CLI.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts

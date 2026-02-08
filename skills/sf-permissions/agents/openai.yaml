@@ -1,0 +1,14 @@
+interface:
+  display_name: SF Permissions
+  short_description: Inspect and reason about permission hierarchies.
+  default_prompt: Analyze Salesforce permission sets, profiles, and object/field access. Use the included CLI helper when available.
+  brand_color: '#0176D3'
+dependencies:
+  tools:
+  - type: cli
+    value: sf
+    description: Salesforce CLI (sf)
+    command: npm install -g @salesforce/cli
+  - type: runtime
+    value: python3>=3.10
+    description: Python runtime for helper scripts

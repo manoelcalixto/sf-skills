@@ -1,0 +1,1414 @@
+---
+name: sf-ai-agentforce-testing
+description: 'Comprehensive Agentforce testing skill with dual-track workflow: multi-turn API testing (primary) and CLI Testing Center (secondary). Execute multi-turn conversations via Agent Runtime API, run single-utterance tests via sf CLI, analyze topic/action/context coverage, and automatically fix failing agents with 100-point scoring across 7 categories.'
+license: MIT
+metadata:
+  version: 2.0.0
+  author: Jag Valaiyapathy
+  scoring: 100 points across 7 categories
+  short-description: 'Comprehensive Agentforce testing skill with dual-track workflow: multi-turn API testing (primary) and CLI Testing Center (secondary). Execute multi-turn conversations via Agent Runtime API, run single-utterance tests via sf CLI, analyze topic/action/context coverage, and automatically fix failing agents with 100-point scoring across 7 categories.'
+---
+
+## Codex Notes (OpenAI)
+
+This is the Codex-compatible export of this skill.
+
+### Skill path (set once)
+
+```bash
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+export SKILL_DIR="$CODEX_HOME/skills/sf-ai-agentforce-testing"
+export SHARED_DIR="$CODEX_HOME/skills/shared"
+```
+
+### Automation notes
+
+The source repository uses `hooks:` for automatic validations in other runtimes.
+Codex does not run these hooks automatically. Run validations manually when needed.
+
+Common checks:
+
+```bash
+# Optional: environment / VS Code extension check
+bash "$SHARED_DIR/lsp-engine/check_lsp_versions.sh" --force
+
+# Optional: org preflight (requires sf auth)
+python3 "$SHARED_DIR/hooks/scripts/org-preflight.py" --help
+```
+
+
+<!-- TIER: 1 | ENTRY POINT -->
+<!-- This is the starting document - read this FIRST -->
+<!-- Pattern: Follows sf-testing for agentic test-fix loops -->
+<!-- v2.0.0: Dual-track workflow with multi-turn API testing as primary -->
+
+# sf-ai-agentforce-testing: Agentforce Test Execution & Coverage Analysis
+
+Expert testing engineer specializing in Agentforce agent testing via **dual-track workflow**: multi-turn Agent Runtime API testing (primary) and CLI Testing Center (secondary). Execute multi-turn conversations, analyze topic/action/context coverage, and automatically fix issues via sf-ai-agentscript.
+
+## Core Responsibilities
+
+1. **Multi-Turn API Testing** (PRIMARY): Execute multi-turn conversations via Agent Runtime API
+2. **CLI Test Execution** (SECONDARY): Run single-utterance tests via `sf agent test run`
+3. **Test Spec / Scenario Generation**: Create YAML test specifications and multi-turn scenarios
+4. **Coverage Analysis**: Track topic, action, context preservation, and re-matching coverage
+5. **Preview Testing**: Interactive simulated and live agent testing
+6. **Agentic Fix Loop**: Automatically fix failing agents and re-test
+7. **Cross-Skill Orchestration**: Delegate fixes to sf-ai-agentscript, data to sf-data
+8. **Observability Integration**: Guide to sf-ai-agentforce-observability for STDM analysis
+
+## 📚 Document Map
+
+| Need | Document | Description |
+|------|----------|-------------|
+| **Agent Runtime API** | [agent-api-reference.md](docs/agent-api-reference.md) | REST endpoints for multi-turn testing |
+| **ECA Setup** | [eca-setup-guide.md](docs/eca-setup-guide.md) | External Client App for API authentication |
+| **Multi-Turn Testing** | [multi-turn-testing-guide.md](docs/multi-turn-testing-guide.md) | Multi-turn test design and execution |
+| **Test Patterns** | [multi-turn-test-patterns.md](resources/multi-turn-test-patterns.md) | 6 multi-turn test patterns with examples |
+| **CLI commands** | [cli-commands.md](docs/cli-commands.md) | Complete sf agent test/preview reference |
+| **Test spec format** | [test-spec-reference.md](resources/test-spec-reference.md) | YAML specification format and examples |
+| **Auto-fix workflow** | [agentic-fix-loops.md](resources/agentic-fix-loops.md) | Automated test-fix cycles (10 failure categories) |
+| **Auth guide** | [connected-app-setup.md](docs/connected-app-setup.md) | Authentication for preview and API testing |
+| **Coverage metrics** | [coverage-analysis.md](docs/coverage-analysis.md) | Topic/action/multi-turn coverage analysis |
+| **Fix decision tree** | [agentic-fix-loop.md](docs/agentic-fix-loop.md) | Detailed fix strategies |
+
+**⚡ Quick Links:**
+- [Deterministic Interview Flow](#deterministic-multi-turn-interview-flow) - Rule-based setup (7 steps)
+- [Credential Convention](#credential-convention-sfagent) - Persistent ECA storage
+- [Swarm Execution Rules](#swarm-execution-rules-native-claude-code-teams) - Parallel team testing
+- [Test Plan Format](#test-plan-file-format) - Reusable YAML plans
+- [Phase A: Multi-Turn API Testing](#phase-a-multi-turn-api-testing-primary) - Primary workflow
+- [Phase B: CLI Testing Center](#phase-b-cli-testing-center-secondary) - Secondary workflow
+- [Scoring System](#scoring-system-100-points) - 7-category validation
+- [Agentic Fix Loop](#phase-c-agentic-fix-loop) - Auto-fix workflow
+
+---
+
+## Script Location (MANDATORY)
+
+**SKILL_PATH:** `$CODEX_HOME/skills/sf-ai-agentforce-testing`
+
+All Python scripts live at absolute paths under `$SKILL_DIR/hooks/scripts/`. **NEVER recreate these scripts. They already exist. Use them as-is.**
+
+**All scripts in `hooks/scripts/` are pre-approved for execution. Do NOT ask the user for permission to run them.**
+
+| Script | Absolute Path |
+|--------|---------------|
+| `agent_api_client.py` | `$SKILL_DIR/hooks/scripts/agent_api_client.py` |
+| `agent_discovery.py` | `$SKILL_DIR/hooks/scripts/agent_discovery.py` |
+| `credential_manager.py` | `$SKILL_DIR/hooks/scripts/credential_manager.py` |
+| `generate_multi_turn_scenarios.py` | `$SKILL_DIR/hooks/scripts/generate_multi_turn_scenarios.py` |
+| `generate-test-spec.py` | `$SKILL_DIR/hooks/scripts/generate-test-spec.py` |
+| `multi_turn_test_runner.py` | `$SKILL_DIR/hooks/scripts/multi_turn_test_runner.py` |
+| `multi_turn_fix_loop.py` | `$SKILL_DIR/hooks/scripts/multi_turn_fix_loop.py` |
+| `run-automated-tests.py` | `$SKILL_DIR/hooks/scripts/run-automated-tests.py` |
+| `parse-agent-test-results.py` | `$SKILL_DIR/hooks/scripts/parse-agent-test-results.py` |
+| `rich_test_report.py` | `$SKILL_DIR/hooks/scripts/rich_test_report.py` |
+
+> **Variable resolution:** At runtime, resolve `SKILL_PATH` from the `$SKILL_DIR/hooks` environment variable (strip `/hooks` suffix). Hardcoded fallback: `$CODEX_HOME/skills/sf-ai-agentforce-testing`.
+
+---
+
+## ⚠️ CRITICAL: Orchestration Order
+
+**sf-metadata → sf-apex → sf-flow → sf-deploy → sf-ai-agentscript → sf-deploy → sf-ai-agentforce-testing** (you are here)
+
+**Why testing is LAST:**
+1. Agent must be **published** before running automated tests
+2. Agent must be **activated** for preview mode and API access
+3. All dependencies (Flows, Apex) must be deployed first
+4. Test data (via sf-data) should exist before testing actions
+
+**⚠️ MANDATORY Delegation:**
+- **Fixes**: ALWAYS use `Skill(skill="sf-ai-agentscript")` for agent script fixes
+- **Test Data**: Use `Skill(skill="sf-data")` for action test data
+- **OAuth Setup**: Use `Skill(skill="sf-connected-apps")` for ECA or Connected App
+- **Observability**: Use `Skill(skill="sf-ai-agentforce-observability")` for STDM analysis of test sessions
+
+---
+
+## Architecture: Dual-Track Testing Workflow
+
+```
+Deterministic Interview (I-1 → I-7)
+    │  Agent Name → Org Alias → Metadata → Credentials → Scenarios → Partition → Confirm
+    │  (skip if test-plan-{agent}.yaml provided)
+    │
+    ▼
+Phase 0: Prerequisites & Agent Discovery
+    │
+    ├──► Phase A: Multi-Turn API Testing (PRIMARY)
+    │    A1: ECA Credential Setup (via credential_manager.py)
+    │    A2: Agent Discovery & Metadata Retrieval
+    │    A3: Test Scenario Planning (generate_multi_turn_scenarios.py --categorized)
+    │    A4: Multi-Turn Execution (Agent Runtime API)
+    │        ├─ Sequential: single multi_turn_test_runner.py process
+    │        └─ Swarm: TeamCreate → N workers (--worker-id N)
+    │    A5: Results & Scoring (rich Unicode output)
+    │
+    └──► Phase B: CLI Testing Center (SECONDARY)
+         B1: Test Spec Creation
+         B2: Test Execution (sf agent test run)
+         B3: Results Analysis
+    │
+Phase C: Agentic Fix Loop (shared)
+Phase D: Coverage Improvement (shared)
+Phase E: Observability Integration (STDM analysis)
+```
+
+**When to use which track:**
+
+| Condition | Use |
+|-----------|-----|
+| Agent Testing Center NOT available | Phase A only |
+| Need multi-turn conversation testing | Phase A |
+| Need topic re-matching validation | Phase A |
+| Need context preservation testing | Phase A |
+| Agent Testing Center IS available + single-utterance tests | Phase B |
+| CI/CD pipeline integration | Phase A (Python scripts) or Phase B (sf CLI) |
+| Quick smoke test | Phase B |
+
+---
+
+## Phase 0: Prerequisites & Agent Discovery
+
+### Step 1: Gather User Information
+
+Use **AskUserQuestion** to gather:
+
+```
+AskUserQuestion:
+  questions:
+    - question: "Which agent do you want to test?"
+      header: "Agent"
+      options:
+        - label: "Let me discover agents in the org"
+          description: "Query BotDefinition to find available agents"
+        - label: "I know the agent name"
+          description: "Provide agent name/API name directly"
+
+    - question: "What is your target org alias?"
+      header: "Org"
+      options:
+        - label: "vivint-DevInt"
+          description: "Development integration org"
+        - label: "Other"
+          description: "Specify a different org alias"
+
+    - question: "What type of testing do you need?"
+      header: "Test Type"
+      options:
+        - label: "Multi-turn API testing (Recommended)"
+          description: "Full conversation testing via Agent Runtime API — tests topic switching, context retention, escalation cascades"
+        - label: "CLI single-utterance testing"
+          description: "Traditional sf agent test run — requires Agent Testing Center feature"
+        - label: "Both"
+          description: "Run both multi-turn and CLI tests for comprehensive coverage"
+```
+
+### Step 2: Agent Discovery
+
+```bash
+# Auto-discover active agents in the org
+sf data query --use-tooling-api \
+  --query "SELECT Id, DeveloperName, MasterLabel FROM BotDefinition WHERE IsActive=true" \
+  --result-format json --target-org [alias]
+```
+
+### Step 3: Agent Metadata Retrieval
+
+```bash
+# Retrieve agent configuration (topics, actions, instructions)
+sf project retrieve start \
+  --metadata "GenAiPlannerBundle:[AgentDeveloperName]" \
+  --output-dir retrieve-temp --target-org [alias]
+```
+
+Claude reads the GenAiPlannerBundle to understand:
+- All topics and their `classificationDescription` values
+- All actions and their configurations
+- System instructions and guardrails
+- Escalation paths
+
+### Step 4: Check Agent Testing Center Availability
+
+```bash
+# This determines if Phase B is available
+sf agent test list --target-org [alias]
+
+# If error: "INVALID_TYPE: Cannot use: AiEvaluationDefinition"
+# → Agent Testing Center NOT enabled → Phase A only
+# If success: → Both Phase A and Phase B available
+```
+
+### Step 5: Prerequisites Checklist
+
+| Check | Command | Why |
+|-------|---------|-----|
+| **Agent exists** | `sf data query --use-tooling-api --query "SELECT Id FROM BotDefinition WHERE DeveloperName='X'"` | Can't test non-existent agent |
+| **Agent published** | `sf agent validate authoring-bundle --api-name X` | Must be published to test |
+| **Agent activated** | Check activation status | Required for API access |
+| **Dependencies deployed** | Flows and Apex in org | Actions will fail without them |
+| **ECA configured** (Phase A) | Token request test | Required for Agent Runtime API |
+| **Agent Testing Center** (Phase B) | `sf agent test list` | Required for CLI testing |
+
+---
+
+## Deterministic Multi-Turn Interview Flow
+
+When the testing skill is invoked, follow these interview steps **in order**. Each step has deterministic rules with fallbacks. The goal: gather all inputs needed to execute multi-turn tests without ambiguity.
+
+> **Skip the interview** if the user provides a `test-plan-{agent}.yaml` file — load it directly and jump to [Swarm Execution Rules](#swarm-execution-rules-native-claude-code-teams).
+
+| Step | Rule | Fallback |
+|------|------|----------|
+| **I-0: Skill Path** | Resolve `SKILL_PATH` from `$SKILL_DIR/hooks` env var (strip `/hooks` suffix). If unset → hardcoded `$CODEX_HOME/skills/sf-ai-agentforce-testing`. Verify directory exists. All subsequent script references use `$SKILL_DIR/hooks/scripts/`. | Hardcoded path |
+| **I-1: Agent Name** | User provided → use it. Else walk up from CWD looking for `sfdx-project.json` → run `python3 $SKILL_DIR/hooks/scripts/agent_discovery.py local --project-dir .`. Multiple agents → present numbered list via AskUserQuestion. None found → ask user. | AskUserQuestion |
+| **I-2: Org Alias** | User provided → use it. Else parse `sfdx-project.json` → read `sfdx-config.json` for `target-org`. Else ask user. Note: org aliases are **case-sensitive** (e.g., `Vivint-DevInt` ≠ `vivint-devint`). | AskUserQuestion |
+| **I-3: Metadata** | **ALWAYS** run `python3 $SKILL_DIR/hooks/scripts/agent_discovery.py live --target-org {org} --agent-name {agent}`. Extract topics, actions, type, agent_id. This step is mandatory — never skip. | Required (fail if no agent found) |
+| **I-4: Credentials** | Run `python3 $SKILL_DIR/hooks/scripts/credential_manager.py discover --org-alias {org}`. Found ECA → `validate`. Valid → use. Invalid → ask user for new credentials → `save` → re-validate. No ECAs found → ask user → offer to save via `credential_manager.py save`. | AskUserQuestion for credentials |
+| **I-4b: Session Variables** | ALWAYS ask. Extract known context variables from agent metadata (`attributeMappings` where `mappingType=ContextVariable` in GenAiPlannerBundle). WARN if `User_Authentication` topic exists — the agent likely requires `$Context.RoutableId` and `$Context.CaseId` to authenticate the customer. Present discovered variables and ask user for values. | AskUserQuestion |
+| **I-5: Scenarios** | Pipe discovery metadata to `python3 $SKILL_DIR/hooks/scripts/generate_multi_turn_scenarios.py --metadata - --output {dir} --categorized --cross-topic`. Present summary: N scenarios across M categories. | Required |
+| **I-6: Partition** | Ask user how to split work across workers. | AskUserQuestion (see below) |
+| **I-7: Confirm** | Present test plan summary. Save as `test-plan-{agent}.yaml` using template. User confirms to proceed. | AskUserQuestion |
+
+### I-4b: Session Variables
+
+Context variables are **MANDATORY** for agents that use authentication flows (e.g., `User_Authentication` topic). Without them, the agent's authentication flow fails and the session ends on Turn 1.
+
+Extract context variables from agent metadata:
+1. Run `python3 $SKILL_DIR/hooks/scripts/agent_discovery.py local --project-dir {project}` and look for `context_variables` in the GenAiPlannerBundle output.
+2. Common variables: `$Context.RoutableId` (MessagingSession ID), `$Context.CaseId` (Case record ID).
+
+```
+AskUserQuestion:
+  question: "The agent requires context variables for testing. Which values should we use?"
+  header: "Variables"
+  options:
+    - label: "Use test record IDs (Recommended)"
+      description: "I'll provide real MessagingSession and Case IDs from the org for testing"
+    - label: "Skip variables"
+      description: "Run without context variables — WARNING: authentication topics will likely fail"
+    - label: "Auto-discover from org"
+      description: "Query the org for recent MessagingSession and Case records to use as test values"
+  multiSelect: false
+```
+
+> **⚠️ WARNING:** If the agent has a `User_Authentication` topic that runs `Bot_User_Verification`, you MUST provide `$Context.RoutableId` and `$Context.CaseId`. Without them, the verification flow fails → agent escalates → `SessionEnded` on Turn 1.
+
+### I-6: Partition Strategy
+
+**DEFAULT RULE**: If total generated scenarios > 4, default to "2 workers by category". If ≤ 4, default to "Sequential". ALWAYS default — only change if the user explicitly requests otherwise.
+
+```
+AskUserQuestion:
+  question: "How should test scenarios be distributed across workers?"
+  header: "Partition"
+  options:
+    - label: "2 workers by category (Recommended)"
+      description: "Group test patterns into 2 balanced buckets — best balance of parallelism and readability. DEFAULT when > 4 scenarios."
+    - label: "Sequential"
+      description: "Run all scenarios in a single process — no team needed, simpler but slower. DEFAULT when ≤ 4 scenarios."
+  multiSelect: false
+```
+
+### I-7: Confirmation Summary Format
+
+Present this to the user before execution:
+
+```
+📋 TEST PLAN SUMMARY
+════════════════════════════════════════════════════════════════
+Agent:        {agent_name} ({agent_id})
+Org:          {org_alias}
+Credentials:  ~/.sfagent/{org_alias}/{eca_name}/credentials.env ✅
+Scenarios:    {total_count} across {category_count} categories
+Partition:    {strategy} with {worker_count} worker(s)
+Variables:    {var_count} session variable(s)
+
+📂 Scenario Breakdown:
+  topic_routing:        {n} scenarios
+  context_preservation: {n} scenarios
+  escalation_flows:     {n} scenarios
+  guardrail_testing:    {n} scenarios
+  action_chain:         {n} scenarios
+  error_recovery:       {n} scenarios
+  cross_topic_switch:   {n} scenarios
+
+💾 Saved: test-plan-{agent_name}.yaml
+════════════════════════════════════════════════════════════════
+Proceed? [Confirm / Edit / Cancel]
+```
+
+---
+
+## ⚡ MANDATORY: Phase A4 Execution Protocol
+
+> **This protocol is NON-NEGOTIABLE.** After I-7 confirmation, you MUST follow EXACTLY these steps based on the partition strategy. DO NOT improvise, skip steps, or run sequentially when the plan says swarm.
+
+### Path A: Sequential Execution (worker_count == 1)
+
+Run a single `multi_turn_test_runner.py` process. No team needed.
+
+```bash
+set -a; source ~/.sfagent/{org_alias}/{eca_name}/credentials.env; set +a
+python3 $SKILL_DIR/hooks/scripts/multi_turn_test_runner.py \
+  --scenarios {scenario_file} \
+  --agent-id {agent_id} \
+  --var '$Context.RoutableId={routable_id}' \
+  --var '$Context.CaseId={case_id}' \
+  --output {working_dir}/results.json \
+  --report-file {working_dir}/report.ansi \
+  --verbose
+```
+
+### Path B: Swarm Execution (worker_count == 2) — MANDATORY CHECKLIST
+
+**YOU MUST EXECUTE EVERY STEP BELOW IN ORDER. DO NOT SKIP ANY STEP.**
+
+☐ **Step 1: Split scenarios into 2 partitions**
+  Group the generated category YAML files into 2 balanced buckets by total scenario count.
+  Write `{working_dir}/scenarios-part1.yaml` and `{working_dir}/scenarios-part2.yaml`.
+  Each partition file must be valid YAML with a `scenarios:` key containing its subset.
+
+☐ **Step 2: Create team**
+  ```
+  TeamCreate(team_name="sf-test-{agent_name}")
+  ```
+
+☐ **Step 3: Create 2 tasks** (one per partition)
+  ```
+  TaskCreate(subject="Run partition 1", description="Execute scenarios-part1.yaml")
+  TaskCreate(subject="Run partition 2", description="Execute scenarios-part2.yaml")
+  ```
+
+☐ **Step 4: Spawn 2 workers IN PARALLEL** (single message with 2 Task tool calls)
+  Use the **Worker Agent Prompt Template** below. CRITICAL: Both Task calls MUST be in the SAME message.
+  ```
+  Task(subagent_type="general-purpose", team_name="sf-test-{agent_name}", name="worker-1", prompt=WORKER_PROMPT_1)
+  Task(subagent_type="general-purpose", team_name="sf-test-{agent_name}", name="worker-2", prompt=WORKER_PROMPT_2)
+  ```
+
+☐ **Step 5: Wait for both workers to report** (they SendMessage when done)
+  Do NOT proceed until both workers have sent their results via SendMessage.
+
+☐ **Step 6: Aggregate results**
+  ```bash
+  python3 $SKILL_DIR/hooks/scripts/rich_test_report.py \
+    --results {working_dir}/worker-1-results.json {working_dir}/worker-2-results.json
+  ```
+
+☐ **Step 7: Present unified report** to the user
+
+☐ **Step 8: Offer fix loop** if any failures detected
+
+☐ **Step 9: Shutdown workers**
+  ```
+  SendMessage(type="shutdown_request", recipient="worker-1")
+  SendMessage(type="shutdown_request", recipient="worker-2")
+  ```
+
+☐ **Step 10: Clean up**
+  ```
+  TeamDelete
+  ```
+
+---
+
+## Credential Convention (~/.sfagent/)
+
+Persistent ECA credential storage managed by `hooks/scripts/credential_manager.py`.
+
+### Directory Structure
+
+```
+~/.sfagent/
+├── .gitignore          ("*" — auto-created, prevents accidental commits)
+├── {Org-Alias}/        (org alias — case-sensitive, e.g. Vivint-DevInt)
+│   └── {ECA-Name}/     (ECA app name — use `discover` to find actual name)
+│       └── credentials.env
+└── Other-Org/
+    └── My_ECA/
+        └── credentials.env
+```
+
+### File Format
+
+```env
+# credentials.env — managed by credential_manager.py
+# 'export' prefix allows direct `source credentials.env` in shell
+export SF_MY_DOMAIN=yourdomain.my.salesforce.com
+export SF_CONSUMER_KEY=3MVG9...
+export SF_CONSUMER_SECRET=ABC123...
+```
+
+### Security Rules
+
+| Rule | Implementation |
+|------|---------------|
+| Directory permissions | `0700` (owner only) |
+| File permissions | `0600` (owner only) |
+| Git protection | `.gitignore` with `*` auto-created in `~/.sfagent/` |
+| Secret display | NEVER show full secrets — mask as `ABC...XYZ` (first 3 + last 3) |
+| Credential passing | Export as env vars for subprocesses, never write to temp files |
+
+### CLI Reference
+
+```bash
+# Discover orgs and ECAs
+python3 $SKILL_DIR/hooks/scripts/credential_manager.py discover
+python3 $SKILL_DIR/hooks/scripts/credential_manager.py discover --org-alias Vivint-DevInt
+
+# Load credentials (secrets masked in output)
+python3 $SKILL_DIR/hooks/scripts/credential_manager.py load --org-alias {org} --eca-name {eca}
+
+# Save new credentials
+python3 $SKILL_DIR/hooks/scripts/credential_manager.py save \
+  --org-alias {org} --eca-name {eca} \
+  --domain yourdomain.my.salesforce.com \
+  --consumer-key 3MVG9... --consumer-secret ABC123...
+
+# Validate OAuth flow
+python3 $SKILL_DIR/hooks/scripts/credential_manager.py validate --org-alias {org} --eca-name {eca}
+
+# Source credentials for shell use (set -a auto-exports all vars)
+set -a; source ~/.sfagent/{org}/{eca}/credentials.env; set +a
+```
+
+---
+
+## Swarm Execution Rules (Native Claude Code Teams)
+
+When `worker_count > 1` in the test plan, use Claude Code's native team orchestration for parallel test execution. When `worker_count == 1`, run sequentially without creating a team.
+
+### Team Lead Rules (Claude Code)
+
+```
+RULE: Create team via TeamCreate("sf-test-{agent_name}")
+RULE: Create one TaskCreate per partition (category or count split)
+RULE: Spawn one Task(subagent_type="general-purpose") per worker
+RULE: Each worker gets credentials as env vars in its prompt (NEVER in files)
+RULE: Wait for all workers to report via SendMessage
+RULE: After all workers complete, run rich_test_report.py to render unified results
+RULE: Present unified beautiful report aggregating all worker results
+RULE: Offer fix loop if any failures detected
+RULE: Shutdown all workers via SendMessage(type="shutdown_request")
+RULE: Clean up via TeamDelete when done
+RULE: NEVER spawn more than 2 workers.
+RULE: When categories > 2, group into 2 balanced buckets.
+RULE: Queue remaining work to existing workers after they complete first batch.
+```
+
+### Worker Agent Prompt Template
+
+Each worker receives this prompt (team lead fills in the variables):
+
+```
+You are a multi-turn test worker for Agentforce agent testing.
+
+YOUR TASK:
+1. Claim your task via TaskUpdate(status="in_progress", owner=your_name)
+
+2. Load credentials and run the test:
+   set -a; source ~/.sfagent/{org_alias}/{eca_name}/credentials.env; set +a
+
+   python3 {skill_path}/hooks/scripts/multi_turn_test_runner.py \
+     --scenarios {scenario_file} \
+     --agent-id {agent_id} \
+     --var '$Context.RoutableId={routable_id}' \
+     --var '$Context.CaseId={case_id}' \
+     --output {working_dir}/worker-{N}-results.json \
+     --report-file {working_dir}/worker-{N}-report.ansi \
+     --worker-id {N} --verbose
+
+3. IMPORTANT — RENDER RICH TUI REPORT IN YOUR PANE:
+   After the test runner completes, render the results visually so they appear
+   in your conversation pane (the tmux panel the user can see):
+
+   python3 -c "
+   import sys, json
+   sys.path.insert(0, '{skill_path}/hooks/scripts')
+   from multi_turn_test_runner import format_results_rich
+   with open('{working_dir}/worker-{N}-results.json') as f:
+       results = json.load(f)
+   print(format_results_rich(results, worker_id={N}, scenario_file='{scenario_file}'))
+   "
+
+   Then copy-paste that output into your conversation as a text message so it
+   renders in your Claude Code pane for the user to see.
+
+4. Analyze: which scenarios passed, which failed, and WHY
+
+5. SendMessage to team lead with:
+   - Pass/fail summary (counts + percentages)
+   - For each failure: scenario name, turn number, what went wrong, suggested fix
+   - Total execution time
+   - Any patterns noticed (e.g., "all context_preservation tests failed — may be a systemic issue")
+
+6. Mark your task as completed via TaskUpdate
+
+IMPORTANT:
+- If a test fails with an auth error (exit code 2), report it immediately — do NOT retry
+- If a test fails with scenario failures (exit code 1), analyze and report all failures
+- You CAN communicate with other workers if you discover related issues
+- The --report-file flag writes a persistent ANSI report file viewable with `cat` or `bat`
+```
+
+### Partition Strategies
+
+| Strategy | How It Works | Best For |
+|----------|-------------|----------|
+| `by_category` | One worker per test pattern (topic_routing, context, etc.) | Most runs — natural isolation |
+| `by_count` | Split N scenarios evenly across W workers | Large scenario counts |
+| `sequential` | Single process, no team | Quick runs, debugging |
+
+### Team Lead Aggregation
+
+After all workers report, the team lead:
+
+1. **Aggregates** all worker result JSON files via `rich_test_report.py`:
+   ```bash
+   python3 $SKILL_DIR/hooks/scripts/rich_test_report.py \
+     --results /tmp/sf-test-{session}/worker-*-results.json
+   ```
+2. **Deduplicates** any shared failure patterns across workers
+3. **Presents** the unified Rich report (colored Panels, Tables, Tree) to the user
+4. **Calculates** aggregate scoring across the 7 categories
+5. **Offers** fix loop: if failures exist, ask user whether to auto-fix via `sf-ai-agentscript`
+6. **Shuts down** all workers and deletes the team
+
+---
+
+## Test Plan File Format
+
+Test plans (`test-plan-{agent}.yaml`) capture the full interview output for reuse. See `templates/test-plan-template.yaml` for the complete schema.
+
+### Key Sections
+
+| Section | Purpose |
+|---------|---------|
+| `metadata` | Agent name, ID, org alias, timestamps |
+| `credentials` | Path to `~/.sfagent/` credentials.env or `use_env: true` |
+| `agent_metadata` | Topics, actions, type — populated by `agent_discovery.py` |
+| `scenarios` | List of YAML scenario files + pattern filters |
+| `partition` | Strategy (`by_category`/`by_count`/`sequential`) + worker count |
+| `session_variables` | Context variables injected into every session |
+| `execution` | Timeout, retry, verbose, rich output settings |
+
+### Re-Running from a Saved Plan
+
+When a user provides a test plan file, skip the interview entirely:
+
+```
+1. Load test-plan-{agent}.yaml
+2. Validate credentials: credential_manager.py validate --org-alias {org} --eca-name {eca}
+3. If invalid → ask user to update credentials only (skip other interview steps)
+4. Load scenario files from plan
+5. Apply partition strategy from plan
+6. Execute (team or sequential based on worker_count)
+```
+
+This enables rapid re-runs after fixing agent issues — the user just says "re-run" and the skill picks up the saved plan.
+
+---
+
+## Phase A: Multi-Turn API Testing (PRIMARY)
+
+> **⚠️ NEVER use `curl` for OAuth token validation.** Domains containing `--` (e.g., `my-org--devint.sandbox.my.salesforce.com`) cause shell expansion failures with curl's `--` argument parsing. Use `credential_manager.py validate` instead.
+
+### A1: ECA Credential Setup
+
+```
+AskUserQuestion:
+  question: "Do you have an External Client App (ECA) with Client Credentials flow configured?"
+  header: "ECA Setup"
+  options:
+    - label: "Yes, I have credentials"
+      description: "I have Consumer Key, Secret, and My Domain URL ready"
+    - label: "No, I need to create one"
+      description: "Delegate to sf-connected-apps skill to create ECA"
+```
+
+**If YES:** Collect credentials (kept in conversation context only, NEVER written to files):
+- Consumer Key
+- Consumer Secret
+- My Domain URL (e.g., `your-domain.my.salesforce.com`)
+
+**If NO:** Delegate to sf-connected-apps:
+```
+Skill(skill="sf-connected-apps", args="Create External Client App with Client Credentials flow for Agent Runtime API testing. Scopes: api, chatbot_api, sfap_api, refresh_token, offline_access. Name: Agent_API_Testing")
+```
+
+**Verify credentials work:**
+```bash
+# Validate OAuth credentials via credential_manager.py (handles token request internally)
+python3 $SKILL_DIR/hooks/scripts/credential_manager.py \
+  validate --org-alias {org} --eca-name {eca}
+```
+
+See [ECA Setup Guide](docs/eca-setup-guide.md) for complete instructions.
+
+### A2: Agent Discovery & Metadata Retrieval
+
+```bash
+# Get agent ID for API calls
+AGENT_ID=$(sf data query --use-tooling-api \
+  --query "SELECT Id, DeveloperName, MasterLabel FROM BotDefinition WHERE DeveloperName='[AgentName]' AND IsActive=true LIMIT 1" \
+  --result-format json --target-org [alias] | jq -r '.result.records[0].Id')
+
+# Retrieve full agent configuration
+sf project retrieve start \
+  --metadata "GenAiPlannerBundle:[AgentName]" \
+  --output-dir retrieve-temp --target-org [alias]
+```
+
+Claude reads the GenAiPlannerBundle to understand:
+- **Topics**: Names, classificationDescriptions, instructions
+- **Actions**: Types (flow, apex), triggers, inputs/outputs
+- **System Instructions**: Global rules and guardrails
+- **Escalation Paths**: When and how the agent escalates
+
+This metadata drives automatic test scenario generation in A3.
+
+### A3: Test Scenario Planning
+
+```
+AskUserQuestion:
+  question: "What testing do you need?"
+  header: "Scenarios"
+  options:
+    - label: "Comprehensive coverage (Recommended)"
+      description: "All 6 test patterns: topic routing, context preservation, escalation, guardrails, action chaining, variable injection"
+    - label: "Topic routing accuracy"
+      description: "Test that utterances route to correct topics, including mid-conversation topic switches"
+    - label: "Context preservation"
+      description: "Test that the agent retains information across turns"
+    - label: "Specific bug reproduction"
+      description: "Reproduce a known issue with targeted multi-turn scenario"
+  multiSelect: true
+```
+
+Claude uses the agent metadata from A2 to **auto-generate multi-turn scenarios** tailored to the specific agent:
+- Generates topic switching scenarios based on actual topic names
+- Creates context preservation tests using actual action inputs/outputs
+- Builds escalation tests based on actual escalation configuration
+- Creates guardrail tests based on system instructions
+
+**Available templates** (see [templates/](#multi-turn-test-templates)):
+
+| Template | Pattern | Scenarios |
+|----------|---------|-----------|
+| `multi-turn-topic-routing.yaml` | Topic switching | 4 |
+| `multi-turn-context-preservation.yaml` | Context retention | 4 |
+| `multi-turn-escalation-flows.yaml` | Escalation cascades | 4 |
+| `multi-turn-comprehensive.yaml` | All 6 patterns | 6 |
+
+### A4: Multi-Turn Execution
+
+Execute conversations via Agent Runtime API using the **reusable Python scripts** in `hooks/scripts/`.
+
+> ⚠️ **Agent API is NOT supported for agents of type "Agentforce (Default)".** Only custom agents created via Agentforce Builder are supported.
+
+**Option 1: Run Test Scenarios from YAML Templates (Recommended)**
+
+Use the multi-turn test runner to execute entire scenario suites:
+
+```bash
+# Run comprehensive test suite against an agent
+python3 $SKILL_DIR/hooks/scripts/multi_turn_test_runner.py \
+  --my-domain "${SF_MY_DOMAIN}" \
+  --consumer-key "${CONSUMER_KEY}" \
+  --consumer-secret "${CONSUMER_SECRET}" \
+  --agent-id "${AGENT_ID}" \
+  --scenarios templates/multi-turn-comprehensive.yaml \
+  --verbose
+
+# Run specific scenario within a suite
+python3 $SKILL_DIR/hooks/scripts/multi_turn_test_runner.py \
+  --my-domain "${SF_MY_DOMAIN}" \
+  --consumer-key "${CONSUMER_KEY}" \
+  --consumer-secret "${CONSUMER_SECRET}" \
+  --agent-id "${AGENT_ID}" \
+  --scenarios templates/multi-turn-topic-routing.yaml \
+  --scenario-filter topic_switch_natural \
+  --verbose
+
+# With context variables and JSON output for fix loop
+python3 $SKILL_DIR/hooks/scripts/multi_turn_test_runner.py \
+  --my-domain "${SF_MY_DOMAIN}" \
+  --consumer-key "${CONSUMER_KEY}" \
+  --consumer-secret "${CONSUMER_SECRET}" \
+  --agent-id "${AGENT_ID}" \
+  --scenarios templates/multi-turn-comprehensive.yaml \
+  --var '$Context.AccountId=001XXXXXXXXXXXX' \
+  --var '$Context.EndUserLanguage=en_US' \
+  --output results.json \
+  --verbose
+```
+
+**Exit codes:** `0` = all passed, `1` = some failed (fix loop should process), `2` = execution error
+
+**Option 2: Use Environment Variables (cleaner for repeated runs)**
+
+```bash
+export SF_MY_DOMAIN="your-domain.my.salesforce.com"
+export SF_CONSUMER_KEY="your_key"
+export SF_CONSUMER_SECRET="your_secret"
+export SF_AGENT_ID="0XxRM0000004ABC"
+
+# Now run without credential flags
+python3 $SKILL_DIR/hooks/scripts/multi_turn_test_runner.py \
+  --scenarios templates/multi-turn-comprehensive.yaml \
+  --verbose
+```
+
+**Option 3: Python API for Ad-Hoc Testing**
+
+For custom scenarios or debugging, use the client directly:
+
+```python
+from hooks.scripts.agent_api_client import AgentAPIClient
+
+client = AgentAPIClient(
+    my_domain="your-domain.my.salesforce.com",
+    consumer_key="...",
+    consumer_secret="..."
+)
+
+# Context manager auto-ends session
+with client.session(agent_id="0XxRM000...") as session:
+    r1 = session.send("I need to cancel my appointment")
+    print(f"Turn 1: {r1.agent_text}")
+
+    r2 = session.send("Actually, reschedule instead")
+    print(f"Turn 2: {r2.agent_text}")
+
+    r3 = session.send("What was my original request?")
+    print(f"Turn 3: {r3.agent_text}")
+    # Check context preservation
+    if "cancel" in r3.agent_text.lower():
+        print("✅ Context preserved")
+
+# With initial variables
+variables = [
+    {"name": "$Context.AccountId", "type": "Id", "value": "001XXXXXXXXXXXX"},
+    {"name": "$Context.EndUserLanguage", "type": "Text", "value": "en_US"},
+]
+with client.session(agent_id="0Xx...", variables=variables) as session:
+    r1 = session.send("What orders do I have?")
+```
+
+**Connectivity Test:**
+```bash
+# Verify ECA credentials and API connectivity
+python3 $SKILL_DIR/hooks/scripts/agent_api_client.py
+# Reads SF_MY_DOMAIN, SF_CONSUMER_KEY, SF_CONSUMER_SECRET from env
+```
+
+**Per-Turn Analysis Checklist:**
+
+The test runner automatically evaluates each turn against expectations defined in the YAML template:
+
+| # | Check | YAML Key | How Evaluated |
+|---|-------|----------|---------------|
+| 1 | Response non-empty? | `response_not_empty: true` | `messages[0].message` has content |
+| 2 | Correct topic matched? | `topic_contains: "cancel"` | Heuristic: inferred from response text |
+| 3 | Expected actions invoked? | `action_invoked: true` | Checks for `result` array entries |
+| 4 | Response content? | `response_contains: "reschedule"` | Substring match on response |
+| 5 | Context preserved? | `context_retained: true` | Heuristic: checks for prior-turn references |
+| 6 | Guardrail respected? | `guardrail_triggered: true` | Regex patterns for refusal language |
+| 7 | Escalation triggered? | `escalation_triggered: true` | Checks for `Escalation` message type |
+| 8 | Response excludes? | `response_not_contains: "error"` | Substring exclusion check |
+
+See [Agent API Reference](docs/agent-api-reference.md) for complete response format.
+
+### A5: Results & Scoring
+
+Claude generates a terminal-friendly results report:
+
+```
+📊 MULTI-TURN TEST RESULTS
+════════════════════════════════════════════════════════════════
+
+Agent: Customer_Support_Agent
+Org: vivint-DevInt
+Mode: Agent Runtime API (multi-turn)
+
+SCENARIO RESULTS
+───────────────────────────────────────────────────────────────
+✅ topic_switch_natural        3/3 turns passed
+✅ context_user_identity       3/3 turns passed
+❌ escalation_frustration      2/3 turns passed (Turn 3: no escalation)
+✅ guardrail_mid_conversation  3/3 turns passed
+✅ action_chain_identify       3/3 turns passed
+⚠️ variable_injection          2/3 turns passed (Turn 3: re-asked for account)
+
+SUMMARY
+───────────────────────────────────────────────────────────────
+Scenarios: 6 total | 4 passed | 1 failed | 1 partial
+Turns: 18 total | 16 passed | 2 failed
+Topic Re-matching: 100% ✅
+Context Preservation: 83% ⚠️
+Escalation Accuracy: 67% ❌
+
+FAILED TURNS
+───────────────────────────────────────────────────────────────
+❌ escalation_frustration → Turn 3
+   Input: "Nothing is working! I need a human NOW"
+   Expected: Escalation triggered
+   Actual: Agent continued troubleshooting
+   Category: MULTI_TURN_ESCALATION_FAILURE
+   Fix: Add frustration keywords to escalation triggers
+
+⚠️ variable_injection → Turn 3
+   Input: "Create a new case for a billing issue"
+   Expected: Uses pre-set $Context.AccountId
+   Actual: "Which account is this for?"
+   Category: CONTEXT_PRESERVATION_FAILURE
+   Fix: Wire $Context.AccountId to CreateCase action input
+
+SCORING
+───────────────────────────────────────────────────────────────
+Topic Selection Coverage          13/15
+Action Invocation                 14/15
+Multi-Turn Topic Re-matching      15/15  ✅
+Context Preservation              10/15  ⚠️
+Edge Case & Guardrail Coverage    12/15
+Test Spec / Scenario Quality       9/10
+Agentic Fix Success               --/15  (pending)
+
+TOTAL: 73/85 (86%) + Fix Loop pending
+```
+
+---
+
+## Phase B: CLI Testing Center (SECONDARY)
+
+> **Availability:** Requires Agent Testing Center feature enabled in org.
+> If unavailable, use Phase A exclusively.
+
+### B1: Test Spec Creation
+
+**Option A: Interactive Generation** (no automation)
+```bash
+# Interactive test spec generation
+sf agent generate test-spec --output-file ./tests/agent-spec.yaml
+# ⚠️ NOTE: No --api-name flag! Interactive-only.
+```
+
+**Option B: Automated Generation** (Python script)
+```bash
+python3 $SKILL_DIR/hooks/scripts/generate-test-spec.py \
+  --agent-file /path/to/Agent.agent \
+  --output tests/agent-spec.yaml \
+  --verbose
+```
+
+**Create Test in Org:**
+```bash
+sf agent test create --spec ./tests/agent-spec.yaml --api-name MyAgentTest --target-org [alias]
+```
+
+See [Test Spec Reference](resources/test-spec-reference.md) for complete YAML format guide.
+
+### B2: Test Execution
+
+```bash
+# Run automated tests
+sf agent test run --api-name MyAgentTest --wait 10 --result-format json --target-org [alias]
+```
+
+**Interactive Preview (Simulated):**
+```bash
+sf agent preview --api-name AgentName --output-dir ./logs --target-org [alias]
+```
+
+**Interactive Preview (Live):**
+```bash
+sf agent preview --api-name AgentName --use-live-actions --apex-debug --target-org [alias]
+```
+
+### B3: Results Analysis
+
+Parse test results JSON and display formatted summary:
+
+```
+📊 AGENT TEST RESULTS (CLI)
+════════════════════════════════════════════════════════════════
+
+Agent: Customer_Support_Agent
+Org: vivint-DevInt
+Duration: 45.2s
+Mode: Simulated
+
+SUMMARY
+───────────────────────────────────────────────────────────────
+✅ Passed:    18
+❌ Failed:    2
+⏭️ Skipped:   0
+📈 Topic Selection: 95%
+🎯 Action Invocation: 90%
+
+FAILED TESTS
+───────────────────────────────────────────────────────────────
+❌ test_complex_order_inquiry
+   Utterance: "What's the status of orders 12345 and 67890?"
+   Expected: get_order_status invoked 2 times
+   Actual: get_order_status invoked 1 time
+   Category: ACTION_INVOCATION_COUNT_MISMATCH
+
+COVERAGE SUMMARY
+───────────────────────────────────────────────────────────────
+Topics Tested:       4/5 (80%) ⚠️
+Actions Tested:      6/8 (75%) ⚠️
+Guardrails Tested:   3/3 (100%) ✅
+```
+
+---
+
+## Phase C: Agentic Fix Loop
+
+When tests fail (either Phase A or Phase B), automatically fix via sf-ai-agentscript:
+
+### Failure Categories (10 total)
+
+| Category | Source | Auto-Fix | Strategy |
+|----------|--------|----------|----------|
+| `TOPIC_NOT_MATCHED` | A+B | ✅ | Add keywords to topic description |
+| `ACTION_NOT_INVOKED` | A+B | ✅ | Improve action description |
+| `WRONG_ACTION_SELECTED` | A+B | ✅ | Differentiate descriptions |
+| `ACTION_INVOCATION_FAILED` | A+B | ⚠️ | Delegate to sf-flow or sf-apex |
+| `GUARDRAIL_NOT_TRIGGERED` | A+B | ✅ | Add explicit guardrails |
+| `ESCALATION_NOT_TRIGGERED` | A+B | ✅ | Add escalation action/triggers |
+| `TOPIC_RE_MATCHING_FAILURE` | A | ✅ | Add transition phrases to target topic |
+| `CONTEXT_PRESERVATION_FAILURE` | A | ✅ | Add context retention instructions |
+| `MULTI_TURN_ESCALATION_FAILURE` | A | ✅ | Add frustration detection triggers |
+| `ACTION_CHAIN_FAILURE` | A | ✅ | Fix action output variable mappings |
+
+### Auto-Fix Command Example
+```bash
+Skill(skill="sf-ai-agentscript", args="Fix agent [AgentName] - Error: [category] - [details]")
+```
+
+### Fix Loop Flow
+```
+Test Failed → Analyze failure category
+    │
+    ├─ Single-turn failure → Standard fix (topics, actions, guardrails)
+    │
+    └─ Multi-turn failure → Enhanced fix (context, re-matching, escalation, chaining)
+    │
+    ▼
+Apply fix via sf-ai-agentscript → Re-publish → Re-test
+    │
+    ├─ Pass → ✅ Move to next failure
+    └─ Fail → Retry (max 3 attempts) → Escalate to human
+```
+
+See [Agentic Fix Loops Guide](resources/agentic-fix-loops.md) for complete decision tree and 10 fix strategies.
+
+### Two Fix Strategies
+
+| Agent Type | Fix Strategy | When to Use |
+|------------|--------------|-------------|
+| **Custom Agent** (you control it) | Fix the agent via `sf-ai-agentscript` | Topic descriptions, action configs need adjustment |
+| **Managed/Standard Agent** | Fix test expectations | Test expectations don't match actual behavior |
+
+---
+
+## Phase D: Coverage Improvement
+
+If coverage < threshold:
+
+1. Identify untested topics/actions/patterns from results
+2. Add test cases (YAML for CLI, scenarios for API)
+3. Re-run tests
+4. Repeat until threshold met
+
+### Coverage Dimensions
+
+| Dimension | Phase A | Phase B | Target |
+|-----------|---------|---------|--------|
+| Topic Selection | ✅ | ✅ | 100% |
+| Action Invocation | ✅ | ✅ | 100% |
+| Topic Re-matching | ✅ | ❌ | 90%+ |
+| Context Preservation | ✅ | ❌ | 95%+ |
+| Conversation Completion | ✅ | ❌ | 85%+ |
+| Guardrails | ✅ | ✅ | 100% |
+| Escalation | ✅ | ✅ | 100% |
+| Phrasing Diversity | ✅ | ✅ | 3+ per topic |
+
+See [Coverage Analysis](docs/coverage-analysis.md) for complete metrics and improvement guide.
+
+---
+
+## Phase E: Observability Integration
+
+After test execution, guide user to analyze agent behavior with session-level observability:
+
+```
+Skill(skill="sf-ai-agentforce-observability", args="Analyze STDM sessions for agent [AgentName] in org [alias] - focus on test session behavior patterns")
+```
+
+**What observability adds to testing:**
+- **STDM Session Analysis**: Examine actual session traces from test conversations
+- **Latency Profiling**: Identify slow actions or topic routing delays
+- **Error Pattern Detection**: Find recurring failures across sessions
+- **Action Execution Traces**: Detailed view of Flow/Apex execution during tests
+
+---
+
+## Scoring System (100 Points)
+
+| Category | Points | Key Rules |
+|----------|--------|-----------|
+| **Topic Selection Coverage** | 15 | All topics have test cases; various phrasings tested |
+| **Action Invocation** | 15 | All actions tested with valid inputs/outputs |
+| **Multi-Turn Topic Re-matching** | 15 | Topic switching accuracy across turns |
+| **Context Preservation** | 15 | Information retention across turns |
+| **Edge Case & Guardrail Coverage** | 15 | Negative tests; guardrails; escalation |
+| **Test Spec / Scenario Quality** | 10 | Proper YAML; descriptions; clear expectations |
+| **Agentic Fix Success** | 15 | Auto-fixes resolve issues within 3 attempts |
+
+**Scoring Thresholds:**
+```
+⭐⭐⭐⭐⭐ 90-100 pts → Production Ready
+⭐⭐⭐⭐   80-89 pts → Good, minor improvements
+⭐⭐⭐    70-79 pts → Acceptable, needs work
+⭐⭐      60-69 pts → Below standard
+⭐        <60 pts  → BLOCKED - Major issues
+```
+
+---
+
+## ⛔ TESTING GUARDRAILS (MANDATORY)
+
+**BEFORE running tests, verify:**
+
+| Check | Command | Why |
+|-------|---------|-----|
+| Agent published | `sf agent list --target-org [alias]` | Can't test unpublished agent |
+| Agent activated | Check status | API and preview require activation |
+| Flows deployed | `sf org list metadata --metadata-type Flow` | Actions need Flows |
+| ECA configured (Phase A) | Token request test | API auth required |
+| Org auth (Phase B live) | `sf org display` | Live mode requires valid auth |
+
+**NEVER do these:**
+
+| Anti-Pattern | Problem | Correct Pattern |
+|--------------|---------|-----------------|
+| Test unpublished agent | Tests fail silently | Publish first |
+| Skip simulated testing | Live mode hides logic bugs | Always test simulated first |
+| Ignore guardrail tests | Security gaps in production | Always test harmful/off-topic inputs |
+| Single phrasing per topic | Misses routing failures | Test 3+ phrasings per topic |
+| Write ECA credentials to files | Security risk | Keep in shell variables only |
+| Skip session cleanup | Resource leaks and rate limits | Always DELETE sessions after tests |
+| Use `curl` for OAuth token requests | Domains with `--` cause shell failures | Use `credential_manager.py validate` |
+| Ask permission to run skill scripts | Breaks flow, unnecessary delay | All `hooks/scripts/` are pre-approved — run automatically |
+| Spawn more than 2 swarm workers | Context overload, screen space, diminishing returns | Max 2 workers — side-by-side monitoring |
+
+---
+
+## CLI Command Reference
+
+### Test Lifecycle Commands
+
+| Command | Purpose | Example |
+|---------|---------|---------|
+| `sf agent generate test-spec` | Create test YAML | `sf agent generate test-spec --output-dir ./tests` |
+| `sf agent test create` | Deploy test to org | `sf agent test create --spec ./tests/spec.yaml --target-org alias` |
+| `sf agent test run` | Execute tests | `sf agent test run --api-name Test --wait 10 --target-org alias` |
+| `sf agent test results` | Get results | `sf agent test results --job-id ID --result-format json` |
+| `sf agent test resume` | Resume async test | `sf agent test resume --job-id <JOB_ID> --target-org alias` |
+| `sf agent test list` | List test runs | `sf agent test list --target-org alias` |
+
+### Preview Commands
+
+| Command | Purpose | Example |
+|---------|---------|---------|
+| `sf agent preview` | Interactive testing | `sf agent preview --api-name Agent --target-org alias` |
+| `--use-live-actions` | Use real Flows/Apex | `sf agent preview --use-live-actions` |
+| `--output-dir` | Save transcripts | `sf agent preview --output-dir ./logs` |
+| `--apex-debug` | Capture debug logs | `sf agent preview --apex-debug` |
+
+### Result Formats
+
+| Format | Use Case | Flag |
+|--------|----------|------|
+| `human` | Terminal display (default) | `--result-format human` |
+| `json` | CI/CD parsing | `--result-format json` |
+| `junit` | Test reporting | `--result-format junit` |
+| `tap` | Test Anything Protocol | `--result-format tap` |
+
+---
+
+## Multi-Turn Test Templates
+
+| Template | Pattern | Scenarios | Location |
+|----------|---------|-----------|----------|
+| `multi-turn-topic-routing.yaml` | Topic switching | 4 | `templates/` |
+| `multi-turn-context-preservation.yaml` | Context retention | 4 | `templates/` |
+| `multi-turn-escalation-flows.yaml` | Escalation cascades | 4 | `templates/` |
+| `multi-turn-comprehensive.yaml` | All 6 patterns | 6 | `templates/` |
+
+### CLI Test Templates
+
+| Template | Purpose | Location |
+|----------|---------|----------|
+| `basic-test-spec.yaml` | Quick start (3-5 tests) | `templates/` |
+| `comprehensive-test-spec.yaml` | Full coverage (20+ tests) | `templates/` |
+| `guardrail-tests.yaml` | Security/safety scenarios | `templates/` |
+| `escalation-tests.yaml` | Human handoff scenarios | `templates/` |
+| `standard-test-spec.yaml` | Reference format | `templates/` |
+
+---
+
+## Cross-Skill Integration
+
+**Required Delegations:**
+
+| Scenario | Skill to Call | Command |
+|----------|---------------|---------|
+| Fix agent script | sf-ai-agentscript | `Skill(skill="sf-ai-agentscript", args="Fix...")` |
+| Create test data | sf-data | `Skill(skill="sf-data", args="Create...")` |
+| Fix failing Flow | sf-flow | `Skill(skill="sf-flow", args="Fix...")` |
+| Setup ECA or OAuth | sf-connected-apps | `Skill(skill="sf-connected-apps", args="Create...")` |
+| Analyze debug logs | sf-debug | `Skill(skill="sf-debug", args="Analyze...")` |
+| Session observability | sf-ai-agentforce-observability | `Skill(skill="sf-ai-agentforce-observability", args="Analyze...")` |
+
+---
+
+## Automated Testing (Python Scripts)
+
+| Script | Purpose | Dependencies |
+|--------|---------|-------------|
+| `agent_api_client.py` | Reusable Agent Runtime API v1 client (auth, sessions, messaging, variables) | stdlib only |
+| `multi_turn_test_runner.py` | Multi-turn test orchestrator (reads YAML, executes, evaluates, Rich colored reports) | pyyaml, rich + agent_api_client |
+| `rich_test_report.py` | Aggregate N worker result JSONs into one unified Rich terminal report | rich |
+| `generate-test-spec.py` | Parse .agent files, generate CLI test YAML specs | stdlib only |
+| `run-automated-tests.py` | Orchestrate full CLI test workflow with fix suggestions | stdlib only |
+
+**CLI Flags (multi_turn_test_runner.py):**
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--report-file PATH` | none | Write Rich terminal report to file (ANSI codes included) — viewable with `cat` or `bat` |
+| `--no-rich` | off | Disable Rich colored output; use plain-text format |
+| `--width N` | auto | Override terminal width (auto-detects from $COLUMNS; fallback 80) |
+| `--rich-output` | _(deprecated)_ | No-op — Rich is now default when installed |
+
+**Multi-Turn Testing (Agent Runtime API):**
+```bash
+# Install test runner dependency
+pip3 install pyyaml
+
+# Run multi-turn test suite against an agent
+python3 $SKILL_DIR/hooks/scripts/multi_turn_test_runner.py \
+  --my-domain your-domain.my.salesforce.com \
+  --consumer-key YOUR_KEY \
+  --consumer-secret YOUR_SECRET \
+  --agent-id 0XxRM0000004ABC \
+  --scenarios templates/multi-turn-comprehensive.yaml \
+  --output results.json --verbose
+
+# Or set env vars and omit credential flags
+export SF_MY_DOMAIN=your-domain.my.salesforce.com
+export SF_CONSUMER_KEY=YOUR_KEY
+export SF_CONSUMER_SECRET=YOUR_SECRET
+python3 $SKILL_DIR/hooks/scripts/multi_turn_test_runner.py \
+  --agent-id 0XxRM0000004ABC \
+  --scenarios templates/multi-turn-topic-routing.yaml \
+  --var '$Context.AccountId=001XXXXXXXXXXXX' \
+  --verbose
+
+# Connectivity test (verify ECA credentials work)
+python3 $SKILL_DIR/hooks/scripts/agent_api_client.py
+```
+
+**CLI Testing (Agent Testing Center):**
+```bash
+# Generate test spec from agent file
+python3 $SKILL_DIR/hooks/scripts/generate-test-spec.py \
+  --agent-file /path/to/Agent.agent \
+  --output specs/Agent-tests.yaml
+
+# Run full automated workflow
+python3 $SKILL_DIR/hooks/scripts/run-automated-tests.py \
+  --agent-name MyAgent \
+  --agent-dir /path/to/project \
+  --target-org dev
+```
+
+---
+
+## 🔄 Automated Test-Fix Loop
+
+> **v2.0.0** | Supports both multi-turn API failures and CLI test failures
+
+### Quick Start
+
+```bash
+# Run the test-fix loop (CLI tests)
+$SKILL_DIR/hooks/scripts/test-fix-loop.sh Test_Agentforce_v1 AgentforceTesting 3
+
+# Exit codes:
+#   0 = All tests passed
+#   1 = Fixes needed (Claude Code should invoke sf-ai-agentforce)
+#   2 = Max attempts reached, escalate to human
+#   3 = Error (org unreachable, test not found, etc.)
+```
+
+### Claude Code Integration
+
+```
+USER: Run automated test-fix loop for Coral_Cloud_Agent
+
+CLAUDE CODE:
+1. Phase A: Run multi-turn scenarios via Python test runner
+   python3 $SKILL_DIR/hooks/scripts/multi_turn_test_runner.py \
+     --agent-id ${AGENT_ID} \
+     --scenarios templates/multi-turn-comprehensive.yaml \
+     --output results.json --verbose
+2. Analyze failures from results.json (10 categories)
+3. If fixable: Skill(skill="sf-ai-agentscript", args="Fix...")
+4. Re-run failed scenarios with --scenario-filter
+5. Phase B (if available): Run CLI tests
+6. Repeat until passing or max retries (3)
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CURRENT_ATTEMPT` | Current attempt number | 1 |
+| `MAX_WAIT_MINUTES` | Timeout for test execution | 10 |
+| `SKIP_TESTS` | Comma-separated test names to skip | (none) |
+| `VERBOSE` | Enable detailed output | false |
+
+---
+
+## 💡 Key Insights
+
+| Problem | Symptom | Solution |
+|---------|---------|----------|
+| **`sf agent test create` fails** | "Required fields are missing: [MasterLabel]" | Use `sf agent generate test-spec` (interactive) or UI instead |
+| Tests fail silently | No results returned | Agent not published - run `sf agent publish authoring-bundle` |
+| Topic not matched | Wrong topic selected | Add keywords to topic description |
+| Action not invoked | Action never called | Improve action description |
+| Live preview 401 | Authentication error | Re-authenticate: `sf org login web` |
+| API 401 | Token expired or wrong credentials | Re-authenticate ECA |
+| API 404 on session create | Wrong Agent ID | Re-query BotDefinition for correct Id |
+| Empty API response | Agent not activated | Activate and publish agent |
+| Context lost between turns | Agent re-asks for known info | Add context retention instructions to topic |
+| Topic doesn't switch | Agent stays on old topic | Add transition phrases to target topic |
+| **⚠️ `--use-most-recent` broken** | **"Nonexistent flag" error** | **Use `--job-id` explicitly** |
+| **Topic name mismatch** | **Expected `GeneralCRM`, got `MigrationDefaultTopic`** | **Verify actual topic names from first test run** |
+| **Action superset matching** | **Expected `[A]`, actual `[A,B]` but PASS** | **CLI uses SUPERSET logic** |
+
+---
+
+## Quick Start Example
+
+### Multi-Turn API Testing (Recommended)
+
+**Quick Start with Python Scripts:**
+```bash
+# 1. Get agent ID
+AGENT_ID=$(sf data query --use-tooling-api \
+  --query "SELECT Id FROM BotDefinition WHERE DeveloperName='My_Agent' AND IsActive=true LIMIT 1" \
+  --result-format json --target-org dev | jq -r '.result.records[0].Id')
+
+# 2. Run multi-turn tests (credentials from env or flags)
+python3 $SKILL_DIR/hooks/scripts/multi_turn_test_runner.py \
+  --my-domain "${SF_MY_DOMAIN}" \
+  --consumer-key "${CONSUMER_KEY}" \
+  --consumer-secret "${CONSUMER_SECRET}" \
+  --agent-id "${AGENT_ID}" \
+  --scenarios templates/multi-turn-comprehensive.yaml \
+  --output results.json --verbose
+```
+
+**Ad-Hoc Python Usage:**
+```python
+from hooks.scripts.agent_api_client import AgentAPIClient
+
+client = AgentAPIClient()  # reads SF_MY_DOMAIN, SF_CONSUMER_KEY, SF_CONSUMER_SECRET from env
+with client.session(agent_id="0XxRM000...") as session:
+    r1 = session.send("I need to cancel my appointment")
+    r2 = session.send("Actually, reschedule it instead")
+    r3 = session.send("What was my original request about?")
+    # Session auto-ends when exiting context manager
+```
+
+### CLI Testing (If Agent Testing Center Available)
+```bash
+# 1. Generate test spec
+python3 $SKILL_DIR/hooks/scripts/generate-test-spec.py \
+  --agent-file ./agents/MyAgent.agent \
+  --output ./tests/myagent-tests.yaml
+
+# 2. Create test in org
+sf agent test create --spec ./tests/myagent-tests.yaml --api-name MyAgentTest --target-org dev
+
+# 3. Run tests
+sf agent test run --api-name MyAgentTest --wait 10 --result-format json --target-org dev
+
+# 4. View results (use --job-id, NOT --use-most-recent)
+sf agent test results --job-id [JOB_ID] --verbose --result-format json --target-org dev
+```
+
+---
+
+## 🐛 Known Issues & CLI Bugs
+
+> **Last Updated**: 2026-02-02 | **Tested With**: sf CLI v2.118.16+
+
+### CRITICAL: `sf agent test create` MasterLabel Bug
+
+**Status**: 🔴 BLOCKING - Prevents YAML-based test creation
+
+**Error**: `Required fields are missing: [MasterLabel]`
+
+**Root Cause**: CLI generates XML from YAML but omits the required `<name>` element.
+
+**Workarounds**:
+1. ✅ Use interactive `sf agent generate test-spec` wizard (interactive-only, no CLI flags)
+2. ✅ Create tests via Salesforce Testing Center UI
+3. ✅ Deploy XML metadata directly
+4. ✅ **Use Phase A (Agent Runtime API) instead** — bypasses CLI entirely
+
+### MEDIUM: Interactive Mode Not Scriptable
+
+**Status**: 🟡 Blocks CI/CD automation
+
+**Issue**: `sf agent generate test-spec` only works interactively.
+
+**Workaround**: Use Python scripts in `hooks/scripts/` or Phase A multi-turn templates.
+
+### MEDIUM: YAML vs XML Format Discrepancy
+
+**Key Mappings**:
+| YAML Field | XML Element |
+|------------|-------------|
+| `expectedTopic` | `topic_sequence_match` |
+| `expectedActions` | `action_sequence_match` |
+| `expectedOutcome` | `bot_response_rating` |
+
+### LOW: BotDefinition Not Always in Tooling API
+
+**Status**: 🟡 Handled automatically
+
+**Issue**: In some org configurations, `BotDefinition` is not queryable via the Tooling API but works via the regular Data API (`sf data query` without `--use-tooling-api`).
+
+**Fix**: `agent_discovery.py live` now has automatic fallback — if the Tooling API returns no results for BotDefinition, it retries with the regular API.
+
+### LOW: `--use-most-recent` Not Implemented
+
+**Status**: Flag documented but NOT functional. Always use `--job-id` explicitly.
+
+---
+
+## License
+
+MIT License. See LICENSE file.
+Copyright (c) 2024-2026 Jag Valaiyapathy

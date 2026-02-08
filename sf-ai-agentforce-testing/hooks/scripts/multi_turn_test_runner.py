@@ -1137,189 +1137,6 @@ def execute_scenario(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Rich Output Formatting (Legacy — Unicode box-drawing fallback)
-# ═══════════════════════════════════════════════════════════════════════════
-
-BOX_W = 66  # Inner width of Unicode box-drawing boxes
-
-
-def format_session_banner(
-    agent_id: str, scenario_file: str, worker_id: int = None, partition_label: str = None
-) -> str:
-    """Render a Unicode top-banner for the test session (legacy fallback)."""
-    lines = []
-    lines.append("╔" + "═" * BOX_W + "╗")
-    lines.append("║  🧪 AGENTFORCE MULTI-TURN TEST SESSION" + " " * (BOX_W - 40) + "║")
-    agent_line = f"  Agent: {agent_id} │ File: {scenario_file}"
-    lines.append("║" + agent_line[:BOX_W].ljust(BOX_W) + "║")
-    if worker_id is not None:
-        label = f" ({partition_label})" if partition_label else ""
-        worker_line = f"  Worker: W{worker_id}{label}"
-        lines.append("║" + worker_line[:BOX_W].ljust(BOX_W) + "║")
-    lines.append("╠" + "═" * BOX_W + "╣")
-    return "\n".join(lines)
-
-
-def format_scenario_header(name: str, idx: int, total: int, priority: str = None) -> str:
-    """Render a scenario separator line with embedded metadata (legacy fallback)."""
-    pri = f" ({priority} priority)" if priority else ""
-    label = f" Scenario {idx}/{total}: {name}{pri} "
-    pad = max(BOX_W - len(label) - 4, 2)
-    return f"\n  ──{label}" + "─" * pad
-
-
-def format_turn_legacy(turn_data: Dict[str, Any], turn_idx: int, total_turns: int) -> str:
-    """Render a single turn with box-drawing borders and check icons (legacy fallback)."""
-    lines = []
-    header = f"─ Turn {turn_idx}/{total_turns} "
-    top = "  ┌" + header + "─" * max(BOX_W - len(header) - 2, 2) + "┐"
-    lines.append(top)
-
-    user_msg = turn_data.get("user_message", "")
-    agent_text = turn_data.get("agent_text", "")
-    agent_display = agent_text[:70] + "..." if len(agent_text) > 70 else agent_text
-    # Replace newlines in display strings to keep box intact
-    user_msg_display = user_msg.replace("\n", " ")
-    agent_display = agent_display.replace("\n", " ")
-
-    lines.append(f'  │ 👤 User:  "{user_msg_display[:70]}"')
-    lines.append(f'  │ 🤖 Agent: "{agent_display}"')
-
-    # Timing / topic / action info line
-    elapsed_s = turn_data.get("elapsed_ms", 0) / 1000
-    info_parts = [f"⏱  {elapsed_s:.1f}s"]
-
-    checks = turn_data.get("evaluation", {}).get("checks", [])
-    # Infer topic from topic_contains check
-    for c in checks:
-        if c["name"] == "topic_contains":
-            info_parts.append(f"📋 Topic: {c.get('expected', '?')}")
-            break
-    # Infer action from action_invoked check
-    for c in checks:
-        if c["name"] == "action_invoked" and c.get("expected"):
-            info_parts.append(f"🔧 Action: {c['expected']}")
-            break
-
-    lines.append("  │ " + " │ ".join(info_parts))
-
-    # Individual check results
-    pass_count = 0
-    total_checks = len(checks)
-    for c in checks:
-        if c["passed"]:
-            pass_count += 1
-            lines.append(f"  │ ✅ {c['name']} ✓")
-        else:
-            detail = c.get("detail", "")
-            detail_short = f" — {detail}" if detail else ""
-            lines.append(f"  │ ❌ {c['name']} ✗{detail_short}")
-
-    # Bottom border with pass count right-aligned
-    suffix = f" {pass_count}/{total_checks} ✅ ──┘"
-    bottom_fill = max(BOX_W - len(suffix) + 2, 2)
-    lines.append("  └" + "─" * bottom_fill + suffix)
-
-    return "\n".join(lines)
-
-
-def format_scenario_result_legacy(scenario_result: Dict[str, Any]) -> str:
-    """One-liner pass/fail summary for a completed scenario (legacy fallback)."""
-    status = scenario_result.get("status", "error")
-    turns_pass = scenario_result.get("pass_count", 0)
-    turns_total = scenario_result.get("total_turns", 0)
-    elapsed_s = scenario_result.get("elapsed_ms", 0) / 1000
-
-    # Count total checks
-    checks_pass = 0
-    checks_total = 0
-    for t in scenario_result.get("turns", []):
-        ev = t.get("evaluation", {})
-        checks_total += ev.get("total_checks", 0)
-        checks_pass += ev.get("pass_count", 0)
-
-    if status == "passed":
-        return (f"  ✅ SCENARIO PASSED │ {turns_pass}/{turns_total} turns │ "
-                f"{checks_pass}/{checks_total} checks │ {elapsed_s:.1f}s total")
-    else:
-        icon = "❌" if status == "failed" else "💥"
-        return (f"  {icon} SCENARIO {status.upper()} │ {turns_pass}/{turns_total} turns │ "
-                f"{checks_pass}/{checks_total} checks │ {elapsed_s:.1f}s total")
-
-
-def format_summary_box(results: Dict[str, Any]) -> str:
-    """Render the final summary in a Unicode box (legacy fallback)."""
-    summary = results.get("summary", {})
-    scenarios_pass = summary.get("passed_scenarios", 0)
-    scenarios_total = summary.get("total_scenarios", 0)
-    turns_pass = summary.get("passed_turns", 0)
-    turns_total = summary.get("total_turns", 0)
-    elapsed_s = results.get("total_elapsed_ms", 0) / 1000
-
-    # Count total checks across all scenarios
-    checks_pass = 0
-    checks_total = 0
-    for s in results.get("scenarios", []):
-        for t in s.get("turns", []):
-            ev = t.get("evaluation", {})
-            checks_total += ev.get("total_checks", 0)
-            checks_pass += ev.get("pass_count", 0)
-
-    all_passed = summary.get("failed_scenarios", 0) == 0 and summary.get("error_scenarios", 0) == 0
-
-    lines = []
-    lines.append("")
-    lines.append("╔" + "═" * BOX_W + "╗")
-    lines.append("║  📊 SUMMARY" + " " * (BOX_W - 12) + "║")
-    lines.append("╠" + "──────────────┬───────────┬────────────┬" + "─" * (BOX_W - 40) + "╣")
-    row1 = f"║ Scenarios    │ {scenarios_pass}/{scenarios_total} ✅    │ Turns      │ {turns_pass}/{turns_total} ✅"
-    lines.append(row1 + " " * max(BOX_W - len(row1) + 1, 1) + "║")
-    row2 = f"║ Checks       │ {checks_pass}/{checks_total} ✅    │ Duration   │ {elapsed_s:.1f}s"
-    lines.append(row2 + " " * max(BOX_W - len(row2) + 1, 1) + "║")
-    lines.append("╠" + "──────────────┴───────────┴────────────┴" + "─" * (BOX_W - 40) + "╣")
-
-    if all_passed:
-        trophy = "║  🏆 ALL SCENARIOS PASSED"
-        lines.append(trophy + " " * (BOX_W - len(trophy) + 1) + "║")
-    else:
-        fail = "║  ❌ SOME SCENARIOS FAILED"
-        lines.append(fail + " " * (BOX_W - len(fail) + 1) + "║")
-
-    lines.append("╚" + "═" * BOX_W + "╝")
-    return "\n".join(lines)
-
-
-def format_results_rich_legacy(results: Dict[str, Any], worker_id: int = None, scenario_file: str = None) -> str:
-    """Orchestrate all legacy rich-format sections into a complete report (fallback when Rich not installed)."""
-    parts = []
-
-    # Session banner
-    agent_id = results.get("agent_id", "Unknown")
-    sf = scenario_file or results.get("scenario_file", "Unknown")
-    partition_label = None
-    if worker_id is not None:
-        scenarios_total = results.get("summary", {}).get("total_scenarios", 0)
-        partition_label = f"{scenarios_total} scenario(s)"
-    parts.append(format_session_banner(agent_id, sf, worker_id, partition_label))
-
-    # Scenario details
-    scenarios = results.get("scenarios", [])
-    for idx, scenario in enumerate(scenarios, 1):
-        priority = scenario.get("priority")
-        parts.append(format_scenario_header(scenario.get("name", "unnamed"), idx, len(scenarios), priority))
-
-        for t in scenario.get("turns", []):
-            parts.append(format_turn_legacy(t, t.get("turn_number", 0), scenario.get("total_turns", 0)))
-
-        parts.append(format_scenario_result_legacy(scenario))
-
-    # Summary
-    parts.append(format_summary_box(results))
-
-    return "\n".join(parts)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
 # Rich Output Formatting (Colored — requires `rich` library)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1600,161 +1417,6 @@ def format_results(results: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_results_codeblock(results: Dict[str, Any], width: int = 72) -> str:
-    """Format results as a plain-text code block optimised for Claude Code.
-
-    Claude Code renders markdown code blocks in a monospace terminal with
-    preserved spacing and native Unicode emoji colours — no ANSI escape
-    codes needed.  The output is a *single* fenced code block ready to be
-    pasted into a Claude Code response.
-
-    Args:
-        results: The full JSON results dict from a test run.
-        width: Maximum line width for word-wrapping agent text.
-
-    Returns:
-        A string containing the formatted code block.
-    """
-    W = max(width, 50)
-    THIN = "─"
-    THICK = "━"
-    DOUBLE = "═"
-
-    scenarios = results.get("scenarios", [])
-    summary = results.get("summary", {})
-    agent_id = results.get("agent_id", "Unknown")
-    total_ms = results.get("total_elapsed_ms", 0)
-    n = len(scenarios)
-
-    lines: List[str] = []
-    a = lines.append  # shorthand
-
-    # ── Header ──
-    a(THICK * W)
-    a(f"  🧪 Agentforce Multi-Turn Test Results")
-    a(f"  Agent: {agent_id}  │  {n} scenario{'s' if n != 1 else ''}  │  {total_ms / 1000:.0f}s total")
-    a(THICK * W)
-
-    # ── Per-scenario ──
-    for s in scenarios:
-        idx = s.get("_run_index", scenarios.index(s) + 1)
-        name = s.get("name", "unknown")
-        desc = s.get("description", "")
-        status = s.get("status", "unknown")
-        turns = s.get("turns", [])
-        total_turns = len(turns)
-        elapsed_s = (s.get("elapsed_ms", 0)) / 1000
-
-        # Scenario separator
-        label = f" Scenario {idx}/{n}: {name} "
-        pad = W - len(label)
-        left = pad // 2
-        right = pad - left
-        a("")
-        a("")
-        a(f"{THIN * left}{label}{THIN * right}")
-        if desc:
-            a(f"  {desc}")
-        a("")
-
-        for t in turns:
-            tn = t.get("turn_number", "?")
-            user_msg = t.get("user_message", "")
-            agent_text = t.get("agent_text", "")
-            elapsed_turn = t.get("elapsed_ms", 0) / 1000
-            msg_types = t.get("message_types", [])
-            has_esc = t.get("has_escalation", False)
-            has_act = t.get("has_action_result", False)
-            is_failure = "Failure" in msg_types
-            evaluation = t.get("evaluation", {})
-            checks = evaluation.get("checks", [])
-            passed = evaluation.get("passed", False)
-            pass_count = evaluation.get("pass_count", 0)
-            total_checks = evaluation.get("total_checks", 0)
-
-            # ── User message ──
-            prefix = f"  Turn {tn}/{total_turns}  👤 "
-            # Word-wrap user message
-            user_display = user_msg.replace("\n", " ")
-            avail = W - len(prefix) - 2  # 2 for quotes
-            if len(user_display) > avail:
-                user_display = user_display[:avail - 3] + "..."
-            a(f"{prefix}\"{user_display}\"")
-
-            # ── Agent response ──
-            indent = "            "      # 12 spaces
-            cont   = "                "  # 16 spaces (align under opening quote)
-            if is_failure:
-                a(f"{indent}⚠️  [Failure] (no response)  ({elapsed_turn:.1f}s)")
-            else:
-                agent_display = agent_text.replace("\n", " ")
-                badges = ""
-                if has_esc:
-                    badges += "  ↗ escalation"
-                if has_act:
-                    badges += "  ⚡ action"
-                suffix = f"  ({elapsed_turn:.1f}s){badges}"
-
-                # Word-wrap agent text
-                wrap_width = max(W - len(cont) - 1, 30)
-                wrapped = textwrap.wrap(agent_display, width=wrap_width) or [""]
-                if len(wrapped) == 1:
-                    a(f"{indent}🤖 \"{wrapped[0]}\"{suffix}")
-                else:
-                    a(f"{indent}🤖 \"{wrapped[0]}")
-                    for mid in wrapped[1:-1]:
-                        a(f"{cont}{mid}")
-                    a(f"{cont}{wrapped[-1]}\"{suffix}")
-
-            # ── Check results ──
-            if passed:
-                a(f"{indent}✅ {pass_count}/{total_checks} checks passed")
-            else:
-                for c in checks:
-                    if not c.get("passed", False):
-                        a(f"{indent}❌ {c['name']} — {c.get('detail', '')}")
-                a(f"{indent}{pass_count}/{total_checks} checks passed")
-
-            a("")  # blank line between turns
-
-        # Scenario result line
-        status_icon = {"passed": "✅", "failed": "❌", "error": "💥"}.get(status, "⚠️")
-        pass_t = s.get("pass_count", 0)
-        total_t = s.get("total_turns", 0)
-        a(f"  Result: {status_icon} {status.upper()} — {pass_t}/{total_t} turns passed │ {elapsed_s:.1f}s")
-
-    # ── Summary ──
-    a("")
-    a("")
-    sp = summary.get("passed_scenarios", 0)
-    st = summary.get("total_scenarios", 0)
-    tp = summary.get("passed_turns", 0)
-    tt = summary.get("total_turns", 0)
-    dur = total_ms / 1000
-
-    a(f"📊 SUMMARY")
-    a(DOUBLE * W)
-    a(f"  Scenarios    {sp}/{st} ✅     Turns       {tp}/{tt} ✅")
-
-    total_checks = 0
-    passed_checks = 0
-    for s in scenarios:
-        for t in s.get("turns", []):
-            ev = t.get("evaluation", {})
-            total_checks += ev.get("total_checks", 0)
-            passed_checks += ev.get("pass_count", 0)
-    a(f"  Checks       {passed_checks}/{total_checks} ✅    Duration    {dur:.1f}s")
-    a("")
-
-    if summary.get("failed_scenarios", 0) > 0 or summary.get("error_scenarios", 0) > 0:
-        a(f"  ❌ SOME SCENARIOS FAILED")
-    else:
-        a(f"  ✅ ALL SCENARIOS PASSED")
-    a(DOUBLE * W)
-
-    return "\n".join(lines)
-
-
 def _infer_failure_category(check_name: str, turn: Dict) -> Optional[str]:
     """Infer failure category from check name and turn data."""
     mapping = {
@@ -1867,8 +1529,6 @@ Environment Variables:
                         help="Disable Rich colored output (use plain-text format instead)")
     parser.add_argument("--codeblock", action="store_true",
                         help="Stream plain-text codeblock output (no ANSI). Implies --verbose.")
-    parser.add_argument("--rich-output", action="store_true", default=False,
-                        help=argparse.SUPPRESS)  # deprecated: backward compat (no-op)
     parser.add_argument("--width", type=int, default=None,
                         help="Override terminal width for Rich rendering (auto-detected by default)")
 
@@ -2007,11 +1667,8 @@ Environment Variables:
 
     # Output — suppress post-hoc report when codeblock already streamed it
     if not args.json_only and not args.codeblock:
-        use_rich = HAS_RICH and not args.no_rich
-        if use_rich:
+        if HAS_RICH and not args.no_rich:
             report = format_results_rich(results, args.worker_id, args.scenarios, width=args.width)
-        elif not args.no_rich:
-            report = format_results_rich_legacy(results, args.worker_id, args.scenarios)
         else:
             report = format_results(results)
         print(report)
@@ -2022,17 +1679,13 @@ Environment Variables:
         stream.file_written("JSON results written to", args.output)
 
     if args.report_file:
-        # Write the Rich report (with ANSI codes) to a file for later viewing
-        use_rich_for_file = HAS_RICH and not args.no_rich
-        if use_rich_for_file:
+        if HAS_RICH and not args.no_rich:
             report_content = format_results_rich(results, args.worker_id, args.scenarios, width=args.width)
-        elif not args.no_rich:
-            report_content = format_results_rich_legacy(results, args.worker_id, args.scenarios)
         else:
             report_content = format_results(results)
         with open(args.report_file, "w") as f:
             f.write(report_content)
-        stream.file_written("Rich report written to", args.report_file)
+        stream.file_written("Report written to", args.report_file)
 
     if args.json_only:
         print(json.dumps(results, indent=2))

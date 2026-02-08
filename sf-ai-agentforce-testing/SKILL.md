@@ -101,6 +101,7 @@ All Python scripts live at absolute paths under `{SKILL_PATH}/hooks/scripts/`. *
 | `multi_turn_fix_loop.py` | `{SKILL_PATH}/hooks/scripts/multi_turn_fix_loop.py` |
 | `run-automated-tests.py` | `{SKILL_PATH}/hooks/scripts/run-automated-tests.py` |
 | `parse-agent-test-results.py` | `{SKILL_PATH}/hooks/scripts/parse-agent-test-results.py` |
+| `rich_test_report.py` | `{SKILL_PATH}/hooks/scripts/rich_test_report.py` |
 
 > **Variable resolution:** At runtime, resolve `SKILL_PATH` from the `${SKILL_HOOKS}` environment variable (strip `/hooks` suffix). Hardcoded fallback: `~/.claude/sf-skills/skills/sf-ai-agentforce-testing`.
 
@@ -411,6 +412,7 @@ RULE: Create one TaskCreate per partition (category or count split)
 RULE: Spawn one Task(subagent_type="general-purpose") per worker
 RULE: Each worker gets credentials as env vars in its prompt (NEVER in files)
 RULE: Wait for all workers to report via SendMessage
+RULE: After all workers complete, run rich_test_report.py to render unified results
 RULE: Present unified beautiful report aggregating all worker results
 RULE: Offer fix loop if any failures detected
 RULE: Shutdown all workers via SendMessage(type="shutdown_request")
@@ -470,9 +472,13 @@ IMPORTANT:
 
 After all workers report, the team lead:
 
-1. **Collects** all worker results (pass/fail counts, timing, failures)
+1. **Aggregates** all worker result JSON files via `rich_test_report.py`:
+   ```bash
+   python3 {SKILL_PATH}/hooks/scripts/rich_test_report.py \
+     --results /tmp/sf-test-{session}/worker-*-results.json
+   ```
 2. **Deduplicates** any shared failure patterns across workers
-3. **Presents** a unified rich report combining all partitions
+3. **Presents** the unified Rich report (colored Panels, Tables, Tree) to the user
 4. **Calculates** aggregate scoring across the 7 categories
 5. **Offers** fix loop: if failures exist, ask user whether to auto-fix via `sf-ai-agentscript`
 6. **Shuts down** all workers and deletes the team
@@ -1083,7 +1089,8 @@ Skill(skill="sf-ai-agentforce-observability", args="Analyze STDM sessions for ag
 | Script | Purpose | Dependencies |
 |--------|---------|-------------|
 | `agent_api_client.py` | Reusable Agent Runtime API v1 client (auth, sessions, messaging, variables) | stdlib only |
-| `multi_turn_test_runner.py` | Multi-turn test orchestrator (reads YAML, executes, evaluates, reports) | pyyaml + agent_api_client |
+| `multi_turn_test_runner.py` | Multi-turn test orchestrator (reads YAML, executes, evaluates, Rich colored reports) | pyyaml, rich + agent_api_client |
+| `rich_test_report.py` | Aggregate N worker result JSONs into one unified Rich terminal report | rich |
 | `generate-test-spec.py` | Parse .agent files, generate CLI test YAML specs | stdlib only |
 | `run-automated-tests.py` | Orchestrate full CLI test workflow with fix suggestions | stdlib only |
 

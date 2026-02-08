@@ -80,6 +80,18 @@ except ImportError:
     )
     sys.exit(2)
 
+# Rich library (optional — graceful fallback to legacy Unicode formatting)
+try:
+    from rich.console import Console, Group
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    from rich.rule import Rule
+    from rich import box
+    HAS_RICH = True
+except ImportError:
+    HAS_RICH = False
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Turn Evaluation
@@ -641,7 +653,7 @@ def execute_scenario(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Rich Output Formatting
+# Rich Output Formatting (Legacy — Unicode box-drawing fallback)
 # ═══════════════════════════════════════════════════════════════════════════
 
 BOX_W = 66  # Inner width of Unicode box-drawing boxes
@@ -650,7 +662,7 @@ BOX_W = 66  # Inner width of Unicode box-drawing boxes
 def format_session_banner(
     agent_id: str, scenario_file: str, worker_id: int = None, partition_label: str = None
 ) -> str:
-    """Render a Unicode top-banner for the test session."""
+    """Render a Unicode top-banner for the test session (legacy fallback)."""
     lines = []
     lines.append("╔" + "═" * BOX_W + "╗")
     lines.append("║  🧪 AGENTFORCE MULTI-TURN TEST SESSION" + " " * (BOX_W - 40) + "║")
@@ -665,15 +677,15 @@ def format_session_banner(
 
 
 def format_scenario_header(name: str, idx: int, total: int, priority: str = None) -> str:
-    """Render a scenario separator line with embedded metadata."""
+    """Render a scenario separator line with embedded metadata (legacy fallback)."""
     pri = f" ({priority} priority)" if priority else ""
     label = f" Scenario {idx}/{total}: {name}{pri} "
     pad = max(BOX_W - len(label) - 4, 2)
     return f"\n  ──{label}" + "─" * pad
 
 
-def format_turn_rich(turn_data: Dict[str, Any], turn_idx: int, total_turns: int) -> str:
-    """Render a single turn with box-drawing borders and check icons."""
+def format_turn_legacy(turn_data: Dict[str, Any], turn_idx: int, total_turns: int) -> str:
+    """Render a single turn with box-drawing borders and check icons (legacy fallback)."""
     lines = []
     header = f"─ Turn {turn_idx}/{total_turns} "
     top = "  ┌" + header + "─" * max(BOX_W - len(header) - 2, 2) + "┐"
@@ -727,8 +739,8 @@ def format_turn_rich(turn_data: Dict[str, Any], turn_idx: int, total_turns: int)
     return "\n".join(lines)
 
 
-def format_scenario_result_rich(scenario_result: Dict[str, Any]) -> str:
-    """One-liner pass/fail summary for a completed scenario."""
+def format_scenario_result_legacy(scenario_result: Dict[str, Any]) -> str:
+    """One-liner pass/fail summary for a completed scenario (legacy fallback)."""
     status = scenario_result.get("status", "error")
     turns_pass = scenario_result.get("pass_count", 0)
     turns_total = scenario_result.get("total_turns", 0)
@@ -752,7 +764,7 @@ def format_scenario_result_rich(scenario_result: Dict[str, Any]) -> str:
 
 
 def format_summary_box(results: Dict[str, Any]) -> str:
-    """Render the final summary in a Unicode box."""
+    """Render the final summary in a Unicode box (legacy fallback)."""
     summary = results.get("summary", {})
     scenarios_pass = summary.get("passed_scenarios", 0)
     scenarios_total = summary.get("total_scenarios", 0)
@@ -793,8 +805,8 @@ def format_summary_box(results: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_results_rich(results: Dict[str, Any], worker_id: int = None, scenario_file: str = None) -> str:
-    """Orchestrate all rich-format sections into a complete report."""
+def format_results_rich_legacy(results: Dict[str, Any], worker_id: int = None, scenario_file: str = None) -> str:
+    """Orchestrate all legacy rich-format sections into a complete report (fallback when Rich not installed)."""
     parts = []
 
     # Session banner
@@ -813,14 +825,177 @@ def format_results_rich(results: Dict[str, Any], worker_id: int = None, scenario
         parts.append(format_scenario_header(scenario.get("name", "unnamed"), idx, len(scenarios), priority))
 
         for t in scenario.get("turns", []):
-            parts.append(format_turn_rich(t, t.get("turn_number", 0), scenario.get("total_turns", 0)))
+            parts.append(format_turn_legacy(t, t.get("turn_number", 0), scenario.get("total_turns", 0)))
 
-        parts.append(format_scenario_result_rich(scenario))
+        parts.append(format_scenario_result_legacy(scenario))
 
     # Summary
     parts.append(format_summary_box(results))
 
     return "\n".join(parts)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Rich Output Formatting (Colored — requires `rich` library)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _make_console(width: int = 100) -> "Console":
+    """Create a Rich Console with recording + forced terminal color."""
+    return Console(record=True, force_terminal=True, width=width)
+
+
+def _format_session_banner_rich(console, agent_id, scenario_file, worker_id=None, partition_label=None):
+    """Render a colored session banner using Rich Panel."""
+    lines = [f"Agent: {agent_id}  |  File: {scenario_file}"]
+    if worker_id is not None:
+        label = f" ({partition_label})" if partition_label else ""
+        lines.append(f"Worker: W{worker_id}{label}")
+    content = "\n".join(lines)
+    console.print(Panel(content, title="[bold]🧪 Agentforce Multi-Turn Test[/bold]",
+                        border_style="bright_blue", box=box.DOUBLE))
+
+
+def _format_turn_panel(console, turn_data, turn_idx, total_turns):
+    """Render a single turn as a Rich Panel with colored content and pass/fail border."""
+    checks = turn_data.get("evaluation", {}).get("checks", [])
+    pass_count = sum(1 for c in checks if c["passed"])
+    all_passed = pass_count == len(checks)
+
+    # Build content lines
+    parts = []
+    user_msg = turn_data.get("user_message", "").replace("\n", " ")
+    agent_text = turn_data.get("agent_text", "").replace("\n", " ")
+    agent_display = agent_text[:90] + "..." if len(agent_text) > 90 else agent_text
+
+    parts.append(Text.assemble(("👤 User:  ", "bold"), (f'"{user_msg[:80]}"', "bright_green")))
+    parts.append(Text.assemble(("🤖 Agent: ", "bold"), (f'"{agent_display}"', "bright_magenta")))
+
+    # Metadata line (timing, topic, action)
+    elapsed_s = turn_data.get("elapsed_ms", 0) / 1000
+    meta_parts = [f"⏱ {elapsed_s:.1f}s"]
+    for c in checks:
+        if c["name"] == "topic_contains":
+            meta_parts.append(f"📋 {c.get('expected', '?')}")
+        if c["name"] == "action_invoked" and c.get("expected"):
+            meta_parts.append(f"🔧 {c['expected']}")
+    parts.append(Text(" | ".join(meta_parts), style="dim"))
+    parts.append(Text(""))  # spacer
+
+    # Check results
+    for c in checks:
+        if c["passed"]:
+            parts.append(Text(f"  ✅ {c['name']}", style="green"))
+        else:
+            detail = f" — {c['detail']}" if c.get("detail") else ""
+            parts.append(Text(f"  ❌ {c['name']}{detail}", style="red"))
+
+    border = "green" if all_passed else "red"
+    subtitle = f"{pass_count}/{len(checks)} passed"
+    panel = Panel(
+        Group(*parts),
+        title=f"Turn {turn_idx}/{total_turns}",
+        subtitle=subtitle,
+        border_style=border,
+        box=box.ROUNDED,
+        padding=(0, 1),
+    )
+    console.print(panel)
+
+
+def _format_scenario_result_rich(console, scenario_result):
+    """Render a colored one-liner pass/fail summary for a completed scenario."""
+    status = scenario_result.get("status", "error")
+    turns = f"{scenario_result.get('pass_count', 0)}/{scenario_result.get('total_turns', 0)}"
+    elapsed = scenario_result.get("elapsed_ms", 0) / 1000
+
+    # Count checks
+    cp = ct = 0
+    for t in scenario_result.get("turns", []):
+        ev = t.get("evaluation", {})
+        ct += ev.get("total_checks", 0)
+        cp += ev.get("pass_count", 0)
+
+    if status == "passed":
+        console.print(f"  [bold green]✅ PASSED[/] | {turns} turns | {cp}/{ct} checks | {elapsed:.1f}s")
+    elif status == "failed":
+        console.print(f"  [bold red]❌ FAILED[/] | {turns} turns | {cp}/{ct} checks | {elapsed:.1f}s")
+    else:
+        console.print(f"  [bold yellow]💥 ERROR[/] | {turns} turns | {cp}/{ct} checks | {elapsed:.1f}s")
+
+
+def _format_summary_panel(console, results):
+    """Render the final summary as a Rich Table inside a colored Panel."""
+    summary = results.get("summary", {})
+    all_passed = summary.get("failed_scenarios", 0) == 0 and summary.get("error_scenarios", 0) == 0
+
+    # Metrics table
+    table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold")
+    table.add_column("Metric", style="bold", width=14)
+    table.add_column("Result", justify="right", width=16)
+    table.add_column("Metric", style="bold", width=14)
+    table.add_column("Result", justify="right", width=16)
+
+    sp = summary.get("passed_scenarios", 0)
+    st = summary.get("total_scenarios", 0)
+    tp = summary.get("passed_turns", 0)
+    tt = summary.get("total_turns", 0)
+    elapsed = results.get("total_elapsed_ms", 0) / 1000
+
+    # Count checks across all scenarios
+    cp = ct = 0
+    for s in results.get("scenarios", []):
+        for t in s.get("turns", []):
+            ev = t.get("evaluation", {})
+            ct += ev.get("total_checks", 0)
+            cp += ev.get("pass_count", 0)
+
+    s_style = "green" if sp == st else "red"
+    t_style = "green" if tp == tt else "red"
+    c_style = "green" if cp == ct else "red"
+
+    table.add_row("Scenarios", f"[{s_style}]{sp}/{st} ✅[/]", "Turns", f"[{t_style}]{tp}/{tt} ✅[/]")
+    table.add_row("Checks", f"[{c_style}]{cp}/{ct} ✅[/]", "Duration", f"{elapsed:.1f}s")
+
+    verdict_style = "bold green" if all_passed else "bold red"
+    verdict_text = "🏆 ALL SCENARIOS PASSED" if all_passed else "❌ SOME SCENARIOS FAILED"
+    verdict = Text(verdict_text, style=verdict_style)
+
+    border = "green" if all_passed else "red"
+    panel = Panel(Group(table, Text(""), verdict), title="📊 Summary",
+                  border_style=border, box=box.DOUBLE)
+    console.print(panel)
+
+
+def format_results_rich(results: Dict[str, Any], worker_id: int = None, scenario_file: str = None) -> str:
+    """Orchestrate all Rich-powered sections into a complete colored report."""
+    console = _make_console()
+
+    # Session banner
+    agent_id = results.get("agent_id", "Unknown")
+    sf = scenario_file or results.get("scenario_file", "Unknown")
+    partition_label = None
+    if worker_id is not None:
+        st = results.get("summary", {}).get("total_scenarios", 0)
+        partition_label = f"{st} scenario(s)"
+    _format_session_banner_rich(console, agent_id, sf, worker_id, partition_label)
+
+    # Scenarios
+    scenarios = results.get("scenarios", [])
+    for idx, scenario in enumerate(scenarios, 1):
+        priority = scenario.get("priority")
+        name = scenario.get("name", "unnamed")
+        pri = f" [dim]({priority})[/dim]" if priority else ""
+        console.rule(f"[bold]Scenario {idx}/{len(scenarios)}: {name}{pri}[/bold]", style="cyan")
+
+        for t in scenario.get("turns", []):
+            _format_turn_panel(console, t, t.get("turn_number", 0), scenario.get("total_turns", 0))
+
+        _format_scenario_result_rich(console, scenario)
+
+    # Summary
+    _format_summary_panel(console, results)
+
+    return console.export_text(styles=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1046,7 +1221,7 @@ Environment Variables:
     parser.add_argument("--worker-id", type=int, default=None,
                         help="Worker identifier for swarm execution (prepends [WN] to output)")
     parser.add_argument("--rich-output", action="store_true",
-                        help="Use beautiful Unicode box-drawing output with icons and timing")
+                        help="Use Rich library for colored terminal output (falls back to Unicode box-drawing if Rich not installed)")
 
     args = parser.parse_args()
 
@@ -1159,7 +1334,10 @@ Environment Variables:
     # Output
     if not args.json_only:
         if args.rich_output:
-            report = format_results_rich(results, args.worker_id, args.scenarios)
+            if HAS_RICH:
+                report = format_results_rich(results, args.worker_id, args.scenarios)
+            else:
+                report = format_results_rich_legacy(results, args.worker_id, args.scenarios)
         else:
             report = format_results(results)
         print(report)

@@ -53,6 +53,16 @@ VALID_TOOLS = [
     "ExitPlanMode"
 ]
 
+# Agent Skills / Codex frontmatter allowlist (agentskills.io)
+CODEX_ALLOWED_FRONTMATTER_FIELDS = {
+    "name",
+    "description",
+    "license",
+    "allowed-tools",
+    "metadata",
+    "compatibility",
+}
+
 
 @dataclass
 class ValidationIssue:
@@ -446,6 +456,9 @@ def validate_single_skill(skill_path: Path, location_type: str) -> SkillValidati
     Returns:
         SkillValidationResult with all findings
     """
+    if location_type == "codex-export":
+        return validate_single_codex_export_skill(skill_path)
+
     skill_name = skill_path.parent.name
     result = SkillValidationResult(
         skill_name=skill_name,
@@ -709,6 +722,234 @@ def validate_single_skill(skill_path: Path, location_type: str) -> SkillValidati
     return result
 
 
+def _is_kebab_case(name: str) -> bool:
+    import re
+
+    return bool(re.match(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$", str(name)))
+
+
+def validate_single_codex_export_skill(skill_path: Path) -> SkillValidationResult:
+    """
+    Validate a Codex / Agent Skills compatible export.
+
+    Key differences vs sf-skills v4 source skills:
+      - Frontmatter must NOT contain hooks
+      - Only Agent Skills compatible fields should exist
+      - agents/openai.yaml should exist (recommended for Codex UX)
+      - No ~/.claude paths or ${SHARED_HOOKS}/${SKILL_HOOKS} placeholders should remain
+    """
+    skill_name = skill_path.parent.name
+    result = SkillValidationResult(
+        skill_name=skill_name,
+        skill_path=skill_path,
+        location_type="codex-export",
+    )
+
+    try:
+        yaml_content, content = extract_frontmatter(skill_path)
+    except Exception as e:
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message=f"Failed to read skill file: {e}",
+                location=str(skill_path),
+            )
+        )
+        return result
+
+    if not yaml_content:
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="No YAML frontmatter found",
+                location=str(skill_path),
+                fix="Add YAML frontmatter between --- delimiters",
+            )
+        )
+        return result
+
+    try:
+        data = yaml.safe_load(yaml_content)
+    except yaml.YAMLError as e:
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message=f"Invalid YAML syntax: {e}",
+                location=str(skill_path),
+            )
+        )
+        return result
+
+    if not isinstance(data, dict):
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Invalid YAML frontmatter - expected a mapping (YAML object)",
+                location=f"{skill_path}:frontmatter",
+            )
+        )
+        return result
+
+    unexpected_fields = set(data.keys()) - CODEX_ALLOWED_FRONTMATTER_FIELDS
+    if unexpected_fields:
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message=f"Unexpected frontmatter fields for Codex export: {', '.join(sorted(unexpected_fields))}",
+                location=f"{skill_path}:frontmatter",
+                fix=f"Remove fields not in {sorted(CODEX_ALLOWED_FRONTMATTER_FIELDS)}",
+            )
+        )
+
+    if "hooks" in data:
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Frontmatter must not include hooks in Codex export",
+                location=f"{skill_path}:frontmatter:hooks",
+                fix="Remove hooks from frontmatter and document manual validations in the body",
+            )
+        )
+
+    name = data.get("name")
+    if not name:
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Missing required field: 'name'",
+                location=f"{skill_path}:frontmatter",
+            )
+        )
+    else:
+        if not _is_kebab_case(str(name)):
+            result.errors.append(
+                ValidationIssue(
+                    severity="error",
+                    message=f"Invalid skill name '{name}' - must be kebab-case",
+                    location=f"{skill_path}:frontmatter:name",
+                )
+            )
+        elif str(name) != skill_name:
+            result.errors.append(
+                ValidationIssue(
+                    severity="error",
+                    message=f"Skill name '{name}' does not match directory '{skill_name}'",
+                    location=f"{skill_path}:frontmatter:name",
+                )
+            )
+
+    if not data.get("description"):
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Missing required field: 'description'",
+                location=f"{skill_path}:frontmatter",
+            )
+        )
+
+    metadata = data.get("metadata")
+    if metadata is not None and not isinstance(metadata, dict):
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Invalid metadata - expected a mapping (YAML object)",
+                location=f"{skill_path}:frontmatter:metadata",
+            )
+        )
+    elif isinstance(metadata, dict):
+        version = metadata.get("version")
+        if version:
+            result.version = str(version)
+
+        if "short-description" not in metadata:
+            result.warnings.append(
+                ValidationIssue(
+                    severity="warning",
+                    message="metadata.short-description missing (recommended for Codex)",
+                    location=f"{skill_path}:frontmatter:metadata",
+                )
+            )
+
+    if not content.strip():
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="No content found after YAML frontmatter",
+                location=str(skill_path),
+            )
+        )
+
+    # Content portability checks
+    portability_errors = [
+        ("~/.claude", "Replace Claude install paths with $CODEX_HOME/skills/..."),
+        ("${SHARED_HOOKS}", "Remove placeholders and use $SHARED_DIR/..."),
+        ("${SKILL_HOOKS}", "Remove placeholders and use $SKILL_DIR/..."),
+    ]
+    for token, fix in portability_errors:
+        if token in content:
+            result.errors.append(
+                ValidationIssue(
+                    severity="error",
+                    message=f"Found non-portable token in body: {token}",
+                    location=str(skill_path),
+                    fix=fix,
+                )
+            )
+
+    # Codex metadata file
+    openai_yaml = skill_path.parent / "agents" / "openai.yaml"
+    if not openai_yaml.exists():
+        result.errors.append(
+            ValidationIssue(
+                severity="error",
+                message="Missing agents/openai.yaml (recommended for Codex)",
+                location=str(openai_yaml),
+                fix="Add agents/openai.yaml with interface + dependency hints",
+            )
+        )
+    else:
+        try:
+            openai_data = yaml.safe_load(openai_yaml.read_text())
+        except yaml.YAMLError as e:
+            result.errors.append(
+                ValidationIssue(
+                    severity="error",
+                    message=f"Invalid YAML in agents/openai.yaml: {e}",
+                    location=str(openai_yaml),
+                )
+            )
+            openai_data = None
+
+        if openai_data is not None and not isinstance(openai_data, dict):
+            result.errors.append(
+                ValidationIssue(
+                    severity="error",
+                    message="agents/openai.yaml must be a YAML mapping",
+                    location=str(openai_yaml),
+                )
+            )
+        elif isinstance(openai_data, dict):
+            if "interface" not in openai_data:
+                result.warnings.append(
+                    ValidationIssue(
+                        severity="warning",
+                        message="agents/openai.yaml missing interface block",
+                        location=str(openai_yaml),
+                    )
+                )
+            if "dependencies" not in openai_data:
+                result.warnings.append(
+                    ValidationIssue(
+                        severity="warning",
+                        message="agents/openai.yaml missing dependencies block",
+                        location=str(openai_yaml),
+                    )
+                )
+
+    result.is_valid = len(result.errors) == 0
+    return result
+
+
 def validate_all_skills(parallel: bool = True) -> ValidationReport:
     """
     Validate all discovered skills.
@@ -904,13 +1145,73 @@ Examples:
         help='Automatically fix common issues (not yet implemented)'
     )
 
+    parser.add_argument(
+        '--codex-export',
+        action='store',
+        default=None,
+        help='Validate a Codex/Agent Skills export directory (e.g. ./skills)',
+    )
+
     args = parser.parse_args()
 
     if args.auto_fix:
         print(f"{Colors.YELLOW}⚠️  Auto-fix feature coming soon!{Colors.NC}\n")
 
     # Run validation
-    report = validate_all_skills(parallel=not args.no_parallel)
+    if args.codex_export:
+        export_root = Path(args.codex_export).resolve()
+        skills = []
+        if not export_root.exists():
+            print(f"{Colors.RED}❌ Codex export directory not found: {export_root}{Colors.NC}")
+            sys.exit(2)
+
+        for child in sorted(export_root.iterdir()):
+            if not child.is_dir():
+                continue
+            skill_md = child / "SKILL.md"
+            if skill_md.exists():
+                skills.append((skill_md, "codex-export"))
+
+        if not skills:
+            print(f"{Colors.RED}❌ No SKILL.md files found under: {export_root}{Colors.NC}")
+            sys.exit(2)
+
+        # Reuse report builder but with our custom skill list
+        # (keeps output format identical)
+        start_time = datetime.now()
+        results = []
+        if (not args.no_parallel) and len(skills) > 1:
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {
+                    executor.submit(validate_single_skill, path, loc_type): (path, loc_type)
+                    for path, loc_type in skills
+                }
+                for future in as_completed(futures):
+                    try:
+                        results.append(future.result())
+                    except Exception as e:
+                        path, _ = futures[future]
+                        print(f"Error validating {path}: {e}")
+        else:
+            for skill_path, loc_type in skills:
+                results.append(validate_single_skill(skill_path, loc_type))
+
+        duration = (datetime.now() - start_time).total_seconds()
+        valid_skills = sum(1 for r in results if r.is_valid)
+        skills_with_errors = sum(1 for r in results if r.has_errors)
+        skills_with_warnings = sum(1 for r in results if len(r.warnings) > 0 and not r.has_errors)
+
+        report = ValidationReport(
+            total_skills=len(results),
+            valid_skills=valid_skills,
+            skills_with_warnings=skills_with_warnings,
+            skills_with_errors=skills_with_errors,
+            results=results,
+            generated_at=datetime.now().isoformat(),
+            duration_seconds=duration,
+        )
+    else:
+        report = validate_all_skills(parallel=not args.no_parallel)
 
     # Generate report
     if args.format == 'json':

@@ -1,0 +1,135 @@
+defaults:
+  interface:
+    brand_color: "#0176D3" # Salesforce blue
+  dependencies:
+    tools:
+      - type: cli
+        value: sf
+        description: Salesforce CLI (sf)
+        command: npm install -g @salesforce/cli
+      - type: runtime
+        value: python3>=3.10
+        description: Python runtime for validation + helper scripts
+
+skills:
+  sf-apex:
+    interface:
+      display_name: "SF Apex"
+      short_description: "Generate and review Apex (bulkification, security, tests)."
+      default_prompt: "You are an expert Salesforce Apex developer. Generate or review Apex code, then validate with Salesforce CLI and Code Analyzer when available."
+    dependencies:
+      tools:
+        - type: runtime
+          value: java>=11
+          description: Required for Apex language server + PMD engine
+        - type: runtime
+          value: node>=18
+          description: Required for some Code Analyzer engines
+        - type: sf-plugin
+          value: "@salesforce/plugin-code-analyzer"
+          description: Salesforce Code Analyzer v5
+          command: sf plugins install @salesforce/plugin-code-analyzer
+  sf-soql:
+    interface:
+      display_name: "SF SOQL"
+      short_description: "Write and optimize SOQL with live Query Plan explain."
+      default_prompt: "Help write, debug, and optimize SOQL. Prefer using the live Query Plan explain endpoint when a target org is available."
+  sf-lwc:
+    interface:
+      display_name: "SF LWC"
+      short_description: "Build and review Lightning Web Components."
+      default_prompt: "Build or review LWC. Use sf CLI, Jest, and Code Analyzer when available."
+    dependencies:
+      tools:
+        - type: runtime
+          value: node>=18
+          description: Required for LWC tooling and language server
+        - type: sf-plugin
+          value: "@salesforce/plugin-code-analyzer"
+          description: Salesforce Code Analyzer v5
+          command: sf plugins install @salesforce/plugin-code-analyzer
+  sf-metadata:
+    interface:
+      display_name: "SF Metadata"
+      short_description: "Generate and validate Salesforce metadata (XML)."
+      default_prompt: "Generate or modify Salesforce metadata XML. Validate with sf CLI and the provided templates."
+  sf-flow:
+    interface:
+      display_name: "SF Flow"
+      short_description: "Build and review Salesforce Flows."
+      default_prompt: "Help build, debug, and document Salesforce Flows (record-triggered, screen flows). Validate structure with the included scripts when available."
+  sf-deploy:
+    interface:
+      display_name: "SF Deploy"
+      short_description: "Deploy metadata and run preflight checks."
+      default_prompt: "Plan and execute safe Salesforce deployments using sf CLI, preflight checks, and reports."
+  sf-debug:
+    interface:
+      display_name: "SF Debug"
+      short_description: "Debug org behavior via logs, queries, and trace flags."
+      default_prompt: "Debug Salesforce behavior using logs and targeted queries. Prefer reproducible steps."
+  sf-data:
+    interface:
+      display_name: "SF Data"
+      short_description: "Work with data loads, queries, and transformations."
+      default_prompt: "Help move, query, and validate Salesforce data using sf CLI and lightweight scripts."
+  sf-permissions:
+    interface:
+      display_name: "SF Permissions"
+      short_description: "Inspect and reason about permission hierarchies."
+      default_prompt: "Analyze Salesforce permission sets, profiles, and object/field access. Use the included CLI helper when available."
+  sf-testing:
+    interface:
+      display_name: "SF Testing"
+      short_description: "Write robust Salesforce tests and run them in CI-like flows."
+      default_prompt: "Write and improve Salesforce tests (Apex, LWC) and help run them through sf CLI."
+  sf-integration:
+    interface:
+      display_name: "SF Integration"
+      short_description: "Build integrations: auth, callouts, external clients."
+      default_prompt: "Help implement Salesforce integrations (Auth, Named Credentials, callouts). Use sf CLI and secure patterns."
+  sf-connected-apps:
+    interface:
+      display_name: "SF Connected Apps"
+      short_description: "Create and validate Connected Apps / External Client Apps."
+      default_prompt: "Help create and validate Connected Apps / External Client Apps (OAuth/JWT). Prefer least-privilege."
+  sf-ai-agentforce:
+    interface:
+      display_name: "SF Agentforce"
+      short_description: "Deploy and iterate on Agentforce agents."
+      default_prompt: "Help deploy and iterate on Agentforce agents. Prefer accurate API versions and org-specific validation."
+  sf-ai-agentforce-testing:
+    interface:
+      display_name: "SF Agentforce Testing"
+      short_description: "Generate multi-turn test scenarios and run them."
+      default_prompt: "Generate multi-turn Agentforce test scenarios, run them against an org, and summarize failures with actionable fixes."
+  sf-ai-agentforce-observability:
+    interface:
+      display_name: "SF Agentforce Observability"
+      short_description: "Extract and analyze Session Tracing data in Data Cloud."
+      default_prompt: "Help extract and analyze Agentforce session tracing (STDM). Prefer reproducible CLI steps and schema-accurate outputs."
+  sf-ai-agentscript:
+    interface:
+      display_name: "SF Agent Script"
+      short_description: "Author and validate Agent Script."
+      default_prompt: "Help author and validate Agent Script. Prefer offline validation first, then org-based checks."
+    dependencies:
+      tools:
+        - type: runtime
+          value: node>=18
+          description: Required for Agent Script language server runtime
+  sf-ai-agentforce-conversationdesign:
+    interface:
+      display_name: "SF Conversation Design"
+      short_description: "Design Agentforce conversation flows and content."
+      default_prompt: "Help design Agentforce conversation flows, prompts, and topic structure. Emphasize clarity and testability."
+  sf-diagram-mermaid:
+    interface:
+      display_name: "SF Diagram (Mermaid)"
+      short_description: "Generate diagrams from Salesforce artifacts."
+      default_prompt: "Generate Mermaid diagrams to communicate Salesforce architecture and flows."
+  sf-diagram-nanobananapro:
+    interface:
+      display_name: "SF Diagram (Nano Banana Pro)"
+      short_description: "Generate higher-fidelity diagrams from org/project data."
+      default_prompt: "Generate high-quality diagrams from Salesforce metadata and org context."

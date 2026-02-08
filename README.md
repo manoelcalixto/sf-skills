@@ -370,6 +370,30 @@ Hooks provide **advisory feedback** — they inform but don't block operations.
 - **Trigger Actions Framework (TAF)** — Optional package for sf-apex trigger patterns
   - Package ID: `04tKZ000000gUEFYA2` or [GitHub repo](https://github.com/mitchspano/trigger-actions-framework)
 
+## 🤖 OpenAI Codex Compatibility (Export)
+
+Codex uses the [Agent Skills](https://agentskills.io) `SKILL.md` format and can optionally read extra UI/dependency metadata from `agents/openai.yaml`.
+
+This repo's source skills include a `hooks:` frontmatter section for automatic validations in other runtimes. To make the skills portable and compatible with Codex + Agent Skills validators, use the exporter:
+
+```bash
+# From the repo root
+python3 scripts/export_codex_skills.py --out ./skills --clean
+```
+
+This produces a Codex-friendly layout under `./skills/`:
+- `skills/shared/` — shared scripts and helpers copied from `./shared/`
+- `skills/sf-*/SKILL.md` — clean frontmatter (no `hooks:`) + Codex notes
+- `skills/sf-*/agents/openai.yaml` — display name + dependency hints
+
+To install into Codex (local):
+
+```bash
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+rm -rf "$CODEX_HOME/skills/sf-"* "$CODEX_HOME/skills/shared" 2>/dev/null || true
+cp -R ./skills/* "$CODEX_HOME/skills/"
+```
+
 <details>
 <summary><h2>💬 Usage Examples</h2></summary>
 

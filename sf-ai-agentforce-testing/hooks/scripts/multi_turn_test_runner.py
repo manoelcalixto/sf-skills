@@ -57,6 +57,7 @@ import concurrent.futures
 import json
 import os
 import re
+import shutil
 import sys
 import time
 from datetime import datetime
@@ -91,6 +92,28 @@ try:
     HAS_RICH = True
 except ImportError:
     HAS_RICH = False
+
+
+def _detect_width(override: int = None) -> int:
+    """Detect terminal width (tmux-aware).
+    Priority: explicit override > $COLUMNS > shutil > 80.
+    Clamped to [60, 300].
+    """
+    if override and override > 0:
+        return max(60, min(override, 300))
+    env_cols = os.environ.get("COLUMNS")
+    if env_cols:
+        try:
+            return max(60, min(int(env_cols), 300))
+        except ValueError:
+            pass
+    try:
+        cols = shutil.get_terminal_size().columns
+        if cols > 0:
+            return max(60, min(cols, 300))
+    except Exception:
+        pass
+    return 80
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -839,9 +862,11 @@ def format_results_rich_legacy(results: Dict[str, Any], worker_id: int = None, s
 # Rich Output Formatting (Colored — requires `rich` library)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _make_console(width: int = 100) -> "Console":
-    """Create a Rich Console with recording + forced terminal color."""
-    return Console(record=True, force_terminal=True, width=width)
+def _make_console(width: int = None) -> "Console":
+    """Create a Rich Console with recording + forced terminal color.
+    If width is None, auto-detects from environment (tmux-aware).
+    """
+    return Console(record=True, force_terminal=True, width=_detect_width(width))
 
 
 def _format_session_banner_rich(console, agent_id, scenario_file, worker_id=None, partition_label=None):
@@ -929,11 +954,11 @@ def _format_summary_panel(console, results):
     all_passed = summary.get("failed_scenarios", 0) == 0 and summary.get("error_scenarios", 0) == 0
 
     # Metrics table
-    table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold")
-    table.add_column("Metric", style="bold", width=14)
-    table.add_column("Result", justify="right", width=16)
-    table.add_column("Metric", style="bold", width=14)
-    table.add_column("Result", justify="right", width=16)
+    table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold", expand=True)
+    table.add_column("Metric", style="bold", ratio=2)
+    table.add_column("Result", justify="right", ratio=3)
+    table.add_column("Metric", style="bold", ratio=2)
+    table.add_column("Result", justify="right", ratio=3)
 
     sp = summary.get("passed_scenarios", 0)
     st = summary.get("total_scenarios", 0)
@@ -966,9 +991,9 @@ def _format_summary_panel(console, results):
     console.print(panel)
 
 
-def format_results_rich(results: Dict[str, Any], worker_id: int = None, scenario_file: str = None) -> str:
+def format_results_rich(results: Dict[str, Any], worker_id: int = None, scenario_file: str = None, width: int = None) -> str:
     """Orchestrate all Rich-powered sections into a complete colored report."""
-    console = _make_console()
+    console = _make_console(width=width)
 
     # Session banner
     agent_id = results.get("agent_id", "Unknown")
@@ -1220,8 +1245,12 @@ Environment Variables:
                         help="Run scenarios in parallel with N workers (default: 0 = sequential)")
     parser.add_argument("--worker-id", type=int, default=None,
                         help="Worker identifier for swarm execution (prepends [WN] to output)")
-    parser.add_argument("--rich-output", action="store_true",
-                        help="Use Rich library for colored terminal output (falls back to Unicode box-drawing if Rich not installed)")
+    parser.add_argument("--no-rich", action="store_true",
+                        help="Disable Rich colored output (use plain-text format instead)")
+    parser.add_argument("--rich-output", action="store_true", default=False,
+                        help=argparse.SUPPRESS)  # deprecated: backward compat (no-op)
+    parser.add_argument("--width", type=int, default=None,
+                        help="Override terminal width for Rich rendering (auto-detected by default)")
 
     args = parser.parse_args()
 
@@ -1333,11 +1362,11 @@ Environment Variables:
 
     # Output
     if not args.json_only:
-        if args.rich_output:
-            if HAS_RICH:
-                report = format_results_rich(results, args.worker_id, args.scenarios)
-            else:
-                report = format_results_rich_legacy(results, args.worker_id, args.scenarios)
+        use_rich = HAS_RICH and not args.no_rich
+        if use_rich:
+            report = format_results_rich(results, args.worker_id, args.scenarios, width=args.width)
+        elif not args.no_rich:
+            report = format_results_rich_legacy(results, args.worker_id, args.scenarios)
         else:
             report = format_results(results)
         print(report)

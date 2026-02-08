@@ -22,6 +22,8 @@ License: MIT
 import argparse
 import glob
 import json
+import os
+import shutil
 import sys
 
 try:
@@ -38,6 +40,28 @@ except ImportError:
         file=sys.stderr,
     )
     sys.exit(2)
+
+
+def _detect_width(override: int = None) -> int:
+    """Detect terminal width (tmux-aware).
+    Priority: explicit override > $COLUMNS > shutil > 80.
+    Clamped to [60, 300].
+    """
+    if override and override > 0:
+        return max(60, min(override, 300))
+    env_cols = os.environ.get("COLUMNS")
+    if env_cols:
+        try:
+            return max(60, min(int(env_cols), 300))
+        except ValueError:
+            pass
+    try:
+        cols = shutil.get_terminal_size().columns
+        if cols > 0:
+            return max(60, min(cols, 300))
+    except Exception:
+        pass
+    return 80
 
 
 def load_results(file_paths):
@@ -84,12 +108,13 @@ def render_unified(results_list, console):
         box=box.ROUNDED,
         show_header=True,
         header_style="bold",
+        expand=True,
     )
-    table.add_column("Worker", style="bold")
-    table.add_column("Scenarios", justify="center")
-    table.add_column("Turns", justify="center")
-    table.add_column("Checks", justify="center")
-    table.add_column("Duration", justify="right")
+    table.add_column("Worker", style="bold", ratio=2, no_wrap=True)
+    table.add_column("Scenarios", justify="center", ratio=2, no_wrap=True)
+    table.add_column("Turns", justify="center", ratio=2, no_wrap=True)
+    table.add_column("Checks", justify="center", ratio=2, no_wrap=True)
+    table.add_column("Duration", justify="right", ratio=2, no_wrap=True)
 
     all_passed_global = True
     for i, r in enumerate(results_list, 1):
@@ -162,11 +187,11 @@ def render_unified(results_list, console):
         agg_cp += cp
         agg_ct += ct
 
-    agg_table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold")
-    agg_table.add_column("Metric", style="bold", width=14)
-    agg_table.add_column("Result", justify="right", width=16)
-    agg_table.add_column("Metric", style="bold", width=14)
-    agg_table.add_column("Result", justify="right", width=16)
+    agg_table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold", expand=True)
+    agg_table.add_column("Metric", style="bold", ratio=2)
+    agg_table.add_column("Result", justify="right", ratio=3)
+    agg_table.add_column("Metric", style="bold", ratio=2)
+    agg_table.add_column("Result", justify="right", ratio=3)
 
     s_style = "green" if agg_sp == agg_st else "red"
     t_style = "green" if agg_tp == agg_tt else "red"
@@ -204,8 +229,8 @@ def main():
         help="Worker result JSON files (supports shell globs)",
     )
     parser.add_argument(
-        "--width", type=int, default=120,
-        help="Terminal width for rendering (default: 120)",
+        "--width", type=int, default=None,
+        help="Terminal width (auto-detected from $COLUMNS or terminal; fallback: 80)",
     )
     args = parser.parse_args()
 
@@ -227,7 +252,7 @@ def main():
         print("ERROR: No valid result files loaded", file=sys.stderr)
         sys.exit(2)
 
-    console = Console(force_terminal=True, width=args.width)
+    console = Console(force_terminal=True, width=_detect_width(args.width))
     render_unified(results_list, console)
 
     # Exit code: 0 if all passed, 1 if any failures

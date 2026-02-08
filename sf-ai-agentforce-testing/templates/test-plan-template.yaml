@@ -82,7 +82,8 @@ execution:
   turn_retry: 1
   # Print progress to stderr
   verbose: true
-  # Use rich Unicode box-drawing output
-  rich_output: true
+  # Rich colored output is ON by default when `rich` is installed.
+  # Set no_rich: true to disable.
+  no_rich: false
   # Write JSON results file
   output_dir: "./test-results"

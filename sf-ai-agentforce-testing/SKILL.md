@@ -141,7 +141,7 @@ Phase 0: Prerequisites & Agent Discovery
     │    A3: Test Scenario Planning (generate_multi_turn_scenarios.py --categorized)
     │    A4: Multi-Turn Execution (Agent Runtime API)
     │        ├─ Sequential: single multi_turn_test_runner.py process
-    │        └─ Swarm: TeamCreate → N workers (--rich-output --worker-id N)
+    │        └─ Swarm: TeamCreate → N workers (--worker-id N)
     │    A5: Results & Scoring (rich Unicode output)
     │
     └──► Phase B: CLI Testing Center (SECONDARY)
@@ -438,7 +438,7 @@ YOUR TASK:
      --scenarios {scenario_file} \
      --agent-id {agent_id} \
      --output /tmp/sf-test-{session}/worker-{N}-results.json \
-     --rich-output --worker-id {N} --verbose
+     --worker-id {N} --verbose
 
 3. Read the results JSON file
 
@@ -1091,6 +1091,14 @@ Skill(skill="sf-ai-agentforce-observability", args="Analyze STDM sessions for ag
 | `rich_test_report.py` | Aggregate N worker result JSONs into one unified Rich terminal report | rich |
 | `generate-test-spec.py` | Parse .agent files, generate CLI test YAML specs | stdlib only |
 | `run-automated-tests.py` | Orchestrate full CLI test workflow with fix suggestions | stdlib only |
+
+**CLI Flags (multi_turn_test_runner.py):**
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--no-rich` | off | Disable Rich colored output; use plain-text format |
+| `--width N` | auto | Override terminal width (auto-detects from $COLUMNS; fallback 80) |
+| `--rich-output` | _(deprecated)_ | No-op — Rich is now default when installed |
 
 **Multi-Turn Testing (Agent Runtime API):**
 ```bash

@@ -129,10 +129,20 @@ class StreamingConsole:
     Falls back to plain print() when Rich is unavailable or --no-rich is set.
     """
 
-    def __init__(self, enabled: bool = True, width: int = None, use_rich: bool = True):
+    def __init__(self, enabled: bool = True, width: int = None, use_rich: bool = True, codeblock: bool = False):
         self._enabled = enabled
         self._lock = threading.Lock()
-        if enabled and HAS_RICH and use_rich:
+        self._codeblock = codeblock and enabled
+        self._width = _detect_width(width)
+        if self._codeblock:
+            # Codeblock mode: plain text + emojis to stdout, no ANSI.
+            # Line-buffering ensures each print() flushes immediately so
+            # output streams line-by-line in Claude Code's Bash tool.
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(line_buffering=True)
+            self._console = None
+            self._rich = False
+        elif enabled and HAS_RICH and use_rich:
             # Write to stdout (not stderr) so ANSI codes render in real-time
             # in CLI tools like Claude Code that only interpret ANSI on stdout
             # during streaming. Line-buffer ensures each print() flushes immediately.
@@ -154,7 +164,14 @@ class StreamingConsole:
         if not self._enabled:
             return
         with self._lock:
-            if self._rich:
+            if self._codeblock:
+                W = self._width
+                print("━" * W, flush=True)
+                print(f"  🧪 Agentforce Multi-Turn Test", flush=True)
+                print(f"  Running {total} scenario{'s' if total != 1 else ''} [{mode}]", flush=True)
+                print(f"  File: {file}", flush=True)
+                print("━" * W, flush=True)
+            elif self._rich:
                 self._console.rule(
                     f"[bold]Running {total} scenario{'s' if total != 1 else ''} [{mode}][/bold]",
                     style="bright_blue",
@@ -168,19 +185,34 @@ class StreamingConsole:
         if not self._enabled:
             return
         with self._lock:
-            if self._rich:
+            if self._codeblock:
+                print("  ✅ Authenticated", flush=True)
+            elif self._rich:
                 self._console.print("  [bold green]✅ Authenticated[/bold green]")
             else:
                 print("✅ Authentication successful", file=sys.stderr)
 
     # ── Scenario-level ────────────────────────────────────────────────
 
-    def scenario_start(self, name: str, idx: int, total: int, variables: list = None):
+    def scenario_start(self, name: str, idx: int, total: int, variables: list = None,
+                        description: str = None):
         """Print scenario separator with name and progress counter."""
         if not self._enabled:
             return
         with self._lock:
-            if self._rich:
+            if self._codeblock:
+                W = self._width
+                label = f" Scenario {idx}/{total}: {name} "
+                pad = W - len(label)
+                left = pad // 2
+                right = pad - left
+                print(flush=True)
+                print(flush=True)
+                print(f"{'─' * left}{label}{'─' * right}", flush=True)
+                if description:
+                    print(f"  {description}", flush=True)
+                print(flush=True)
+            elif self._rich:
                 self._console.print()
                 self._console.print()
                 self._console.rule(
@@ -201,15 +233,24 @@ class StreamingConsole:
         """Print the user message being sent for this turn."""
         if not self._enabled:
             return
-        truncated = message[:50] + "..." if len(message) > 50 else message
         with self._lock:
-            if self._rich:
-                self._console.print(
-                    f"\n  Turn {num}/{total}  "
-                    f"[bright_green]👤 \"{truncated}\"[/bright_green]"
-                )
+            if self._codeblock:
+                W = self._width
+                prefix = f"  Turn {num}/{total}  👤 "
+                user_display = message.replace("\n", " ")
+                avail = W - len(prefix) - 2  # 2 for quotes
+                if len(user_display) > avail:
+                    user_display = user_display[:avail - 3] + "..."
+                print(f"{prefix}\"{user_display}\"", flush=True)
             else:
-                print(f"    Turn {num}: \"{truncated}\"", file=sys.stderr)
+                truncated = message[:50] + "..." if len(message) > 50 else message
+                if self._rich:
+                    self._console.print(
+                        f"\n  Turn {num}/{total}  "
+                        f"[bright_green]👤 \"{truncated}\"[/bright_green]"
+                    )
+                else:
+                    print(f"    Turn {num}: \"{truncated}\"", file=sys.stderr)
 
     def agent_response(self, turn_result):
         """Print the agent's response with metadata badges.
@@ -226,6 +267,30 @@ class StreamingConsole:
         is_failure = "Failure" in types
 
         with self._lock:
+            if self._codeblock:
+                indent = "            "      # 12 spaces
+                cont   = "                "  # 16 spaces (align under opening quote)
+                if is_failure:
+                    print(f"{indent}⚠️  [Failure] (no response)  ({elapsed_s:.1f}s)", flush=True)
+                else:
+                    display = text.replace("\n", " ")
+                    badges = ""
+                    if turn_result.has_escalation:
+                        badges += "  ↗ escalation"
+                    if turn_result.has_action_result:
+                        badges += "  ⚡ action"
+                    suffix = f"  ({elapsed_s:.1f}s){badges}"
+                    wrap_width = max(self._width - len(cont) - 1, 30)
+                    wrapped = textwrap.wrap(display, width=wrap_width) or [""]
+                    if len(wrapped) == 1:
+                        print(f"{indent}🤖 \"{wrapped[0]}\"{suffix}", flush=True)
+                    else:
+                        print(f"{indent}🤖 \"{wrapped[0]}", flush=True)
+                        for mid in wrapped[1:-1]:
+                            print(f"{cont}{mid}", flush=True)
+                        print(f"{cont}{wrapped[-1]}\"{suffix}", flush=True)
+                return  # early return for codeblock — skip Rich/plain branches
+
             if self._rich:
                 if is_failure:
                     self._console.print(
@@ -298,6 +363,18 @@ class StreamingConsole:
         all_passed = evaluation.get("passed", False)
 
         with self._lock:
+            if self._codeblock:
+                indent = "            "  # 12 spaces
+                if all_passed:
+                    print(f"{indent}✅ {pass_count}/{total_checks} checks passed", flush=True)
+                else:
+                    failed = [c for c in checks if not c["passed"]]
+                    for fc in failed:
+                        detail = fc.get("detail", "")
+                        print(f"{indent}❌ {fc['name']} — {detail}", flush=True)
+                    print(f"{indent}{pass_count}/{total_checks} checks passed", flush=True)
+                return
+
             if self._rich:
                 if all_passed:
                     self._console.print(
@@ -326,7 +403,9 @@ class StreamingConsole:
         if not self._enabled:
             return
         with self._lock:
-            if self._rich:
+            if self._codeblock:
+                print(f"            ⟳ Retry {attempt}/{max_retries}: {reason}", flush=True)
+            elif self._rich:
                 self._console.print(
                     f"    [dim yellow]⟳ Retry {attempt}/{max_retries}: {reason}[/dim yellow]"
                 )
@@ -340,7 +419,9 @@ class StreamingConsole:
         if not self._enabled:
             return
         with self._lock:
-            if self._rich:
+            if self._codeblock:
+                print(f"    ❌ {error_type}: {message}", flush=True)
+            elif self._rich:
                 self._console.print(
                     f"    [bold red]❌ {error_type}:[/bold red] [red]{message}[/red]"
                 )
@@ -350,8 +431,8 @@ class StreamingConsole:
     # ── Utility ───────────────────────────────────────────────────────
 
     def api_log(self, msg: str):
-        """Print a dim API debug log line."""
-        if not self._enabled:
+        """Print a dim API debug log line. Suppressed in codeblock mode."""
+        if not self._enabled or self._codeblock:
             return
         with self._lock:
             if self._rich:
@@ -364,10 +445,100 @@ class StreamingConsole:
         if not self._enabled:
             return
         with self._lock:
-            if self._rich:
+            if self._codeblock:
+                print(f"  📄 {label}: {path}", flush=True)
+            elif self._rich:
                 self._console.print(f"  [dim]📄 {label}: {path}[/dim]")
             else:
                 print(f"\n📄 {label}: {path}", file=sys.stderr)
+
+    def scenario_end(self, scenario_result: dict):
+        """Print per-scenario result line after all turns complete."""
+        if not self._enabled:
+            return
+        status = scenario_result.get("status", "error")
+        pass_t = scenario_result.get("pass_count", 0)
+        total_t = scenario_result.get("total_turns", 0)
+        elapsed_s = scenario_result.get("elapsed_ms", 0) / 1000
+
+        with self._lock:
+            if self._codeblock:
+                icon = {"passed": "✅", "failed": "❌", "error": "💥"}.get(status, "⚠️")
+                print(flush=True)
+                print(f"  Result: {icon} {status.upper()} — {pass_t}/{total_t} turns passed │ {elapsed_s:.1f}s", flush=True)
+            elif self._rich:
+                if status == "passed":
+                    self._console.print(
+                        f"\n  [bold green]✅ PASSED[/] — {pass_t}/{total_t} turns │ {elapsed_s:.1f}s"
+                    )
+                elif status == "failed":
+                    self._console.print(
+                        f"\n  [bold red]❌ FAILED[/] — {pass_t}/{total_t} turns │ {elapsed_s:.1f}s"
+                    )
+                else:
+                    self._console.print(
+                        f"\n  [bold yellow]💥 ERROR[/] — {pass_t}/{total_t} turns │ {elapsed_s:.1f}s"
+                    )
+            else:
+                icon = {"passed": "✅", "failed": "❌", "error": "💥"}.get(status, "⚠️")
+                print(f"\n  {icon} {status.upper()} — {pass_t}/{total_t} turns │ {elapsed_s:.1f}s", file=sys.stderr)
+
+    def run_summary(self, results: dict):
+        """Print the final run summary block."""
+        if not self._enabled:
+            return
+        summary = results.get("summary", {})
+        sp = summary.get("passed_scenarios", 0)
+        st = summary.get("total_scenarios", 0)
+        tp = summary.get("passed_turns", 0)
+        tt = summary.get("total_turns", 0)
+        dur = results.get("total_elapsed_ms", 0) / 1000
+
+        # Count checks across all scenarios
+        cp = ct = 0
+        for s in results.get("scenarios", []):
+            for t in s.get("turns", []):
+                ev = t.get("evaluation", {})
+                ct += ev.get("total_checks", 0)
+                cp += ev.get("pass_count", 0)
+
+        all_passed = summary.get("failed_scenarios", 0) == 0 and summary.get("error_scenarios", 0) == 0
+
+        with self._lock:
+            if self._codeblock:
+                W = self._width
+                print(flush=True)
+                print(flush=True)
+                print("📊 SUMMARY", flush=True)
+                print("═" * W, flush=True)
+                print(f"  Scenarios    {sp}/{st} ✅     Turns       {tp}/{tt} ✅", flush=True)
+                print(f"  Checks       {cp}/{ct} ✅    Duration    {dur:.1f}s", flush=True)
+                print(flush=True)
+                if all_passed:
+                    print("  ✅ ALL SCENARIOS PASSED", flush=True)
+                else:
+                    print("  ❌ SOME SCENARIOS FAILED", flush=True)
+                print("═" * W, flush=True)
+            elif self._rich:
+                self._console.print()
+                if all_passed:
+                    self._console.print(
+                        f"  [bold green]📊 SUMMARY — {sp}/{st} scenarios ✅ │ "
+                        f"{tp}/{tt} turns │ {cp}/{ct} checks │ {dur:.1f}s[/]"
+                    )
+                    self._console.print("  [bold green]🏆 ALL SCENARIOS PASSED[/]")
+                else:
+                    self._console.print(
+                        f"  [bold red]📊 SUMMARY — {sp}/{st} scenarios │ "
+                        f"{tp}/{tt} turns │ {cp}/{ct} checks │ {dur:.1f}s[/]"
+                    )
+                    self._console.print("  [bold red]❌ SOME SCENARIOS FAILED[/]")
+            else:
+                print(f"\n📊 SUMMARY — {sp}/{st} scenarios │ {tp}/{tt} turns │ {cp}/{ct} checks │ {dur:.1f}s", file=sys.stderr)
+                if all_passed:
+                    print("🏆 ALL SCENARIOS PASSED", file=sys.stderr)
+                else:
+                    print("❌ SOME SCENARIOS FAILED", file=sys.stderr)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -830,7 +1001,8 @@ def execute_scenario(
         all_variables.extend(global_variables)
 
     if stream:
-        stream.scenario_start(name, run_idx, run_total, all_variables if all_variables else None)
+        stream.scenario_start(name, run_idx, run_total, all_variables if all_variables else None,
+                              description=description)
     elif verbose:
         print(f"\n  ▶ Scenario: {name}", file=sys.stderr)
         if all_variables:
@@ -933,16 +1105,20 @@ def execute_scenario(
     except AgentAPIError as e:
         result["error"] = str(e)
         result["status"] = "error"
+        result["elapsed_ms"] = round((time.time() - start_time) * 1000, 1)
         if stream:
             stream.scenario_error("API Error", str(e))
+            stream.scenario_end(result)
         elif verbose:
             print(f"    ❌ API Error: {e}", file=sys.stderr)
         return result
     except Exception as e:
         result["error"] = f"Unexpected error: {type(e).__name__}: {e}"
         result["status"] = "error"
+        result["elapsed_ms"] = round((time.time() - start_time) * 1000, 1)
         if stream:
             stream.scenario_error("Unexpected Error", f"{type(e).__name__}: {e}")
+            stream.scenario_end(result)
         elif verbose:
             print(f"    ❌ Unexpected Error: {type(e).__name__}: {e}", file=sys.stderr)
         return result
@@ -953,6 +1129,9 @@ def execute_scenario(
         result["status"] = "passed"
     elif result["fail_count"] > 0:
         result["status"] = "failed"
+
+    if stream:
+        stream.scenario_end(result)
 
     return result
 
@@ -1686,12 +1865,20 @@ Environment Variables:
                         help="Worker identifier for swarm execution (prepends [WN] to output)")
     parser.add_argument("--no-rich", action="store_true",
                         help="Disable Rich colored output (use plain-text format instead)")
+    parser.add_argument("--codeblock", action="store_true",
+                        help="Stream plain-text codeblock output (no ANSI). Implies --verbose.")
     parser.add_argument("--rich-output", action="store_true", default=False,
                         help=argparse.SUPPRESS)  # deprecated: backward compat (no-op)
     parser.add_argument("--width", type=int, default=None,
                         help="Override terminal width for Rich rendering (auto-detected by default)")
 
     args = parser.parse_args()
+
+    # --codeblock implies verbose + no-rich, and suppresses json-only
+    if args.codeblock:
+        args.verbose = True
+        args.no_rich = True
+        args.json_only = False
 
     # Validate required args
     if not args.agent_id:
@@ -1707,6 +1894,7 @@ Environment Variables:
         enabled=args.verbose and not args.json_only,
         width=args.width,
         use_rich=not args.no_rich,
+        codeblock=args.codeblock,
     )
 
     # Parse global variables
@@ -1747,7 +1935,6 @@ Environment Variables:
     # Authenticate
     try:
         client.authenticate()
-        stream.auth_success()
     except AgentAPIError as e:
         print(f"❌ Authentication failed: {e.message}", file=sys.stderr)
         sys.exit(2)
@@ -1757,10 +1944,11 @@ Environment Variables:
         s["_run_index"] = idx
         s["_run_total"] = len(scenarios)
 
-    # Execute scenarios
+    # Execute scenarios — print header first, then auth indicator below it
     parallel = getattr(args, 'parallel', 0)
     mode = f"parallel ({parallel} workers)" if parallel else "sequential"
     stream.run_header(len(scenarios), args.scenarios, mode)
+    stream.auth_success()
 
     start_time = time.time()
     scenario_results = []
@@ -1814,8 +2002,11 @@ Environment Variables:
         "scenarios": scenario_results,
     }
 
-    # Output
-    if not args.json_only:
+    # Streaming summary (codeblock mode printed the report live)
+    stream.run_summary(results)
+
+    # Output — suppress post-hoc report when codeblock already streamed it
+    if not args.json_only and not args.codeblock:
         use_rich = HAS_RICH and not args.no_rich
         if use_rich:
             report = format_results_rich(results, args.worker_id, args.scenarios, width=args.width)

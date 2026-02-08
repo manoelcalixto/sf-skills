@@ -36,13 +36,15 @@ https://api.salesforce.com/einstein/ai-agent/v1
 
 The Agent Runtime API requires an **OAuth 2.0 access token** obtained via **Client Credentials flow** from an External Client App (ECA).
 
+> **NEVER use `curl` for OAuth token validation.** Domains containing `--` (e.g., `my-org--devint.sandbox.my.salesforce.com`) cause shell expansion failures. The `agent_api_client.py` handles OAuth internally.
+
 ```bash
-# Obtain access token
-SF_TOKEN=$(curl -s -X POST "https://${SF_MY_DOMAIN}/services/oauth2/token" \
-  -d "grant_type=client_credentials" \
-  -d "client_id=${CONSUMER_KEY}" \
-  -d "client_secret=${CONSUMER_SECRET}" \
-  | jq -r '.access_token')
+# Verify credentials work (credential_manager.py handles OAuth internally)
+python3 ~/.claude/sf-skills/skills/sf-ai-agentforce-testing/hooks/scripts/credential_manager.py \
+  validate --org-alias {org} --eca-name {eca}
+
+# The agent_api_client.py and multi_turn_test_runner.py handle token acquisition
+# automatically — you never need to manually obtain tokens.
 ```
 
 **Required:** An External Client App configured with Client Credentials flow. See [ECA Setup Guide](eca-setup-guide.md).
@@ -348,10 +350,17 @@ CONSUMER_KEY="your_key"
 CONSUMER_SECRET="your_secret"
 AGENT_ID="0XxRM0000004ABC"
 
-# 1. Get access token
-SF_TOKEN=$(curl -s -X POST "https://${SF_MY_DOMAIN}/services/oauth2/token" \
-  -d "grant_type=client_credentials&client_id=${CONSUMER_KEY}&client_secret=${CONSUMER_SECRET}" \
-  | jq -r '.access_token')
+# 1. Get access token (use credential_manager.py to validate first)
+# python3 ~/.claude/sf-skills/skills/sf-ai-agentforce-testing/hooks/scripts/credential_manager.py \
+#   validate --org-alias {org} --eca-name {eca}
+# The agent_api_client.py handles token acquisition automatically.
+# For manual scripting, source credentials from ~/.sfagent/{org}/{eca}/credentials.env
+source ~/.sfagent/${ORG_ALIAS}/${ECA_NAME}/credentials.env
+SF_TOKEN=$(python3 -c "
+from hooks.scripts.agent_api_client import AgentAPIClient
+c = AgentAPIClient()
+print(c._get_token())
+")
 
 # 2. Create session
 SESSION_ID=$(curl -s -X POST \

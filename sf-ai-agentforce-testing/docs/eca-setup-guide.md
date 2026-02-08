@@ -122,18 +122,15 @@ The execution user's permissions determine what the API can access:
 
 ### Test Token Request
 
-```bash
-# Replace with your values
-SF_MY_DOMAIN="your-domain.my.salesforce.com"
-CONSUMER_KEY="your_consumer_key"
-CONSUMER_SECRET="your_consumer_secret"
+> **NEVER use `curl` for OAuth token validation.** Domains containing `--` (e.g., `my-org--devint.sandbox.my.salesforce.com`) cause shell expansion failures with curl's `--` argument parsing. Use the credential manager script instead.
 
-# Request access token
-curl -s -X POST "https://${SF_MY_DOMAIN}/services/oauth2/token" \
-  -d "grant_type=client_credentials" \
-  -d "client_id=${CONSUMER_KEY}" \
-  -d "client_secret=${CONSUMER_SECRET}" | jq .
+```bash
+# Validate credentials via credential_manager.py (handles OAuth internally)
+python3 ~/.claude/sf-skills/skills/sf-ai-agentforce-testing/hooks/scripts/credential_manager.py \
+  validate --org-alias {org} --eca-name {eca}
 ```
+
+The script outputs JSON with the validation result including token metadata (scopes, instance URL, token type).
 
 ### Expected Success Response
 

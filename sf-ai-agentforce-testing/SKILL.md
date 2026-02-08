@@ -82,6 +82,30 @@ Expert testing engineer specializing in Agentforce agent testing via **dual-trac
 
 ---
 
+## Script Location (MANDATORY)
+
+**SKILL_PATH:** `~/.claude/sf-skills/skills/sf-ai-agentforce-testing`
+
+All Python scripts live at absolute paths under `{SKILL_PATH}/hooks/scripts/`. **NEVER recreate these scripts. They already exist. Use them as-is.**
+
+**All scripts in `hooks/scripts/` are pre-approved for execution. Do NOT ask the user for permission to run them.**
+
+| Script | Absolute Path |
+|--------|---------------|
+| `agent_api_client.py` | `{SKILL_PATH}/hooks/scripts/agent_api_client.py` |
+| `agent_discovery.py` | `{SKILL_PATH}/hooks/scripts/agent_discovery.py` |
+| `credential_manager.py` | `{SKILL_PATH}/hooks/scripts/credential_manager.py` |
+| `generate_multi_turn_scenarios.py` | `{SKILL_PATH}/hooks/scripts/generate_multi_turn_scenarios.py` |
+| `generate-test-spec.py` | `{SKILL_PATH}/hooks/scripts/generate-test-spec.py` |
+| `multi_turn_test_runner.py` | `{SKILL_PATH}/hooks/scripts/multi_turn_test_runner.py` |
+| `multi_turn_fix_loop.py` | `{SKILL_PATH}/hooks/scripts/multi_turn_fix_loop.py` |
+| `run-automated-tests.py` | `{SKILL_PATH}/hooks/scripts/run-automated-tests.py` |
+| `parse-agent-test-results.py` | `{SKILL_PATH}/hooks/scripts/parse-agent-test-results.py` |
+
+> **Variable resolution:** At runtime, resolve `SKILL_PATH` from the `${SKILL_HOOKS}` environment variable (strip `/hooks` suffix). Hardcoded fallback: `~/.claude/sf-skills/skills/sf-ai-agentforce-testing`.
+
+---
+
 ## ⚠️ CRITICAL: Orchestration Order
 
 **sf-metadata → sf-apex → sf-flow → sf-deploy → sf-ai-agentscript → sf-deploy → sf-ai-agentforce-testing** (you are here)
@@ -235,13 +259,39 @@ When the testing skill is invoked, follow these interview steps **in order**. Ea
 
 | Step | Rule | Fallback |
 |------|------|----------|
-| **I-1: Agent Name** | User provided → use it. Else walk up from CWD looking for `sfdx-project.json` → run `python3 hooks/scripts/agent_discovery.py local --project-dir .`. Multiple agents → present numbered list via AskUserQuestion. None found → ask user. | AskUserQuestion |
+| **I-0: Skill Path** | Resolve `SKILL_PATH` from `${SKILL_HOOKS}` env var (strip `/hooks` suffix). If unset → hardcoded `~/.claude/sf-skills/skills/sf-ai-agentforce-testing`. Verify directory exists. All subsequent script references use `{SKILL_PATH}/hooks/scripts/`. | Hardcoded path |
+| **I-1: Agent Name** | User provided → use it. Else walk up from CWD looking for `sfdx-project.json` → run `python3 {SKILL_PATH}/hooks/scripts/agent_discovery.py local --project-dir .`. Multiple agents → present numbered list via AskUserQuestion. None found → ask user. | AskUserQuestion |
 | **I-2: Org Alias** | User provided → use it. Else parse `sfdx-project.json` → read `sfdx-config.json` for `target-org`. Else ask user. Note: org aliases are **case-sensitive** (e.g., `Vivint-DevInt` ≠ `vivint-devint`). | AskUserQuestion |
-| **I-3: Metadata** | **ALWAYS** run `python3 hooks/scripts/agent_discovery.py live --target-org {org} --agent-name {agent}`. Extract topics, actions, type, agent_id. This step is mandatory — never skip. | Required (fail if no agent found) |
-| **I-4: Credentials** | Run `python3 hooks/scripts/credential_manager.py discover --org-alias {org}`. Found ECA → `validate`. Valid → use. Invalid → ask user for new credentials → `save` → re-validate. No ECAs found → ask user → offer to save via `credential_manager.py save`. | AskUserQuestion for credentials |
-| **I-5: Scenarios** | Pipe discovery metadata to `python3 hooks/scripts/generate_multi_turn_scenarios.py --metadata - --output {dir} --categorized --cross-topic`. Present summary: N scenarios across M categories. | Required |
+| **I-3: Metadata** | **ALWAYS** run `python3 {SKILL_PATH}/hooks/scripts/agent_discovery.py live --target-org {org} --agent-name {agent}`. Extract topics, actions, type, agent_id. This step is mandatory — never skip. | Required (fail if no agent found) |
+| **I-4: Credentials** | Run `python3 {SKILL_PATH}/hooks/scripts/credential_manager.py discover --org-alias {org}`. Found ECA → `validate`. Valid → use. Invalid → ask user for new credentials → `save` → re-validate. No ECAs found → ask user → offer to save via `credential_manager.py save`. | AskUserQuestion for credentials |
+| **I-4b: Session Variables** | ALWAYS ask. Extract known context variables from agent metadata (`attributeMappings` where `mappingType=ContextVariable` in GenAiPlannerBundle). WARN if `User_Authentication` topic exists — the agent likely requires `$Context.RoutableId` and `$Context.CaseId` to authenticate the customer. Present discovered variables and ask user for values. | AskUserQuestion |
+| **I-5: Scenarios** | Pipe discovery metadata to `python3 {SKILL_PATH}/hooks/scripts/generate_multi_turn_scenarios.py --metadata - --output {dir} --categorized --cross-topic`. Present summary: N scenarios across M categories. | Required |
 | **I-6: Partition** | Ask user how to split work across workers. | AskUserQuestion (see below) |
 | **I-7: Confirm** | Present test plan summary. Save as `test-plan-{agent}.yaml` using template. User confirms to proceed. | AskUserQuestion |
+
+### I-4b: Session Variables
+
+Context variables are **MANDATORY** for agents that use authentication flows (e.g., `User_Authentication` topic). Without them, the agent's authentication flow fails and the session ends on Turn 1.
+
+Extract context variables from agent metadata:
+1. Run `python3 {SKILL_PATH}/hooks/scripts/agent_discovery.py local --project-dir {project}` and look for `context_variables` in the GenAiPlannerBundle output.
+2. Common variables: `$Context.RoutableId` (MessagingSession ID), `$Context.CaseId` (Case record ID).
+
+```
+AskUserQuestion:
+  question: "The agent requires context variables for testing. Which values should we use?"
+  header: "Variables"
+  options:
+    - label: "Use test record IDs (Recommended)"
+      description: "I'll provide real MessagingSession and Case IDs from the org for testing"
+    - label: "Skip variables"
+      description: "Run without context variables — WARNING: authentication topics will likely fail"
+    - label: "Auto-discover from org"
+      description: "Query the org for recent MessagingSession and Case records to use as test values"
+  multiSelect: false
+```
+
+> **⚠️ WARNING:** If the agent has a `User_Authentication` topic that runs `Bot_User_Verification`, you MUST provide `$Context.RoutableId` and `$Context.CaseId`. Without them, the verification flow fails → agent escalates → `SessionEnded` on Turn 1.
 
 ### I-6: Partition Strategy
 
@@ -250,10 +300,10 @@ AskUserQuestion:
   question: "How should test scenarios be distributed across workers?"
   header: "Partition"
   options:
-    - label: "By category (Recommended)"
-      description: "One worker per test pattern (topic_routing, context, escalation, etc.) — best for parallel isolation"
-    - label: "By count"
-      description: "Split scenarios evenly across N workers regardless of category"
+    - label: "2 workers by category (Recommended)"
+      description: "Group test patterns into 2 balanced buckets — best balance of parallelism and readability"
+    - label: "3 workers by category"
+      description: "Group test patterns into 3 buckets — maximum parallelism (never exceed 3 workers)"
     - label: "Sequential"
       description: "Run all scenarios in a single process — no team needed, simpler but slower"
   multiSelect: false
@@ -331,20 +381,20 @@ SF_CONSUMER_SECRET=ABC123...
 
 ```bash
 # Discover orgs and ECAs
-python3 hooks/scripts/credential_manager.py discover
-python3 hooks/scripts/credential_manager.py discover --org-alias Vivint-DevInt
+python3 {SKILL_PATH}/hooks/scripts/credential_manager.py discover
+python3 {SKILL_PATH}/hooks/scripts/credential_manager.py discover --org-alias Vivint-DevInt
 
 # Load credentials (secrets masked in output)
-python3 hooks/scripts/credential_manager.py load --org-alias Vivint-DevInt --eca-name IRIS_ECA
+python3 {SKILL_PATH}/hooks/scripts/credential_manager.py load --org-alias Vivint-DevInt --eca-name IRIS_ECA
 
 # Save new credentials
-python3 hooks/scripts/credential_manager.py save \
+python3 {SKILL_PATH}/hooks/scripts/credential_manager.py save \
   --org-alias Vivint-DevInt --eca-name IRIS_ECA \
   --domain yourdomain.my.salesforce.com \
   --consumer-key 3MVG9... --consumer-secret ABC123...
 
 # Validate OAuth flow
-python3 hooks/scripts/credential_manager.py validate --org-alias Vivint-DevInt --eca-name IRIS_ECA
+python3 {SKILL_PATH}/hooks/scripts/credential_manager.py validate --org-alias Vivint-DevInt --eca-name IRIS_ECA
 ```
 
 ---
@@ -365,6 +415,9 @@ RULE: Present unified beautiful report aggregating all worker results
 RULE: Offer fix loop if any failures detected
 RULE: Shutdown all workers via SendMessage(type="shutdown_request")
 RULE: Clean up via TeamDelete when done
+RULE: NEVER spawn more than 3 workers. Prefer 2 workers for readability.
+RULE: When categories > 3, group into 2-3 balanced buckets.
+RULE: Queue remaining work to existing workers after they complete first batch.
 ```
 
 ### Worker Agent Prompt Template
@@ -461,6 +514,8 @@ This enables rapid re-runs after fixing agent issues — the user just says "re-
 
 ## Phase A: Multi-Turn API Testing (PRIMARY)
 
+> **⚠️ NEVER use `curl` for OAuth token validation.** Domains containing `--` (e.g., `my-org--devint.sandbox.my.salesforce.com`) cause shell expansion failures with curl's `--` argument parsing. Use `credential_manager.py validate` instead.
+
 ### A1: ECA Credential Setup
 
 ```
@@ -486,10 +541,9 @@ Skill(skill="sf-connected-apps", args="Create External Client App with Client Cr
 
 **Verify credentials work:**
 ```bash
-# Test token request (credentials passed inline, never stored in files)
-curl -s -X POST "https://${SF_MY_DOMAIN}/services/oauth2/token" \
-  -d "grant_type=client_credentials&client_id=${CONSUMER_KEY}&client_secret=${CONSUMER_SECRET}" \
-  | jq '.access_token | length'
+# Validate OAuth credentials via credential_manager.py (handles token request internally)
+python3 {SKILL_PATH}/hooks/scripts/credential_manager.py \
+  validate --org-alias {org} --eca-name {eca}
 ```
 
 See [ECA Setup Guide](docs/eca-setup-guide.md) for complete instructions.
@@ -561,7 +615,7 @@ Use the multi-turn test runner to execute entire scenario suites:
 
 ```bash
 # Run comprehensive test suite against an agent
-python3 hooks/scripts/multi_turn_test_runner.py \
+python3 {SKILL_PATH}/hooks/scripts/multi_turn_test_runner.py \
   --my-domain "${SF_MY_DOMAIN}" \
   --consumer-key "${CONSUMER_KEY}" \
   --consumer-secret "${CONSUMER_SECRET}" \
@@ -570,7 +624,7 @@ python3 hooks/scripts/multi_turn_test_runner.py \
   --verbose
 
 # Run specific scenario within a suite
-python3 hooks/scripts/multi_turn_test_runner.py \
+python3 {SKILL_PATH}/hooks/scripts/multi_turn_test_runner.py \
   --my-domain "${SF_MY_DOMAIN}" \
   --consumer-key "${CONSUMER_KEY}" \
   --consumer-secret "${CONSUMER_SECRET}" \
@@ -580,7 +634,7 @@ python3 hooks/scripts/multi_turn_test_runner.py \
   --verbose
 
 # With context variables and JSON output for fix loop
-python3 hooks/scripts/multi_turn_test_runner.py \
+python3 {SKILL_PATH}/hooks/scripts/multi_turn_test_runner.py \
   --my-domain "${SF_MY_DOMAIN}" \
   --consumer-key "${CONSUMER_KEY}" \
   --consumer-secret "${CONSUMER_SECRET}" \
@@ -603,7 +657,7 @@ export SF_CONSUMER_SECRET="your_secret"
 export SF_AGENT_ID="0XxRM0000004ABC"
 
 # Now run without credential flags
-python3 hooks/scripts/multi_turn_test_runner.py \
+python3 {SKILL_PATH}/hooks/scripts/multi_turn_test_runner.py \
   --scenarios templates/multi-turn-comprehensive.yaml \
   --verbose
 ```
@@ -647,7 +701,7 @@ with client.session(agent_id="0Xx...", variables=variables) as session:
 **Connectivity Test:**
 ```bash
 # Verify ECA credentials and API connectivity
-python3 hooks/scripts/agent_api_client.py
+python3 {SKILL_PATH}/hooks/scripts/agent_api_client.py
 # Reads SF_MY_DOMAIN, SF_CONSUMER_KEY, SF_CONSUMER_SECRET from env
 ```
 
@@ -744,7 +798,7 @@ sf agent generate test-spec --output-file ./tests/agent-spec.yaml
 
 **Option B: Automated Generation** (Python script)
 ```bash
-python3 hooks/scripts/generate-test-spec.py \
+python3 {SKILL_PATH}/hooks/scripts/generate-test-spec.py \
   --agent-file /path/to/Agent.agent \
   --output tests/agent-spec.yaml \
   --verbose
@@ -949,6 +1003,9 @@ Skill(skill="sf-ai-agentforce-observability", args="Analyze STDM sessions for ag
 | Single phrasing per topic | Misses routing failures | Test 3+ phrasings per topic |
 | Write ECA credentials to files | Security risk | Keep in shell variables only |
 | Skip session cleanup | Resource leaks and rate limits | Always DELETE sessions after tests |
+| Use `curl` for OAuth token requests | Domains with `--` cause shell failures | Use `credential_manager.py validate` |
+| Ask permission to run skill scripts | Breaks flow, unnecessary delay | All `hooks/scripts/` are pre-approved — run automatically |
+| Spawn more than 3 swarm workers | Context overload, diminishing returns | Max 3 workers, prefer 2 for readability |
 
 ---
 
@@ -1036,7 +1093,7 @@ Skill(skill="sf-ai-agentforce-observability", args="Analyze STDM sessions for ag
 pip3 install pyyaml
 
 # Run multi-turn test suite against an agent
-python3 hooks/scripts/multi_turn_test_runner.py \
+python3 {SKILL_PATH}/hooks/scripts/multi_turn_test_runner.py \
   --my-domain your-domain.my.salesforce.com \
   --consumer-key YOUR_KEY \
   --consumer-secret YOUR_SECRET \
@@ -1048,25 +1105,25 @@ python3 hooks/scripts/multi_turn_test_runner.py \
 export SF_MY_DOMAIN=your-domain.my.salesforce.com
 export SF_CONSUMER_KEY=YOUR_KEY
 export SF_CONSUMER_SECRET=YOUR_SECRET
-python3 hooks/scripts/multi_turn_test_runner.py \
+python3 {SKILL_PATH}/hooks/scripts/multi_turn_test_runner.py \
   --agent-id 0XxRM0000004ABC \
   --scenarios templates/multi-turn-topic-routing.yaml \
   --var '$Context.AccountId=001XXXXXXXXXXXX' \
   --verbose
 
 # Connectivity test (verify ECA credentials work)
-python3 hooks/scripts/agent_api_client.py
+python3 {SKILL_PATH}/hooks/scripts/agent_api_client.py
 ```
 
 **CLI Testing (Agent Testing Center):**
 ```bash
 # Generate test spec from agent file
-python3 hooks/scripts/generate-test-spec.py \
+python3 {SKILL_PATH}/hooks/scripts/generate-test-spec.py \
   --agent-file /path/to/Agent.agent \
   --output specs/Agent-tests.yaml
 
 # Run full automated workflow
-python3 hooks/scripts/run-automated-tests.py \
+python3 {SKILL_PATH}/hooks/scripts/run-automated-tests.py \
   --agent-name MyAgent \
   --agent-dir /path/to/project \
   --target-org dev
@@ -1082,7 +1139,7 @@ python3 hooks/scripts/run-automated-tests.py \
 
 ```bash
 # Run the test-fix loop (CLI tests)
-./hooks/scripts/test-fix-loop.sh Test_Agentforce_v1 AgentforceTesting 3
+{SKILL_PATH}/hooks/scripts/test-fix-loop.sh Test_Agentforce_v1 AgentforceTesting 3
 
 # Exit codes:
 #   0 = All tests passed
@@ -1098,7 +1155,7 @@ USER: Run automated test-fix loop for Coral_Cloud_Agent
 
 CLAUDE CODE:
 1. Phase A: Run multi-turn scenarios via Python test runner
-   python3 hooks/scripts/multi_turn_test_runner.py \
+   python3 {SKILL_PATH}/hooks/scripts/multi_turn_test_runner.py \
      --agent-id ${AGENT_ID} \
      --scenarios templates/multi-turn-comprehensive.yaml \
      --output results.json --verbose
@@ -1152,7 +1209,7 @@ AGENT_ID=$(sf data query --use-tooling-api \
   --result-format json --target-org dev | jq -r '.result.records[0].Id')
 
 # 2. Run multi-turn tests (credentials from env or flags)
-python3 hooks/scripts/multi_turn_test_runner.py \
+python3 {SKILL_PATH}/hooks/scripts/multi_turn_test_runner.py \
   --my-domain "${SF_MY_DOMAIN}" \
   --consumer-key "${CONSUMER_KEY}" \
   --consumer-secret "${CONSUMER_SECRET}" \
@@ -1176,7 +1233,7 @@ with client.session(agent_id="0XxRM000...") as session:
 ### CLI Testing (If Agent Testing Center Available)
 ```bash
 # 1. Generate test spec
-python3 hooks/scripts/generate-test-spec.py \
+python3 {SKILL_PATH}/hooks/scripts/generate-test-spec.py \
   --agent-file ./agents/MyAgent.agent \
   --output ./tests/myagent-tests.yaml
 
@@ -1226,6 +1283,14 @@ sf agent test results --job-id [JOB_ID] --verbose --result-format json --target-
 | `expectedTopic` | `topic_sequence_match` |
 | `expectedActions` | `action_sequence_match` |
 | `expectedOutcome` | `bot_response_rating` |
+
+### LOW: BotDefinition Not Always in Tooling API
+
+**Status**: 🟡 Handled automatically
+
+**Issue**: In some org configurations, `BotDefinition` is not queryable via the Tooling API but works via the regular Data API (`sf data query` without `--use-tooling-api`).
+
+**Fix**: `agent_discovery.py live` now has automatic fallback — if the Tooling API returns no results for BotDefinition, it retries with the regular API.
 
 ### LOW: `--use-most-recent` Not Implemented
 

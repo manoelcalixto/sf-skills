@@ -241,6 +241,158 @@ def _parse_function_xml(xml_path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _parse_planner_bundle_xml(xml_path: str) -> Optional[Dict[str, Any]]:
+    """Parse a GenAiPlannerBundle .genAiPlannerBundle file.
+
+    Extracts the full agent topology including:
+      - localTopics with instructions, local actions, and action links
+      - attributeMappings for context variables (ContextVariable type)
+      - plannerActions (root-level global actions)
+      - localActionLinks (root-level function references)
+
+    The GenAiPlannerBundle is the richest metadata type — it contains the
+    complete agent definition with topics, actions, instructions, and
+    variable bindings all in one file.
+    """
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+        ns = _get_namespace(root)
+
+        # Name from directory (e.g., Product_Troubleshooting2_v2_v3_v4_v5_v6)
+        name = Path(xml_path).parent.name
+        description = _find_text(root, "description", ns)
+        label = _find_text(root, "masterLabel", ns) or name
+
+        # --- Context Variables from attributeMappings ---
+        context_variables: List[str] = []
+        seen_ctx_vars: set = set()
+        for mapping_el in _find_all_ns(root, "attributeMappings", ns):
+            mapping_type = _find_text(mapping_el, "mappingType", ns)
+            if mapping_type == "ContextVariable":
+                target = _find_text(mapping_el, "mappingTargetName", ns)
+                if target and target not in seen_ctx_vars:
+                    seen_ctx_vars.add(target)
+                    context_variables.append(target)
+
+        # --- Topics from localTopics ---
+        topics: List[Dict[str, Any]] = []
+        for topic_el in _find_all_ns(root, "localTopics", ns):
+            # Prefer localDeveloperName (clean) over developerName (has UUID suffix)
+            topic_name = (
+                _find_text(topic_el, "localDeveloperName", ns)
+                or _find_text(topic_el, "developerName", ns)
+            )
+            topic_label = _find_text(topic_el, "masterLabel", ns)
+            topic_desc = _find_text(topic_el, "description", ns)
+            topic_scope = _find_text(topic_el, "scope", ns)
+            can_escalate_str = _find_text(topic_el, "canEscalate", ns)
+            can_escalate = can_escalate_str == "true" if can_escalate_str else False
+
+            # Collect instructions
+            instructions: List[str] = []
+            for instr_el in _find_all_ns(topic_el, "genAiPluginInstructions", ns):
+                instr_text = _find_text(instr_el, "description", ns)
+                if instr_text:
+                    instructions.append(instr_text)
+
+            # Collect local actions within this topic
+            topic_actions: List[Dict[str, Any]] = []
+            for action_el in _find_all_ns(topic_el, "localActions", ns):
+                action_entry: Dict[str, Any] = {}
+                a_name = (
+                    _find_text(action_el, "localDeveloperName", ns)
+                    or _find_text(action_el, "developerName", ns)
+                )
+                if a_name:
+                    action_entry["name"] = a_name
+                a_label = _find_text(action_el, "masterLabel", ns)
+                if a_label:
+                    action_entry["label"] = a_label
+                a_desc = _find_text(action_el, "description", ns)
+                if a_desc:
+                    action_entry["description"] = a_desc
+                a_target = _find_text(action_el, "invocationTarget", ns)
+                if a_target:
+                    action_entry["invocationTarget"] = a_target
+                a_type = _find_text(action_el, "invocationTargetType", ns)
+                if a_type:
+                    action_entry["invocationTargetType"] = a_type
+                if action_entry:
+                    topic_actions.append(action_entry)
+
+            # Collect local action link references within this topic
+            topic_action_links: List[str] = []
+            for link_el in _find_all_ns(topic_el, "localActionLinks", ns):
+                fn_name = _find_text(link_el, "functionName", ns)
+                if fn_name:
+                    topic_action_links.append(fn_name)
+
+            entry: Dict[str, Any] = {"name": topic_name}
+            if topic_label:
+                entry["label"] = topic_label
+            if topic_desc:
+                entry["description"] = topic_desc
+            if topic_scope:
+                entry["scope"] = topic_scope
+            entry["canEscalate"] = can_escalate
+            if instructions:
+                entry["instructions"] = instructions
+            if topic_actions:
+                entry["actions"] = topic_actions
+            if topic_action_links:
+                entry["actionLinks"] = topic_action_links
+            topics.append(entry)
+
+        # --- Root-level actions ---
+        actions: List[Dict[str, Any]] = []
+
+        # plannerActions (global actions available across all topics)
+        for pa_el in _find_all_ns(root, "plannerActions", ns):
+            pa_entry: Dict[str, Any] = {}
+            pa_name = (
+                _find_text(pa_el, "localDeveloperName", ns)
+                or _find_text(pa_el, "developerName", ns)
+            )
+            if pa_name:
+                pa_entry["name"] = pa_name
+            pa_label = _find_text(pa_el, "masterLabel", ns)
+            if pa_label:
+                pa_entry["label"] = pa_label
+            pa_desc = _find_text(pa_el, "description", ns)
+            if pa_desc:
+                pa_entry["description"] = pa_desc
+            pa_target = _find_text(pa_el, "invocationTarget", ns)
+            if pa_target:
+                pa_entry["invocationTarget"] = pa_target
+            pa_type = _find_text(pa_el, "invocationTargetType", ns)
+            if pa_type:
+                pa_entry["invocationTargetType"] = pa_type
+            if pa_entry:
+                actions.append(pa_entry)
+
+        # localActionLinks at root level (global function references)
+        for link_el in _find_all_ns(root, "localActionLinks", ns):
+            fn_name = _find_text(link_el, "genAiFunctionName", ns)
+            if fn_name:
+                actions.append({"name": fn_name, "type": "actionLink"})
+
+        return {
+            "name": name,
+            "type": "GenAiPlannerBundle",
+            "id": None,
+            "description": description,
+            "label": label,
+            "topics": topics,
+            "actions": actions,
+            "source_path": xml_path,
+            "context_variables": context_variables,
+        }
+    except ET.ParseError as e:
+        print(f"WARNING: Failed to parse {xml_path}: {e}", file=sys.stderr)
+        return None
+
+
 def discover_local(project_dir: str, agent_name: Optional[str] = None) -> Dict[str, Any]:
     """Discover agents from local SFDX project metadata (XML files).
 
@@ -277,6 +429,7 @@ def discover_local(project_dir: str, agent_name: Optional[str] = None) -> Dict[s
         ("*.bot-meta.xml", _parse_bot_xml),
         ("*.genAiPlanner-meta.xml", _parse_planner_xml),
         ("*.genAiFunction-meta.xml", _parse_function_xml),
+        ("*.genAiPlannerBundle", _parse_planner_bundle_xml),
     ]
 
     for suffix, parser in scan_config:
@@ -370,6 +523,68 @@ def _sf_tooling_query(query: str, target_org: str) -> List[Dict[str, Any]]:
     return data.get("result", {}).get("records", [])
 
 
+def _sf_data_query(query: str, target_org: str) -> List[Dict[str, Any]]:
+    """Run a regular (non-Tooling) SOQL query via sf CLI and return parsed records.
+
+    Fallback for objects like BotDefinition that may not be available via the
+    Tooling API in all org configurations.
+
+    Args:
+        query: SOQL query string.
+        target_org: sf CLI org alias or username.
+
+    Returns:
+        List of record dicts from the query result.
+        Returns empty list on error (with warning to stderr).
+    """
+    cmd = [
+        "sf", "data", "query",
+        "--query", query,
+        "--target-org", target_org,
+        "--json",
+    ]
+
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=60
+        )
+    except FileNotFoundError:
+        print(
+            "ERROR: 'sf' CLI not found. Install from "
+            "https://developer.salesforce.com/tools/salesforcecli",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        print(
+            f"WARNING: sf query timed out (60s): {query[:80]}...",
+            file=sys.stderr,
+        )
+        return []
+
+    if result.returncode != 0:
+        err_msg = ""
+        try:
+            err_data = json.loads(result.stdout)
+            err_msg = err_data.get("message", "")
+        except (json.JSONDecodeError, KeyError):
+            err_msg = result.stderr.strip() or result.stdout.strip()
+
+        if "INVALID_TYPE" in err_msg or "sObject type" in err_msg:
+            return []
+
+        print(f"WARNING: sf data query failed: {err_msg[:200]}", file=sys.stderr)
+        return []
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError as e:
+        print(f"WARNING: Failed to parse sf output: {e}", file=sys.stderr)
+        return []
+
+    return data.get("result", {}).get("records", [])
+
+
 def discover_live(target_org: str, agent_name: Optional[str] = None) -> Dict[str, Any]:
     """Discover agents from a live Salesforce org via Tooling API.
 
@@ -393,7 +608,11 @@ def discover_live(target_org: str, agent_name: Optional[str] = None) -> Dict[str
         f"SELECT Id, DeveloperName, Description, MasterLabel "
         f"FROM BotDefinition{where} ORDER BY DeveloperName LIMIT 200"
     )
-    for rec in _sf_tooling_query(bot_soql, target_org):
+    bot_records = _sf_tooling_query(bot_soql, target_org)
+    if not bot_records:
+        print("INFO: BotDefinition not in Tooling API, trying regular API...", file=sys.stderr)
+        bot_records = _sf_data_query(bot_soql, target_org)
+    for rec in bot_records:
         agents.append({
             "name": rec.get("DeveloperName"),
             "type": "BotDefinition",

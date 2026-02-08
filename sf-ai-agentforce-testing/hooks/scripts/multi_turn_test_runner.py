@@ -1421,6 +1421,161 @@ def format_results(results: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def format_results_codeblock(results: Dict[str, Any], width: int = 72) -> str:
+    """Format results as a plain-text code block optimised for Claude Code.
+
+    Claude Code renders markdown code blocks in a monospace terminal with
+    preserved spacing and native Unicode emoji colours — no ANSI escape
+    codes needed.  The output is a *single* fenced code block ready to be
+    pasted into a Claude Code response.
+
+    Args:
+        results: The full JSON results dict from a test run.
+        width: Maximum line width for word-wrapping agent text.
+
+    Returns:
+        A string containing the formatted code block.
+    """
+    W = max(width, 50)
+    THIN = "─"
+    THICK = "━"
+    DOUBLE = "═"
+
+    scenarios = results.get("scenarios", [])
+    summary = results.get("summary", {})
+    agent_id = results.get("agent_id", "Unknown")
+    total_ms = results.get("total_elapsed_ms", 0)
+    n = len(scenarios)
+
+    lines: List[str] = []
+    a = lines.append  # shorthand
+
+    # ── Header ──
+    a(THICK * W)
+    a(f"  🧪 Agentforce Multi-Turn Test Results")
+    a(f"  Agent: {agent_id}  │  {n} scenario{'s' if n != 1 else ''}  │  {total_ms / 1000:.0f}s total")
+    a(THICK * W)
+
+    # ── Per-scenario ──
+    for s in scenarios:
+        idx = s.get("_run_index", scenarios.index(s) + 1)
+        name = s.get("name", "unknown")
+        desc = s.get("description", "")
+        status = s.get("status", "unknown")
+        turns = s.get("turns", [])
+        total_turns = len(turns)
+        elapsed_s = (s.get("elapsed_ms", 0)) / 1000
+
+        # Scenario separator
+        label = f" Scenario {idx}/{n}: {name} "
+        pad = W - len(label)
+        left = pad // 2
+        right = pad - left
+        a("")
+        a("")
+        a(f"{THIN * left}{label}{THIN * right}")
+        if desc:
+            a(f"  {desc}")
+        a("")
+
+        for t in turns:
+            tn = t.get("turn_number", "?")
+            user_msg = t.get("user_message", "")
+            agent_text = t.get("agent_text", "")
+            elapsed_turn = t.get("elapsed_ms", 0) / 1000
+            msg_types = t.get("message_types", [])
+            has_esc = t.get("has_escalation", False)
+            has_act = t.get("has_action_result", False)
+            is_failure = "Failure" in msg_types
+            evaluation = t.get("evaluation", {})
+            checks = evaluation.get("checks", [])
+            passed = evaluation.get("passed", False)
+            pass_count = evaluation.get("pass_count", 0)
+            total_checks = evaluation.get("total_checks", 0)
+
+            # ── User message ──
+            prefix = f"  Turn {tn}/{total_turns}  👤 "
+            # Word-wrap user message
+            user_display = user_msg.replace("\n", " ")
+            avail = W - len(prefix) - 2  # 2 for quotes
+            if len(user_display) > avail:
+                user_display = user_display[:avail - 3] + "..."
+            a(f"{prefix}\"{user_display}\"")
+
+            # ── Agent response ──
+            indent = "            "      # 12 spaces
+            cont   = "                "  # 16 spaces (align under opening quote)
+            if is_failure:
+                a(f"{indent}⚠️  [Failure] (no response)  ({elapsed_turn:.1f}s)")
+            else:
+                agent_display = agent_text.replace("\n", " ")
+                badges = ""
+                if has_esc:
+                    badges += "  ↗ escalation"
+                if has_act:
+                    badges += "  ⚡ action"
+                suffix = f"  ({elapsed_turn:.1f}s){badges}"
+
+                # Word-wrap agent text
+                wrap_width = max(W - len(cont) - 1, 30)
+                wrapped = textwrap.wrap(agent_display, width=wrap_width) or [""]
+                if len(wrapped) == 1:
+                    a(f"{indent}🤖 \"{wrapped[0]}\"{suffix}")
+                else:
+                    a(f"{indent}🤖 \"{wrapped[0]}")
+                    for mid in wrapped[1:-1]:
+                        a(f"{cont}{mid}")
+                    a(f"{cont}{wrapped[-1]}\"{suffix}")
+
+            # ── Check results ──
+            if passed:
+                a(f"{indent}✅ {pass_count}/{total_checks} checks passed")
+            else:
+                for c in checks:
+                    if not c.get("passed", False):
+                        a(f"{indent}❌ {c['name']} — {c.get('detail', '')}")
+                a(f"{indent}{pass_count}/{total_checks} checks passed")
+
+            a("")  # blank line between turns
+
+        # Scenario result line
+        status_icon = {"passed": "✅", "failed": "❌", "error": "💥"}.get(status, "⚠️")
+        pass_t = s.get("pass_count", 0)
+        total_t = s.get("total_turns", 0)
+        a(f"  Result: {status_icon} {status.upper()} — {pass_t}/{total_t} turns passed │ {elapsed_s:.1f}s")
+
+    # ── Summary ──
+    a("")
+    a("")
+    sp = summary.get("passed_scenarios", 0)
+    st = summary.get("total_scenarios", 0)
+    tp = summary.get("passed_turns", 0)
+    tt = summary.get("total_turns", 0)
+    dur = total_ms / 1000
+
+    a(f"📊 SUMMARY")
+    a(DOUBLE * W)
+    a(f"  Scenarios    {sp}/{st} ✅     Turns       {tp}/{tt} ✅")
+
+    total_checks = 0
+    passed_checks = 0
+    for s in scenarios:
+        for t in s.get("turns", []):
+            ev = t.get("evaluation", {})
+            total_checks += ev.get("total_checks", 0)
+            passed_checks += ev.get("pass_count", 0)
+    a(f"  Checks       {passed_checks}/{total_checks} ✅    Duration    {dur:.1f}s")
+    a("")
+
+    if summary.get("failed_scenarios", 0) > 0 or summary.get("error_scenarios", 0) > 0:
+        a(f"  ❌ SOME SCENARIOS FAILED")
+    else:
+        a(f"  ✅ ALL SCENARIOS PASSED")
+    a(DOUBLE * W)
+
+    return "\n".join(lines)
+
+
 def _infer_failure_category(check_name: str, turn: Dict) -> Optional[str]:
     """Infer failure category from check name and turn data."""
     mapping = {

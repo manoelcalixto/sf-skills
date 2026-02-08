@@ -59,6 +59,7 @@ import os
 import re
 import shutil
 import sys
+import textwrap
 import threading
 import time
 from datetime import datetime
@@ -176,6 +177,7 @@ class StreamingConsole:
         with self._lock:
             if self._rich:
                 self._console.print()
+                self._console.print()
                 self._console.rule(
                     f"[bold]Scenario {idx}/{total}: {name}[/bold]",
                     style="cyan",
@@ -184,7 +186,7 @@ class StreamingConsole:
                     var_names = ", ".join(v["name"] for v in variables)
                     self._console.print(f"  [dim]Variables: {var_names}[/dim]")
             else:
-                print(f"\n  ▶ Scenario: {name}", file=sys.stderr)
+                print(f"\n\n  ▶ Scenario: {name}", file=sys.stderr)
                 if variables:
                     print(f"    Variables: {[v['name'] for v in variables]}", file=sys.stderr)
 
@@ -205,7 +207,11 @@ class StreamingConsole:
                 print(f"    Turn {num}: \"{truncated}\"", file=sys.stderr)
 
     def agent_response(self, turn_result):
-        """Print the agent's response with metadata badges."""
+        """Print the agent's response with metadata badges.
+
+        Text wraps across multiple lines with consistent indentation so
+        continuation lines align under the opening quote character.
+        """
         if not self._enabled:
             return
 
@@ -218,34 +224,64 @@ class StreamingConsole:
             if self._rich:
                 if is_failure:
                     self._console.print(
-                        f"            [bold yellow]⚠️  [Failure] (no response)[/bold yellow]"
+                        f"            [bold yellow]⚠️  \\[Failure] (no response)[/bold yellow]"
                         f"  [dim]({elapsed_s:.1f}s)[/dim]"
                     )
                 else:
-                    display = text.replace("\n", " ")
-                    display = display[:80] + "..." if len(display) > 80 else display
+                    # Escape Rich markup brackets in agent text
+                    display = text.replace("\n", " ").replace("[", "\\[")
                     # Build suffix badges
                     badges = ""
                     if turn_result.has_escalation:
                         badges += "  [yellow]↗ escalation[/yellow]"
                     if turn_result.has_action_result:
                         badges += "  [cyan]⚡ action[/cyan]"
-                    self._console.print(
-                        f"            [bright_magenta]🤖 \"{display}\"[/bright_magenta]"
-                        f"  [dim]({elapsed_s:.1f}s)[/dim]{badges}"
-                    )
+                    suffix = f"  [dim]({elapsed_s:.1f}s)[/dim]{badges}"
+                    # Word-wrap: 12-space indent + 🤖(2 cols) + space + " = 16 cols
+                    indent = "            "      # 12 spaces
+                    cont   = "                "  # 16 spaces (align under opening quote)
+                    avail = max((self._console.width or 80) - 16 - 1, 30)
+                    lines = textwrap.wrap(display, width=avail) or [""]
+
+                    if len(lines) == 1:
+                        self._console.print(
+                            f"{indent}[bright_magenta]🤖 \"{lines[0]}\"[/bright_magenta]{suffix}"
+                        )
+                    else:
+                        self._console.print(
+                            f"{indent}[bright_magenta]🤖 \"{lines[0]}[/bright_magenta]"
+                        )
+                        for mid_line in lines[1:-1]:
+                            self._console.print(
+                                f"[bright_magenta]{cont}{mid_line}[/bright_magenta]"
+                            )
+                        self._console.print(
+                            f"[bright_magenta]{cont}{lines[-1]}\"[/bright_magenta]{suffix}"
+                        )
             else:
                 if is_failure:
                     print(f"      ⚠️  [Failure] (no response)  ({elapsed_s:.1f}s)", file=sys.stderr)
                 else:
                     display = text.replace("\n", " ")
-                    display = display[:80] + "..." if len(display) > 80 else display
                     badges = ""
                     if turn_result.has_escalation:
                         badges += "  ↗ escalation"
                     if turn_result.has_action_result:
                         badges += "  ⚡ action"
-                    print(f"      🤖 \"{display}\"  ({elapsed_s:.1f}s){badges}", file=sys.stderr)
+                    suffix = f"  ({elapsed_s:.1f}s){badges}"
+                    # Word-wrap: 6-space indent + 🤖(2) + space + " = 10 cols
+                    indent = "      "      # 6 spaces
+                    cont   = "          "  # 10 spaces (align under opening quote)
+                    avail = max(_detect_width() - 10 - 1, 30)
+                    lines = textwrap.wrap(display, width=avail) or [""]
+
+                    if len(lines) == 1:
+                        print(f"{indent}🤖 \"{lines[0]}\"{suffix}", file=sys.stderr)
+                    else:
+                        print(f"{indent}🤖 \"{lines[0]}", file=sys.stderr)
+                        for mid_line in lines[1:-1]:
+                            print(f"{cont}{mid_line}", file=sys.stderr)
+                        print(f"{cont}{lines[-1]}\"{suffix}", file=sys.stderr)
 
     def turn_result(self, evaluation: dict):
         """Print check results for a completed turn."""
